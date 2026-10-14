@@ -8,7 +8,7 @@ import { useProgress } from './progress/ProgressProvider';
 
 // 누르면 상세 칸에 더 보여 주는 항목(요령·톡방 사례·주의사항)
 interface Item { summary: string; badge?: string; detail: ReactNode }
-type Sel = { s: 'tips' | 'community' | 'warnings'; i: number };
+type Sel = { s: 'tips' | 'community'; i: number };
 
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
 const sectionTitle = 'text-[14px] font-bold text-slate-700 mt-8 mb-3 flex items-center gap-2';
@@ -21,7 +21,6 @@ function buildItems(step: Step): Record<Sel['s'], Item[]> {
       summary: c.text, badge: c.kind,
       detail: (<><h5>톡방 사례</h5>{meta(<>{c.kind && <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[12px] font-bold">{c.kind}</span>}{c.date && <span>{c.date}</span>}</>)}<p>{c.text}</p></>),
     })),
-    warnings: step.warnings.map((w) => ({ summary: w, detail: (<><h5>주의</h5><div className="warn-box">{w}</div></>) })),
   };
 }
 
@@ -45,13 +44,12 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
   useEffect(() => { closeRefFn.current = guardedClose; });
 
   useEffect(() => {
-    if (!open || !items) return;
-    // 데스크톱에서는 누를 수 있는 첫 항목을 바로 열어 둔다
-    const first = (['tips', 'community', 'warnings'] as const).find((k) => items[k].length > 0);
+    if (!open) return;
+    // 열 때·단계를 바꿀 때는 아무것도 고르지 않은 빈 안내 상태로 시작한다
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSel(window.innerWidth > 768 && first ? { s: first, i: 0 } : null);
+    setSel(null);
     setPanel(false);
-  }, [open, index, items]);
+  }, [open, index]);
 
   // 열리면 닫기 버튼으로 포커스, Esc 로 닫기, 닫히면 연 요소로 포커스 복귀
   useEffect(() => {
@@ -74,8 +72,10 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
   const clickable = (key: Sel['s'], title: string, icon: string, tone: { card: string; text: string }) => items[key].length > 0 && (
     <div key={key}>
       <h5 className={sectionTitle}><i className={`${icon} text-slate-500`} aria-hidden /> {title}</h5>
-      {items[key].map((item, i) => (
-        <div key={i} className={`guide-card ${tone.card}`} role="button" tabIndex={0} onClick={() => pick(key, i)} onKeyDown={onActivate(() => pick(key, i))}>
+      {items[key].map((item, i) => {
+        const on = sel?.s === key && sel.i === i;
+        return (
+        <div key={i} className={`guide-card ${on ? '!border-blue-400 !bg-white' : tone.card}`} role="button" tabIndex={0} aria-current={on ? 'true' : undefined} onClick={() => pick(key, i)} onKeyDown={onActivate(() => pick(key, i))}>
           <div className="flex justify-between items-center gap-3">
             <span className={`text-[14px] leading-relaxed line-clamp-2 ${tone.text}`}>{item.summary}</span>
             <span className="flex items-center gap-2 shrink-0">
@@ -84,7 +84,8 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
             </span>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -139,7 +140,16 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
               </div>
             )}
 
-            {clickable('warnings', '실패 방지 주의사항', 'fas fa-exclamation-triangle', { card: '', text: 'font-bold text-red-600' })}
+            {step.warnings.length > 0 && (
+              <div>
+                <h5 className={sectionTitle}><i className="fas fa-exclamation-triangle text-slate-500" aria-hidden /> 실패 방지 주의사항</h5>
+                {step.warnings.map((w, i) => (
+                  <div key={i} className="rounded-[20px] border border-red-100 bg-red-50/60 px-[18px] py-4 mb-3.5">
+                    <p className="text-[14px] font-semibold text-red-700 leading-relaxed">{w}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className={`detail-panel md:relative md:translate-x-0 md:w-1/2 md:bg-white md:shadow-none ${panel ? 'active' : ''}`}>
@@ -152,7 +162,7 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
                 {current ? current.detail : (
                   <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
                     <i className="fas fa-mouse-pointer text-4xl opacity-20" aria-hidden />
-                    <p className="font-medium">좌측의 항목을 클릭하여 상세 정보를 확인하세요.</p>
+                    <p className="font-normal">왼쪽 목록에서 요령이나 톡방 사례를 누르면 여기에 자세히 보여요.</p>
                   </div>
                 )}
               </div>

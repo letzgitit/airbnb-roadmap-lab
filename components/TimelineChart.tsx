@@ -26,7 +26,7 @@ function StatusMark({ st, c }: { st: StepStatus | undefined; c: { done: number; 
   return (
     <span className={`shrink-0 inline-flex items-center gap-1 text-[12px] font-bold ${st === 'done' ? 'text-emerald-600' : st === 'doing' ? 'text-blue-700' : 'text-slate-500'}`}>
       {st === 'done' ? <i className="fas fa-circle-check" aria-label="완료" /> : st === 'doing' ? <i className="fas fa-circle-dot" aria-label="진행 중" /> : null}
-      {c && c.total > 0 ? <span>{c.done}/{c.total}</span> : null}
+      {c && c.total > 0 ? <span className="text-slate-600">{c.done}/{c.total}</span> : null}
     </span>
   );
 }

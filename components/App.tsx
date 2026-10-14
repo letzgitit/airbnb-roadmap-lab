@@ -11,10 +11,10 @@ import { Summary } from './progress/Summary';
 import { LogCard } from './progress/LogCard';
 import { TrashCard } from './progress/TrashCard';
 
-export default function App({ content }: { content: Content }) {
+export default function App({ content, loginReady }: { content: Content; loginReady: boolean }) {
   return (
     <ProgressProvider>
-      <Inner content={content} />
+      <Inner content={content} loginReady={loginReady} />
     </ProgressProvider>
   );
 }
@@ -36,7 +36,7 @@ function useDialog() {
   return { open, shown, show, hide };
 }
 
-function Inner({ content }: { content: Content }) {
+function Inner({ content, loginReady }: { content: Content; loginReady: boolean }) {
   const { steps, scripts, updates } = content;
   const { status, doc } = useProgress();
   const loggedIn = status === 'ready' && !!doc;
@@ -95,11 +95,15 @@ function Inner({ content }: { content: Content }) {
             </div>
             <div className="flex flex-col items-start sm:items-end gap-2">
               <button onClick={tool.show} className="toolbox-btn"><i className="fas fa-comment-medical text-lg" /><span>상황별 필승 멘트함</span></button>
-              {status === 'anon' && (
+              {status === 'anon' && (loginReady ? (
                 <button onClick={() => void signIn('google', { callbackUrl: '/' })} className="text-[12px] font-bold text-blue-100 hover:text-white underline underline-offset-4">
                   <i className="fab fa-google mr-1" />우리 현황 보기 (로그인)
                 </button>
-              )}
+              ) : (
+                <button type="button" disabled aria-disabled="true" className="text-[12px] font-semibold text-blue-100/80 cursor-not-allowed">
+                  <i className="fab fa-google mr-1" aria-hidden />로그인 준비 중
+                </button>
+              ))}
               {status === 'forbidden' && (
                 <button onClick={() => void signOut({ callbackUrl: '/' })} className="text-[12px] font-bold text-amber-200 underline underline-offset-4">허용되지 않은 계정이에요 · 로그아웃</button>
               )}
