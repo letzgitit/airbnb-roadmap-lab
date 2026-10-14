@@ -1,26 +1,19 @@
-# airbnb-roadmap-lab
+# airbnb-roadmap-lab (외도민 타임 라인)
 
-에어비앤비 관련 기획 흐름과 실행 로드맵을 정리하기 위한 단일 HTML 실험 프로젝트입니다.
+공개 타임라인(SSG) + 구글 로그인한 두 사람만 보는 「우리 현황」 Next.js 앱.
+기존 단일 HTML은 `legacy/index.html`에 보존.
 
-## Status
+## 구조
+- `app/`, `components/` — 화면. 공개 화면은 정적 생성, 현황은 로그인 뒤 `/api/progress`로만 읽음
+- `lib/core/` — 병합 엔진·검증·저장소·마크다운 내보내기(서버와 CLI 공용)
+- `content/` — 콘텐츠 JSON(다른 작업이 관리). 없으면 `fixtures/content-sample/` 사용
+- `scripts/` — `progress.mjs`(CLI, `README-progress.md`), `seed-progress.mjs`, `verify-sync.mjs`
 
-- Type: lab
-- Visibility: private
-- Stack: HTML
-
-## What It Does
-
-- 에어비앤비 서비스/분석 아이디어를 로드맵 형태로 시각화합니다.
-- 별도 빌드 도구 없이 정적 HTML로 바로 확인할 수 있습니다.
-
-## Project Structure
-
-- `index.html`: 로드맵 화면
-
-## Run Locally
-
+## 실행
 ```bash
-python3 -m http.server 8000
+npm i
+cp .env.example .env.local    # 값 채우기(로컬은 ALLOWED_EMAILS 만 있어도 됨)
+npm run dev                   # 가짜 로그인: DEV_FAKE_LOGIN_EMAIL=me@example.test npm run dev  (?as=<이메일> 로 두 사람 흉내)
+npm run build && npm start
 ```
-
-브라우저에서 `http://localhost:8000`으로 접속합니다.
+저장소 env(`KV_REST_API_*` 또는 `UPSTASH_REDIS_REST_*`)가 없으면 `.data/progress.json`을 씁니다.

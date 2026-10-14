@@ -39,3 +39,12 @@ config.js
 *.njsproj
 *.sln
 *.sw?
+
+# App-specific (login-progress)
+.data/
+.vercel/
+.review/
+.env*
+!.env.example
+next-env.d.ts
+*.tsbuildinfo

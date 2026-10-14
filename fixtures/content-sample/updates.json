@@ -1,0 +1,16 @@
+[
+  {
+    "date": "2026-10-10",
+    "title": "[샘플] 기준이 바뀌었어요",
+    "text": "[샘플] 최근 바뀐 내용 설명 문장입니다.",
+    "source": "샘플 고시",
+    "url": "https://example.com/notice"
+  },
+  {
+    "date": "2026-09-28",
+    "title": "[샘플] 신청 절차 안내 갱신",
+    "text": "[샘플] 두 번째 샘플 문장입니다.",
+    "source": "샘플 공단",
+    "url": "https://example.com/notice2"
+  }
+]

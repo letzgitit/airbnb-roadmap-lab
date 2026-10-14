@@ -1,0 +1,22 @@
+{
+  "_comment": "가짜 데이터 예시입니다. 실제 주소·이름·금액은 넣지 마세요(필요하면 나중에 사용자가 따로 넣습니다).",
+  "by": "seed",
+  "property": [
+    { "label": "주소", "value": "[예시] OO구 OO동 000-0" },
+    { "label": "인도일", "value": "[예시] 2026-12-01" },
+    { "label": "렌트프리", "value": "[예시] 2주" }
+  ],
+  "steps": {
+    "1": { "status": "done", "targetDate": "2026-10-20", "note": "[예시] 임장 3곳 완료" },
+    "2": { "status": "doing", "targetDate": "2026-10-31", "note": "" }
+  },
+  "tasks": [
+    { "stepId": 2, "text": "[예시] 구청 담당자에게 전화하기", "due": "2026-10-25", "done": false },
+    { "stepId": 2, "text": "[예시] 질문 목록 정리", "due": "2026-10-22", "done": true },
+    { "stepId": 3, "text": "[예시] 특약 문구 초안 받기", "due": null, "done": false }
+  ],
+  "log": [
+    { "kind": "결정", "text": "[예시] 1순위 매물을 A로 정함" },
+    { "kind": "통화", "text": "[예시] 중개인 통화: 가능하다고 함" }
+  ]
+}
