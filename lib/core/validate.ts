@@ -11,8 +11,9 @@ const nullableDate = z.union([dateStr, z.null()]);
 const text = z.string().trim().min(1, '내용을 입력하세요.').max(200, '200자 이하로 입력하세요.');
 const stepId = z.number().int().min(1).max(STEP_COUNT);
 const version = z.number().int().min(0);
-const id = z.string().min(1).max(64);
-const editKey = z.string().regex(/^(step:\d{1,2}|(task|log|prop):[A-Za-z0-9_-]{1,64})$/);
+// 서버가 만드는 id 모양(t_/l_/p_ + 영숫자)만 받는다. `constructor`·`__proto__` 같은 값이 레코드 조회에 들어가지 않게.
+const id = z.string().regex(/^[tlp]_[A-Za-z0-9]{1,60}$/, 'id 형식이 올바르지 않습니다.');
+const editKey = z.string().regex(/^(step:\d{1,2}|(task|log|prop):[tlp]_[A-Za-z0-9]{1,60})$/);
 
 export const stepPatch = z.object({
   status: z.enum(['todo', 'doing', 'done']).optional(),

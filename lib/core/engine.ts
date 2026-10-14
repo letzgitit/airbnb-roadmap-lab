@@ -11,6 +11,16 @@ const TRASH_KEEP_MS = 30 * 24 * 3600 * 1000;
 const MAX_TASKS = 500;
 const MAX_LOG = 500;
 const MAX_PROPS = 60;
+// 휴지통(소프트 삭제) 항목은 30일 보관하지만 종류별로 이 개수를 넘으면 오래된 것부터 정리한다(추가·삭제 반복으로 문서가 끝없이 커지지 않게).
+const MAX_TRASH = 200;
+// 문서 하나의 상한(UTF-8 바이트). Redis CAS 요청엔 이전 값·새 값이 함께(JSON 이스케이프 포함) 실려 실제 요청은 2배 남짓 → 1MB 안쪽.
+export const MAX_DOC_BYTES = 400 * 1024;
+const CAS_ATTEMPTS = 10;
+
+// 레코드에 「자기 키」로 들어 있는 것만 꺼낸다(`constructor`·`__proto__` 같은 id 로 프로토타입을 건드리지 않게).
+function own<T>(rec: Record<string, T>, id: string): T | undefined {
+  return Object.hasOwn(rec, id) ? rec[id] : undefined;
+}
 
 export class OpError extends Error {
   status: number;
@@ -79,7 +89,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       return {};
     }
     case 'step.update': {
-      const cur = doc.steps[String(op.stepId)] ?? defaultStep();
+      const cur = own(doc.steps, String(op.stepId)) ?? defaultStep();
       if (!op.force && cur.version !== op.baseVersion) {
         throw new OpError(409, { error: 'conflict', kind: 'step', id: op.stepId, current: cur, by: cur.updatedBy, at: cur.updatedAt });
       }
@@ -104,7 +114,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
     case 'task.update': {
       const keys = Object.keys(op.patch);
       const toggleOnly = keys.length === 1 && keys[0] === 'done';
-      const cur = guardUpdate(doc.tasks[op.id], 'task', op.baseVersion, op.force, toggleOnly);
+      const cur = guardUpdate(own(doc.tasks, op.id), 'task', op.baseVersion, op.force, toggleOnly);
       const next: TaskItem = { ...cur, ...op.patch, ...bump(cur) };
       if (op.patch.done !== undefined && op.patch.done !== cur.done) {
         next.doneBy = op.patch.done ? actor.name : null;
@@ -115,7 +125,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       return { result: next };
     }
     case 'task.delete': {
-      const cur = doc.tasks[op.id];
+      const cur = own(doc.tasks, op.id);
       if (!cur) throw new OpError(404, { error: 'not_found' });
       if (cur.deletedAt) return { result: cur };
       const next: TaskItem = { ...cur, deletedAt: iso, deletedBy: actor.name, ...bump(cur) };
@@ -124,7 +134,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       return { result: next };
     }
     case 'task.restore': {
-      const cur = doc.tasks[op.id];
+      const cur = own(doc.tasks, op.id);
       if (!cur) throw new OpError(404, { error: 'not_found' });
       if (!cur.deletedAt) return { result: cur };
       const next: TaskItem = { ...cur, deletedAt: null, deletedBy: null, ...bump(cur) };
@@ -180,14 +190,14 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       return { result: p };
     }
     case 'property.update': {
-      const cur = guardUpdate(doc.property[op.id], 'property', op.baseVersion, op.force, false);
+      const cur = guardUpdate(own(doc.property, op.id), 'property', op.baseVersion, op.force, false);
       const next: PropertyItem = { ...cur, ...op.patch, ...bump(cur) };
       doc.property[cur.id] = next;
       touch(doc, actor, iso, `매물 정보 수정: ${clip(next.label)}`);
       return { result: next };
     }
     case 'property.delete': {
-      const cur = doc.property[op.id];
+      const cur = own(doc.property, op.id);
       if (!cur) throw new OpError(404, { error: 'not_found' });
       if (cur.deletedAt) return { result: cur };
       const next: PropertyItem = { ...cur, deletedAt: iso, deletedBy: actor.name, ...bump(cur) };
@@ -196,7 +206,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       return { result: next };
     }
     case 'property.restore': {
-      const cur = doc.property[op.id];
+      const cur = own(doc.property, op.id);
       if (!cur) throw new OpError(404, { error: 'not_found' });
       if (!cur.deletedAt) return { result: cur };
       const next: PropertyItem = { ...cur, deletedAt: null, deletedBy: null, ...bump(cur) };
@@ -212,7 +222,19 @@ function purgeTrash(doc: ProgressDoc, now: number) {
   for (const [id, t] of Object.entries(doc.tasks)) if (old(t.deletedAt)) delete doc.tasks[id];
   for (const [id, p] of Object.entries(doc.property)) if (old(p.deletedAt)) delete doc.property[id];
   doc.log = doc.log.filter((l) => !old(l.deletedAt));
+  // 휴지통 개수 상한: 오래 지운 것부터 정리
+  const capTrash = <T extends { id: string; deletedAt: string | null }>(items: T[]): Set<string> => {
+    const trash = items.filter((x) => x.deletedAt).sort((a, b) => (a.deletedAt ?? '').localeCompare(b.deletedAt ?? ''));
+    return new Set(trash.slice(0, Math.max(0, trash.length - MAX_TRASH)).map((x) => x.id));
+  };
+  for (const id of capTrash(Object.values(doc.tasks))) delete doc.tasks[id];
+  for (const id of capTrash(Object.values(doc.property))) delete doc.property[id];
+  const dropLog = capTrash(doc.log);
+  if (dropLog.size) doc.log = doc.log.filter((l) => !dropLog.has(l.id));
 }
+
+const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function readDoc(): Promise<ProgressDoc> {
   const doc = parseDoc(await getStore().read());
@@ -224,9 +246,12 @@ export interface OpOutcome { index: number; ok: boolean; result?: unknown; statu
 
 // 여러 연산을 한 번에: 읽은 값이 그대로일 때만 쓰고, 그 사이 누가 썼으면 다시 읽어 항목 단위로 재적용한다.
 // 연산 하나가 실패(충돌·삭제됨 등)해도 그 연산만 건너뛰고 나머지는 적용한다.
-export async function mutateMany(ops: Op[], actor: Actor): Promise<{ doc: ProgressDoc; outcomes: OpOutcome[] }> {
+// dryRun: 지금 저장된 값에 적용해 본 결과만 돌려주고 쓰지 않는다(CLI --dry-run).
+export async function mutateMany(ops: Op[], actor: Actor, opts: { dryRun?: boolean } = {}): Promise<{ doc: ProgressDoc; outcomes: OpOutcome[] }> {
   const store = getStore();
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
+    // 동시에 쓰다 밀렸으면 조금씩 늦춰 다시(같은 순간에 또 부딪치지 않게 무작위로)
+    if (attempt > 0) await sleep(Math.min(400, 15 * 2 ** attempt) * (0.5 + Math.random()));
     const raw = await store.read();
     const doc = parseDoc(raw);
     const now = Date.now();
@@ -240,8 +265,17 @@ export async function mutateMany(ops: Op[], actor: Actor): Promise<{ doc: Progre
         else throw e;
       }
     });
+    // 하나도 적용되지 않았으면 쓸 것이 없다
+    if (outcomes.every((o) => !o.ok)) return { doc, outcomes };
     purgeTrash(doc, now);
-    if (await store.cas(raw, JSON.stringify(doc))) return { doc, outcomes };
+    const next = JSON.stringify(doc);
+    const size = utf8Bytes(next);
+    // 커지는 쓰기만 막는다(이미 상한 근처여도 삭제·수정으로 줄이는 건 통과)
+    if (size > MAX_DOC_BYTES && size > utf8Bytes(raw ?? '')) {
+      throw new OpError(413, { error: 'too_large', message: '현황 문서가 너무 커졌어요. 오래된 기록을 지운 뒤 다시 시도하세요.' });
+    }
+    if (opts.dryRun) return { doc, outcomes };
+    if (await store.cas(raw, next)) return { doc, outcomes };
   }
   throw new OpError(503, { error: 'busy', message: '잠시 후 다시 시도하세요.' });
 }

@@ -2,23 +2,26 @@ import { NextResponse } from 'next/server';
 import { getActor } from '@/lib/session';
 import { mutate, OpError } from '@/lib/core/engine';
 import { opSchema } from '@/lib/core/validate';
+import { checkWriteRequest, NO_STORE } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
 
-const NO_STORE = { 'Cache-Control': 'no-store' };
+const MAX_BODY_BYTES = 16 * 1024;
 
 export async function POST(req: Request) {
+  // 다른 사이트에서 날아온 요청 차단(세션 확인보다 먼저: 쿠키가 실려 와도 여기서 끝난다)
+  const bad = checkWriteRequest(req);
+  if (bad) return NextResponse.json({ error: bad }, { status: 403, headers: NO_STORE });
+
   const a = await getActor(req);
   if (!a.ok) return NextResponse.json({ error: a.status === 401 ? 'unauthorized' : 'forbidden' }, { status: a.status, headers: NO_STORE });
 
-  // 다른 사이트에서 날아온 요청 차단
-  const origin = req.headers.get('origin');
-  if (origin && new URL(origin).host !== req.headers.get('host')) {
-    return NextResponse.json({ error: 'bad_origin' }, { status: 403, headers: NO_STORE });
-  }
-
   let json: unknown;
-  try { json = await req.json(); } catch {
+  try {
+    const text = await req.text();
+    if (text.length > MAX_BODY_BYTES) return NextResponse.json({ error: 'too_large', message: '요청이 너무 큽니다.' }, { status: 413, headers: NO_STORE });
+    json = JSON.parse(text);
+  } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400, headers: NO_STORE });
   }
   const parsed = opSchema.safeParse(json);
@@ -34,7 +37,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ doc, result, me: { email: a.actor.email, name: a.actor.name } }, { headers: NO_STORE });
   } catch (e) {
     if (e instanceof OpError) return NextResponse.json(e.body, { status: e.status, headers: NO_STORE });
-    console.error(e);
+    // 오류 객체 전체를 찍지 않는다(저장소 오류엔 요청 본문 = 현황 문서가 실릴 수 있음). 메시지만.
+    console.error('progress mutate failed:', e instanceof Error ? e.message : 'unknown');
     return NextResponse.json({ error: 'server_error' }, { status: 500, headers: NO_STORE });
   }
 }

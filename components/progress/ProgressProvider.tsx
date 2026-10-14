@@ -30,7 +30,8 @@ const PRESENCE_MS = 12_000;
 
 function devHeaders(): Record<string, string> {
   // 개발 서버에서만 의미가 있다(서버가 production 에선 무시한다). 두 사람 흉내용: ?as=<이메일>
-  if (typeof window === 'undefined') return {};
+  // 프로덕션 빌드에선 이 줄에서 끝나 헤더 이름조차 번들에 남지 않는다.
+  if (process.env.NODE_ENV !== 'development' || typeof window === 'undefined') return {};
   const as = new URLSearchParams(window.location.search).get('as');
   return as ? { 'x-dev-fake-email': as } : {};
 }
@@ -89,6 +90,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const docRef = useRef<ProgressDoc | null>(null);
   const meRef = useRef<Me | null>(null);
   const inflight = useRef(0);
+  const writes = useRef(0);
   const toastId = useRef(0);
   const statusRef = useRef<Status>('loading');
 
@@ -104,14 +106,18 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (inflight.current > 0) return;
     const cur = docRef.current;
+    const seq = writes.current;
     try {
       const res = await fetch(`/api/progress${cur ? `?since=${cur.version}` : ''}`, { headers: devHeaders(), cache: 'no-store' });
-      if (res.status === 401) { setSt('anon'); return; }
-      if (res.status === 403) { setSt('forbidden'); return; }
+      // 세션이 끊기거나 허용이 취소되면 들고 있던 현황도 화면 메모리에서 지운다
+      if (res.status === 401) { commit(null); setSt('anon'); return; }
+      if (res.status === 403) { commit(null); setSt('forbidden'); return; }
       if (!res.ok) return;
       const data = await res.json();
       if (inflight.current > 0) return;
       meRef.current = data.me; setMe(data.me);
+      // 폴링 응답이 오는 사이 내 저장이 끝나 더 새 문서를 받았으면, 늦게 온 옛 문서로 덮지 않는다(다음 폴링에서 맞춰짐)
+      if (writes.current !== seq) return;
       if (data.unchanged && docRef.current) {
         commit({ ...docRef.current, editing: data.editing });
       } else if (data.doc) {
@@ -149,7 +155,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     if (optimistic && before && meRef.current) commit(applyLocal(before, op, meRef.current));
     inflight.current += 1;
     let r: SendResult;
-    try { r = await post(op); } finally { inflight.current -= 1; }
+    try { r = await post(op); } finally { inflight.current -= 1; writes.current += 1; }
 
     if (r.ok && r.body?.doc) {
       if (inflight.current === 0) commit(r.body.doc as ProgressDoc);
@@ -165,7 +171,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     } else if (r.status === 401 || r.status === 403) {
       setSt(r.status === 401 ? 'anon' : 'forbidden');
       toast('로그인이 필요하거나 권한이 없어요.', { kind: 'error' });
-    } else if (r.status === 400 && typeof r.body?.message === 'string') {
+    } else if ((r.status === 400 || r.status === 413) && typeof r.body?.message === 'string') {
       toast(r.body.message, { kind: 'error' });
     } else {
       toast('저장에 실패했어요. 변경이 되돌려졌습니다.', { kind: 'error' });

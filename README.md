@@ -17,3 +17,5 @@ npm run dev                   # 가짜 로그인: DEV_FAKE_LOGIN_EMAIL=me@exampl
 npm run build && npm start
 ```
 저장소 env(`KV_REST_API_*` 또는 `UPSTASH_REDIS_REST_*`)가 없으면 `.data/progress.json`을 씁니다.
+
+가짜 로그인은 `next dev`(NODE_ENV=development) + `DEV_FAKE_LOGIN_EMAIL` + **Redis env 없음** + Vercel 아님일 때만 켜집니다(운영 데이터를 가짜 로그인으로 열지 않게). `npm run dev`는 `127.0.0.1`에만 열립니다 — 같은 와이파이의 다른 기기가 가짜 로그인으로 들어오지 못하게.
