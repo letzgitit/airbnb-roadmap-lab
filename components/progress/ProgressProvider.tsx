@@ -6,7 +6,8 @@ import type { Op } from '@/lib/core/validate';
 
 type Status = 'loading' | 'anon' | 'forbidden' | 'ready';
 export interface SendResult { ok: boolean; status: number; body: Record<string, unknown> | null }
-interface SendOpts { optimistic?: boolean; onSuccess?: () => void; quiet?: boolean }
+// onTakeLatest: 충돌 창에서 「최신 내용 받기」를 고르면 서버 최신값(current)으로 불린다. 열린 편집 칸을 그 값·version 으로 다시 채우는 데 쓴다.
+interface SendOpts { optimistic?: boolean; onSuccess?: () => void; quiet?: boolean; onTakeLatest?: (current: Record<string, unknown>) => void }
 interface Toast { id: number; msg: string; kind: 'info' | 'error'; action?: { label: string; run: () => void } }
 interface Conflict { op: Op; body: Record<string, unknown>; opts?: SendOpts }
 
@@ -68,12 +69,12 @@ function applyLocal(doc: ProgressDoc, op: Op, me: Me): ProgressDoc {
 
 function describe(kind: unknown, cur: Record<string, unknown> | undefined): string {
   if (!cur) return '';
-  if (kind === 'task') return `"${cur.text}"${cur.due ? ` · 마감 ${cur.due}` : ''}${cur.done ? ' · 완료' : ''}`;
+  if (kind === 'task') return `"${cur.text}"${cur.due ? `, 마감 ${cur.due}` : ''}${cur.done ? ', 완료' : ''}`;
   if (kind === 'log') return `[${cur.kind}] ${cur.text}`;
   if (kind === 'property') return `${cur.label}: ${cur.value}`;
   if (kind === 'step') {
     const label = { todo: '시작 전', doing: '진행 중', done: '완료' }[String(cur.status)] ?? '';
-    return `${label}${cur.targetDate ? ` · 목표일 ${cur.targetDate}` : ''}${cur.note ? ` · 메모 "${cur.note}"` : ''}`;
+    return `${label}${cur.targetDate ? `, 목표일 ${cur.targetDate}` : ''}${cur.note ? `, 메모 "${cur.note}"` : ''}`;
   }
   return '';
 }
@@ -86,6 +87,8 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [editKey, setEditKey] = useState<string | null>(null);
+  const conflictBtn = useRef<HTMLButtonElement>(null);
+  const conflictReturn = useRef<HTMLElement | null>(null);
 
   const docRef = useRef<ProgressDoc | null>(null);
   const meRef = useRef<Me | null>(null);
@@ -196,37 +199,65 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     return m;
   }, [doc, me]);
 
+  // 충돌 창: 「최신 내용 받기」 = 열린 편집 칸을 서버 최신값으로 다시 채우고 version 도 최신으로(다시 저장해도 상대 글을 몰래 덮지 않게)
+  const takeLatest = useCallback(() => {
+    const c = conflict;
+    setConflict(null);
+    if (c?.body.current && typeof c.body.current === 'object') c.opts?.onTakeLatest?.(c.body.current as Record<string, unknown>);
+    void refresh();
+  }, [conflict, refresh]);
+
+  useEffect(() => {
+    if (!conflict) return;
+    conflictReturn.current = document.activeElement as HTMLElement | null;
+    conflictBtn.current?.focus();
+    // Esc = 안전한 쪽(최신 내용 받기). 뒤에 깔린 단계 창의 Esc 처리까지 가지 않게 먼저 가로챈다.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); takeLatest(); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      const el = conflictReturn.current;
+      if (el && document.contains(el)) el.focus();
+    };
+  }, [conflict, takeLatest]);
+
   const value = useMemo<Ctx>(() => ({
     status, doc, me, refreshing, send, toast, editingBy, setEditing: setEditKey, refresh: () => { setRefreshing(true); void refresh().finally(() => setRefreshing(false)); },
   }), [status, doc, me, refreshing, send, toast, editingBy, refresh]);
 
-  const curDesc = conflict ? describe(conflict.body.kind, conflict.body.current as Record<string, unknown> | undefined) : '';
+  const curRec = conflict?.body.current as Record<string, unknown> | undefined;
+  const curDesc = conflict ? describe(conflict.body.kind, curRec) : '';
+  const mine = conflict && curRec && 'patch' in conflict.op ? describe(conflict.body.kind, { ...curRec, ...(conflict.op.patch as Record<string, unknown>) }) : '';
   const who = conflict ? String(conflict.body.by || '상대') : '';
 
   return (
     <C.Provider value={value}>
       {children}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 w-[calc(100%-32px)] max-w-md pointer-events-none" aria-live="polite">
+      {/* 폰에선 단계 창 하단 단추 줄(이전/다음 단계)을 가리지 않게 88px 위에 띄운다 */}
+      <div className="fixed bottom-[88px] md:bottom-6 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 w-[calc(100%-32px)] max-w-md pointer-events-none" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900/95 text-white'}`}>
-            <span>{t.msg}</span>
-            {t.action && <button className="shrink-0 text-amber-300 font-black" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
+          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl pl-4 pr-2 py-1.5 min-h-14 text-[14px] font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900/95 text-white'}`}>
+            <span className="py-1.5">{t.msg}</span>
+            {t.action && <button type="button" className="shrink-0 min-h-11 min-w-11 px-3 rounded-xl text-amber-300 font-bold hover:bg-white/10" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
           </div>
         ))}
       </div>
       {conflict && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4" role="alertdialog" aria-label="수정 충돌">
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="conflict-title" aria-describedby="conflict-desc">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full">
-            <div className="text-[11px] font-black text-red-500 tracking-widest mb-2"><i className="fas fa-exclamation-triangle" /> 동시에 고쳤어요</div>
-            <p className="font-extrabold text-slate-800 text-[15px] leading-snug">{who}가 방금 이 항목을 고쳤어요.</p>
-            <p className="mt-2 text-sm text-slate-600">최신 내용: <span className="font-bold text-slate-800">{curDesc || '(확인 불가)'}</span></p>
-            <div className="mt-5 flex flex-col sm:flex-row gap-2">
-              <button className="flex-1 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700" onClick={async () => {
+            <div className="text-[13px] font-bold text-red-600 mb-2"><i className="fas fa-exclamation-triangle mr-1" aria-hidden />동시에 고쳤어요</div>
+            <p id="conflict-title" className="font-extrabold text-slate-800 text-[16px] leading-snug">{who}가 방금 이 항목을 고쳤어요.</p>
+            <div id="conflict-desc" className="mt-3 space-y-1.5 text-[14px] text-slate-600 leading-relaxed">
+              <p>최신 내용: <span className="font-bold text-slate-800 break-words">{curDesc || '(확인 불가)'}</span></p>
+              {mine && <p>내가 쓴 것: <span className="font-semibold text-slate-700 break-words">{mine}</span></p>}
+            </div>
+            <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2">
+              <button type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200" onClick={async () => {
                 const c = conflict; setConflict(null);
                 if ('patch' in c.op) await send({ ...c.op, force: true } as Op, c.opts);
               }}>내 내용으로 덮어쓰기</button>
-              <button className="flex-1 px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200" onClick={() => { setConflict(null); void refresh(); }}>최신 내용 받기</button>
+              <button ref={conflictBtn} type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700" onClick={takeLatest}>최신 내용 받기</button>
             </div>
           </div>
         </div>

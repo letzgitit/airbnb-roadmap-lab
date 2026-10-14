@@ -6,8 +6,22 @@ import type { Actor } from '@/lib/core/engine';
 
 export type ActorResult = { ok: true; actor: Actor } | { ok: false; status: 401 | 403 };
 
-function nameFrom(email: string, name?: string | null) {
-  return (name && name.trim()) || email.split('@')[0];
+// 화면에 보일 이름(편집자·수정자 표시). env MEMBER_NAMES="a@x.com:나,b@y.com:아내" 로 바꿀 수 있고, 없으면 이메일 앞부분.
+// 서버에서만 매핑한다(이메일↔이름 표를 브라우저 번들에 싣지 않는다).
+function memberNames(): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const pair of (process.env.MEMBER_NAMES ?? '').split(',')) {
+    const i = pair.lastIndexOf(':');
+    if (i <= 0) continue;
+    const email = pair.slice(0, i).trim().toLowerCase();
+    const name = pair.slice(i + 1).trim().slice(0, 20);
+    if (email && name) m.set(email, name);
+  }
+  return m;
+}
+
+function nameFrom(email: string) {
+  return memberNames().get(email) || email.split('@')[0];
 }
 
 // 개발 전용 가짜 로그인이 켜지는 조건. 하나라도 어긋나면 꺼진다.
@@ -35,5 +49,5 @@ export async function getActor(req: Request): Promise<ActorResult> {
   const email = session?.user?.email?.trim().toLowerCase();
   if (!email) return { ok: false, status: 401 };
   if (!isAllowed(email)) return { ok: false, status: 403 };
-  return { ok: true, actor: { email, name: nameFrom(email, session?.user?.name) } };
+  return { ok: true, actor: { email, name: nameFrom(email) } };
 }

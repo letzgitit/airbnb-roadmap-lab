@@ -225,5 +225,7 @@
 /* --- 우리 현황(로그인 시) 추가분: 기존 톤(slate/blue) 그대로 --- */
 .status-seg button { transition: all 0.15s; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* 폰: 막대 차트 대신 단계 목록이 들어가므로 차트용 최소 높이를 풀어 준다 */
+@media (max-width: 767px) { .chart-wrapper { min-height: 0; } }
 
 }

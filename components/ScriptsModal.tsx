@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ScriptItem } from '@/lib/core/types';
+import { onActivate } from '@/lib/client/a11y';
 
 function iconFor(who: string) {
   if (/중개/.test(who)) return 'fa-building';
@@ -20,6 +21,22 @@ export function ScriptsModal({ scripts, open, shown, onClose }: { scripts: Scrip
   }, [scripts]);
   const [sel, setSel] = useState<ScriptItem | null>(null);
   const [panel, setPanel] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  // 열리면 닫기 버튼으로 포커스, Esc 로 닫기, 닫히면 연 요소로 포커스 복귀
+  useEffect(() => {
+    if (!open) return;
+    const back = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (back && document.contains(back)) back.focus();
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -38,7 +55,7 @@ export function ScriptsModal({ scripts, open, shown, onClose }: { scripts: Scrip
             <h2 className="text-2xl font-black text-slate-900">상황별 필승 멘트 공략집</h2>
             <p className="text-sm text-slate-500 mt-2 font-medium">당신을 전문가로 만들어주는 {groups.length}인의 이해관계자 대응법</p>
           </div>
-          <button onClick={onClose} aria-label="닫기" className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-500"><i className="fas fa-times" /></button>
+          <button ref={closeRef} onClick={onClose} aria-label="닫기" className="w-11 h-11 shrink-0 flex items-center justify-center bg-slate-100 rounded-full text-slate-500"><i className="fas fa-times" /></button>
         </div>
         <div className="flex-grow overflow-hidden flex flex-col md:flex-row relative">
           <div className="flex-grow overflow-y-auto bg-slate-50/50 p-6 md:w-1/2 border-r border-slate-100">
@@ -46,7 +63,7 @@ export function ScriptsModal({ scripts, open, shown, onClose }: { scripts: Scrip
               <div className="mb-8" key={who}>
                 <h3 className="text-lg font-black text-blue-800 mb-4 flex items-center gap-3"><i className={`fas ${iconFor(who)} bg-blue-100 p-2 rounded-xl text-blue-600`} /> {who}</h3>
                 {items.map((it, i) => (
-                  <div key={i} className="guide-card" role="button" tabIndex={0} onClick={() => { setSel(it); setPanel(true); }} onKeyDown={(e) => { if (e.key === 'Enter') { setSel(it); setPanel(true); } }}>
+                  <div key={i} className="guide-card" role="button" tabIndex={0} onClick={() => { setSel(it); setPanel(true); }} onKeyDown={onActivate(() => { setSel(it); setPanel(true); })}>
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-slate-700 text-sm">{it.situation}</span>
                       <i className="fas fa-comment-dots text-blue-400 text-sm" />
@@ -58,7 +75,7 @@ export function ScriptsModal({ scripts, open, shown, onClose }: { scripts: Scrip
           </div>
           <div className={`detail-panel md:relative md:translate-x-0 md:w-1/2 md:bg-white md:shadow-none ${panel ? 'active' : ''}`}>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-4 sticky top-0 bg-white z-20 md:bg-slate-50/30">
-              <button onClick={() => setPanel(false)} aria-label="목록으로" className="w-8 h-8 flex items-center justify-center bg-slate-100 rounded-lg md:hidden"><i className="fas fa-arrow-left text-sm" /></button>
+              <button onClick={() => setPanel(false)} aria-label="목록으로" className="w-11 h-11 shrink-0 flex items-center justify-center bg-slate-100 rounded-xl md:hidden"><i className="fas fa-arrow-left text-sm" /></button>
               <h3 className="font-bold text-slate-800 text-lg truncate">{sel ? `${sel.who} · ${sel.situation}` : '멘트 상세 가이드'}</h3>
             </div>
             <div className="flex-grow overflow-y-auto p-8 bg-white">

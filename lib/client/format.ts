@@ -16,12 +16,13 @@ export function relTime(iso: string | null | undefined, now = Date.now()): strin
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-export function dueLabel(due: string | null, today: string): { text: string; late: boolean } | null {
+// 마감일 표시: 날짜와 남은 날을 따로 돌려준다(화면에서 간격으로 나눠 보여 준다).
+export function dueLabel(due: string | null, today: string): { date: string; rel: string; late: boolean } | null {
   if (!due) return null;
   const [, m, d] = due.split('-');
   const diff = Math.round((new Date(`${due}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000);
-  const base = `${Number(m)}/${Number(d)}`;
-  if (diff < 0) return { text: `${base} · ${-diff}일 지남`, late: true };
-  if (diff === 0) return { text: `${base} · 오늘`, late: false };
-  return { text: `${base} · D-${diff}`, late: false };
+  const date = `${Number(m)}/${Number(d)}`;
+  if (diff < 0) return { date, rel: `${-diff}일 지남`, late: true };
+  if (diff === 0) return { date, rel: '오늘', late: false };
+  return { date, rel: `D-${diff}`, late: false };
 }

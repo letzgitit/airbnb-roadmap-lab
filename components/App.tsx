@@ -9,6 +9,7 @@ import { ScriptsModal } from './ScriptsModal';
 import { ProgressProvider, useProgress } from './progress/ProgressProvider';
 import { Summary } from './progress/Summary';
 import { LogCard } from './progress/LogCard';
+import { TrashCard } from './progress/TrashCard';
 
 export default function App({ content }: { content: Content }) {
   return (
@@ -37,7 +38,7 @@ function useDialog() {
 
 function Inner({ content }: { content: Content }) {
   const { steps, scripts, updates } = content;
-  const { status, doc, me } = useProgress();
+  const { status, doc } = useProgress();
   const loggedIn = status === 'ready' && !!doc;
   const step = useDialog();
   const tool = useDialog();
@@ -102,7 +103,6 @@ function Inner({ content }: { content: Content }) {
               {status === 'forbidden' && (
                 <button onClick={() => void signOut({ callbackUrl: '/' })} className="text-[12px] font-bold text-amber-200 underline underline-offset-4">허용되지 않은 계정이에요 · 로그아웃</button>
               )}
-              {loggedIn && <span className="text-[12px] font-bold text-emerald-200"><i className="fas fa-circle-check mr-1" />{me?.name} 님 · 우리 현황 켜짐</span>}
             </div>
           </div>
 
@@ -149,7 +149,8 @@ function Inner({ content }: { content: Content }) {
             <ul className="space-y-3">
               {updates.map((u, i) => (
                 <li key={i} className="rounded-2xl bg-slate-50 px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400"><span>{u.date}</span>{u.source && <span>· {/^https?:\/\//i.test(u.url) ? <a href={u.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{u.source}</a> : u.source}</span>}</div>
+                  <div className="text-[12px] font-bold text-slate-500">{u.date}</div>
+                  {u.source && <div className="mt-0.5 text-[12px] font-semibold text-slate-500">출처 {/^https?:\/\//i.test(u.url) ? <a href={u.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline underline-offset-2 break-all">{u.source}</a> : u.source}</div>}
                   <div className="mt-1 font-extrabold text-slate-800 text-[14px]">{u.title}</div>
                   <p className="mt-1 text-[13px] text-slate-600 leading-relaxed">{u.text}</p>
                 </li>
@@ -157,6 +158,8 @@ function Inner({ content }: { content: Content }) {
             </ul>
           </section>
         )}
+
+        {loggedIn && <TrashCard />}
       </main>
 
       <StepModal steps={steps} index={index} open={step.open} shown={step.shown} loggedIn={loggedIn} onClose={step.hide}
