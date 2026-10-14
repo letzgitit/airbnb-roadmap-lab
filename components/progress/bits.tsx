@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useProgress } from './ProgressProvider';
+import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useProgress, type DirtyScope } from './ProgressProvider';
 
 export function EditBadge({ k }: { k: string }) {
   const { editingBy } = useProgress();
@@ -47,4 +47,26 @@ export function Stamp({ by, at, rel }: { by: string | null | undefined; at: stri
       <span>{by}</span><span>{rel(at)}</span>
     </span>
   );
+}
+
+// 저장 안 한 내용이 있는 폼을 등록한다(단계 창 닫기 확인·탭 닫기 경고에 쓰임). 폼이 사라지면 자동 해제.
+export function useDirty(key: string, dirty: boolean, scope: DirtyScope = 'page') {
+  const { markDirty } = useProgress();
+  useEffect(() => {
+    markDirty(key, scope, dirty);
+    return () => markDirty(key, scope, false);
+  }, [key, scope, dirty, markDirty]);
+}
+
+// 편집 폼 안의 Esc = 편집 취소. 바뀐 게 없으면 바로 닫고, 있으면 「저장 안 한 내용이 있어요」 확인 뒤 닫는다.
+// 단계 창의 Esc(창 닫기)까지 올라가지 않게 여기서 멈춘다.
+export function useFormEsc(dirty: boolean, cancel: () => void) {
+  const { confirmDiscard } = useProgress();
+  return (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dirty) { cancel(); return; }
+    void confirmDiscard().then((ok) => { if (ok) cancel(); });
+  };
 }

@@ -5,7 +5,7 @@ import type { StepStatus, TaskItem } from '@/lib/core/types';
 import { STEP_COUNT } from '@/lib/core/types';
 import { dueLabel, relTime, todayStr } from '@/lib/client/format';
 import { useProgress } from './ProgressProvider';
-import { btnGhost, btnPrimary, EditBadge, iconBtn, inputCls, Stamp, useBusy, useEditing } from './bits';
+import { btnGhost, btnPrimary, EditBadge, iconBtn, inputCls, Stamp, useBusy, useDirty, useEditing, useFormEsc } from './bits';
 
 // 고른 상태는 흰 바탕 + 진한 글자(채운 파랑은 누르는 주 버튼에만 쓴다)
 const STATUS: { v: StepStatus; label: string; on: string }[] = [
@@ -25,7 +25,11 @@ export function StepPanel({ stepId, steps }: { stepId: number; steps: StepRef[] 
   const [note, setNote] = useState('');
   // 편집을 연 순간의 version. 저장할 때 이 값으로 보내야 그 사이 상대가 고친 걸 409 로 알아챈다.
   const [base, setBase] = useState(0);
+  const [orig, setOrig] = useState({ date: '', note: '' });
   const { busy, run } = useBusy();
+  const dirty = ed.open && (date !== orig.date || note !== orig.note);
+  useDirty(`form:step:${stepId}`, dirty, 'modal');
+  const escStep = useFormEsc(dirty, ed.stop);
   if (!doc) return null;
 
   const live = Object.values(doc.tasks).filter((t) => t.stepId === stepId && !t.deletedAt)
@@ -57,14 +61,20 @@ export function StepPanel({ stepId, steps }: { stepId: number; steps: StepRef[] 
             <div className="whitespace-pre-wrap break-words"><span className="font-bold text-slate-600 mr-2">메모</span>{st?.note || <span className="text-slate-500">없음</span>}</div>
             <Stamp by={st?.updatedBy} at={st?.updatedAt} rel={relTime} />
           </div>
-          <button type="button" className={btnGhost} onClick={() => { setDate(st?.targetDate ?? ''); setNote(st?.note ?? ''); setBase(st?.version ?? 0); ed.start(); }}>수정</button>
+          <button type="button" className={btnGhost} onClick={() => {
+            const o = { date: st?.targetDate ?? '', note: st?.note ?? '' };
+            setDate(o.date); setNote(o.note); setOrig(o); setBase(st?.version ?? 0); ed.start();
+          }}>수정</button>
         </div>
       ) : (
-        <form className="mt-3 space-y-2" onSubmit={(e) => {
+        <form className="mt-3 space-y-2" onKeyDown={escStep} onSubmit={(e) => {
           e.preventDefault();
           void run(() => send({ op: 'step.update', stepId, baseVersion: base, patch: { targetDate: date || null, note } }, {
             onSuccess: ed.stop,
-            onTakeLatest: (cur) => { setDate(String(cur.targetDate ?? '')); setNote(String(cur.note ?? '')); setBase(Number(cur.version) || 0); },
+            onTakeLatest: (cur) => {
+              const o = { date: String(cur.targetDate ?? ''), note: String(cur.note ?? '') };
+              setDate(o.date); setNote(o.note); setOrig(o); setBase(Number(cur.version) || 0);
+            },
           }));
         }}>
           <label className="block text-[13px] font-bold text-slate-600">목표일<input type="date" className={`${inputCls} mt-1`} value={date} onChange={(e) => setDate(e.target.value)} /></label>
@@ -90,6 +100,7 @@ function AddTask({ stepId }: { stepId: number }) {
   const [text, setText] = useState('');
   const [due, setDue] = useState('');
   const { busy, run } = useBusy();
+  useDirty(`form:add-task:${stepId}`, text.trim() !== '' || due !== '', 'modal');
   return (
     <form className="mt-3 flex flex-col sm:flex-row gap-2" onSubmit={(e) => {
       e.preventDefault();
@@ -110,8 +121,12 @@ function TaskRow({ t, steps }: { t: TaskItem; steps: StepRef[] }) {
   const [due, setDue] = useState('');
   const [sid, setSid] = useState(t.stepId);
   const [base, setBase] = useState(t.version);
+  const [orig, setOrig] = useState({ text: '', due: '', sid: t.stepId });
   const { busy, run } = useBusy();
   const dl = dueLabel(t.due, todayStr());
+  const dirty = ed.open && (text !== orig.text || due !== orig.due || sid !== orig.sid);
+  useDirty(`form:task:${t.id}`, dirty, 'modal');
+  const esc = useFormEsc(dirty, ed.stop);
 
   // 확인 창 없이 바로 지우고, 8초 동안 알림의 「되돌리기」로 취소할 수 있다(나중엔 맨 아래 「삭제한 항목」에서 복원).
   const del = () => {
@@ -123,13 +138,13 @@ function TaskRow({ t, steps }: { t: TaskItem; steps: StepRef[] }) {
   if (ed.open) {
     return (
       <li className="rounded-2xl border border-blue-200 bg-blue-50/40 p-3">
-        <form className="space-y-2" onSubmit={(e) => {
+        <form className="space-y-2" onKeyDown={esc} onSubmit={(e) => {
           e.preventDefault();
           void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch: { text, due: due || null, stepId: sid } }, {
             onSuccess: ed.stop,
             onTakeLatest: (cur) => {
-              setText(String(cur.text ?? '')); setDue(String(cur.due ?? ''));
-              if (typeof cur.stepId === 'number') setSid(cur.stepId);
+              const o = { text: String(cur.text ?? ''), due: String(cur.due ?? ''), sid: typeof cur.stepId === 'number' ? cur.stepId : sid };
+              setText(o.text); setDue(o.due); setSid(o.sid); setOrig(o);
               setBase(Number(cur.version) || 0);
             },
           }));
@@ -162,7 +177,10 @@ function TaskRow({ t, steps }: { t: TaskItem; steps: StepRef[] }) {
         </div>
       </div>
       <div className="flex shrink-0">
-        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => { setText(t.text); setDue(t.due ?? ''); setSid(t.stepId); setBase(t.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
+        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => {
+          const o = { text: t.text, due: t.due ?? '', sid: t.stepId };
+          setText(o.text); setDue(o.due); setSid(o.sid); setOrig(o); setBase(t.version); ed.start();
+        }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
         <button type="button" aria-label="삭제" className={`${iconBtn} hover:text-red-600`} onClick={del}><i className="fas fa-trash text-[13px]" aria-hidden /></button>
       </div>
     </li>

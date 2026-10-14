@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { PropertyItem } from '@/lib/core/types';
 import { relTime } from '@/lib/client/format';
 import { useProgress } from './ProgressProvider';
-import { btnGhost, btnPrimary, EditBadge, iconBtn, inputCls, Stamp, textBtn, useBusy, useEditing } from './bits';
+import { btnGhost, btnPrimary, EditBadge, iconBtn, inputCls, Stamp, textBtn, useBusy, useDirty, useEditing, useFormEsc } from './bits';
 
 export function PropertyCard() {
   const { doc, send } = useProgress();
@@ -12,6 +12,7 @@ export function PropertyCard() {
   const [value, setValue] = useState('');
   const [adding, setAdding] = useState(false);
   const { busy, run } = useBusy();
+  useDirty('form:add-prop', adding && (label.trim() !== '' || value.trim() !== ''));
   if (!doc) return null;
   const items = Object.values(doc.property).filter((p) => !p.deletedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
@@ -46,15 +47,22 @@ function PropRow({ p }: { p: PropertyItem }) {
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
   const [base, setBase] = useState(p.version);
+  const [orig, setOrig] = useState({ label: '', value: '' });
   const { busy, run } = useBusy();
+  const dirty = ed.open && (label !== orig.label || value !== orig.value);
+  useDirty(`form:prop:${p.id}`, dirty);
+  const esc = useFormEsc(dirty, ed.stop);
 
   if (ed.open) {
     return (
-      <form className="py-2 flex flex-col sm:flex-row gap-2" onSubmit={(e) => {
+      <form className="py-2 flex flex-col sm:flex-row gap-2" onKeyDown={esc} onSubmit={(e) => {
         e.preventDefault();
         void run(() => send({ op: 'property.update', id: p.id, baseVersion: base, patch: { label, value } }, {
           onSuccess: ed.stop,
-          onTakeLatest: (cur) => { setLabel(String(cur.label ?? '')); setValue(String(cur.value ?? '')); setBase(Number(cur.version) || 0); },
+          onTakeLatest: (cur) => {
+            const o = { label: String(cur.label ?? ''), value: String(cur.value ?? '') };
+            setLabel(o.label); setValue(o.value); setOrig(o); setBase(Number(cur.version) || 0);
+          },
         }));
       }}>
         <input className={`${inputCls} sm:w-36`} value={label} maxLength={40} onChange={(e) => setLabel(e.target.value)} aria-label="항목 이름" />
@@ -71,7 +79,7 @@ function PropRow({ p }: { p: PropertyItem }) {
         <Stamp by={p.updatedBy} at={p.updatedAt} rel={relTime} />
       </div>
       <div className="flex shrink-0">
-        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => { setLabel(p.label); setValue(p.value); setBase(p.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
+        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => { setLabel(p.label); setValue(p.value); setOrig({ label: p.label, value: p.value }); setBase(p.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
         <button type="button" aria-label="삭제" className={`${iconBtn} hover:text-red-600`} onClick={() => {
           void send({ op: 'property.delete', id: p.id }).then((r) => { if (r.ok) toast('매물 정보를 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'property.restore', id: p.id }) } }); });
         }}><i className="fas fa-trash text-[13px]" aria-hidden /></button>

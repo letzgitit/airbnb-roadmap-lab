@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { LOG_KINDS, type LogEntry, type LogKind } from '@/lib/core/types';
 import { relTime } from '@/lib/client/format';
 import { useProgress } from './ProgressProvider';
-import { btnGhost, btnPrimary, EditBadge, iconBtn, inputCls, Stamp, textBtn, useBusy, useEditing } from './bits';
+import { btnGhost, btnPrimary, EditBadge, iconBtn, inputCls, Stamp, textBtn, useBusy, useDirty, useEditing, useFormEsc } from './bits';
 
 const KIND_STYLE: Record<LogKind, string> = {
   결정: 'bg-red-50 text-red-700', 통화: 'bg-blue-50 text-blue-700', 일정: 'bg-purple-50 text-purple-700', 메모: 'bg-slate-100 text-slate-700',
@@ -16,6 +16,7 @@ export function LogCard() {
   const [text, setText] = useState('');
   const [all, setAll] = useState(false);
   const { busy, run } = useBusy();
+  useDirty('form:add-log', text.trim() !== '');
   if (!doc) return null;
   const items = doc.log.filter((l) => !l.deletedAt).sort((a, b) => b.at.localeCompare(a.at));
   const shown = all ? items : items.slice(0, 5);
@@ -46,18 +47,23 @@ function LogRow({ l }: { l: LogEntry }) {
   const [text, setText] = useState('');
   const [kind, setKind] = useState<LogKind>(l.kind);
   const [base, setBase] = useState(l.version);
+  const [orig, setOrig] = useState<{ kind: LogKind; text: string }>({ kind: l.kind, text: '' });
   const { busy, run } = useBusy();
+  const dirty = ed.open && (kind !== orig.kind || text !== orig.text);
+  useDirty(`form:log:${l.id}`, dirty);
+  const esc = useFormEsc(dirty, ed.stop);
 
   if (ed.open) {
     return (
       <li className="rounded-2xl border border-blue-200 bg-blue-50/40 p-3">
-        <form className="space-y-2" onSubmit={(e) => {
+        <form className="space-y-2" onKeyDown={esc} onSubmit={(e) => {
           e.preventDefault();
           void run(() => send({ op: 'log.update', id: l.id, baseVersion: base, patch: { kind, text } }, {
             onSuccess: ed.stop,
             onTakeLatest: (cur) => {
-              if ((LOG_KINDS as readonly string[]).includes(String(cur.kind))) setKind(cur.kind as LogKind);
-              setText(String(cur.text ?? '')); setBase(Number(cur.version) || 0);
+              const k = (LOG_KINDS as readonly string[]).includes(String(cur.kind)) ? (cur.kind as LogKind) : kind;
+              const o = { kind: k, text: String(cur.text ?? '') };
+              setKind(o.kind); setText(o.text); setOrig(o); setBase(Number(cur.version) || 0);
             },
           }));
         }}>
@@ -76,7 +82,7 @@ function LogRow({ l }: { l: LogEntry }) {
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1"><Stamp by={l.by} at={l.at} rel={relTime} /><EditBadge k={`log:${l.id}`} /></div>
       </div>
       <div className="flex shrink-0">
-        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => { setText(l.text); setKind(l.kind); setBase(l.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
+        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => { setText(l.text); setKind(l.kind); setOrig({ kind: l.kind, text: l.text }); setBase(l.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
         <button type="button" aria-label="삭제" className={`${iconBtn} hover:text-red-600`} onClick={() => {
           void send({ op: 'log.delete', id: l.id }).then((r) => { if (r.ok) toast('기록을 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'log.restore', id: l.id }) } }); });
         }}><i className="fas fa-trash text-[13px]" aria-hidden /></button>

@@ -34,8 +34,15 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
   const [sel, setSel] = useState<Sel | null>(null);
   const [panel, setPanel] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const onCloseRef = useRef(onClose);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  const { hasDirty, confirmDiscard } = useProgress();
+  // 단계 창 안의 편집 폼에 저장 안 한 내용이 있으면, 닫기·이전/다음 단계 전에 앱 안 확인 창을 띄운다
+  const guard = (fn: () => void) => {
+    if (!hasDirty('modal')) { fn(); return; }
+    void confirmDiscard().then((ok) => { if (ok) fn(); });
+  };
+  const guardedClose = () => guard(onClose);
+  const closeRefFn = useRef(guardedClose);
+  useEffect(() => { closeRefFn.current = guardedClose; });
 
   useEffect(() => {
     if (!open || !items) return;
@@ -51,7 +58,7 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
     if (!open) return;
     const back = document.activeElement as HTMLElement | null;
     closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRefFn.current(); };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
@@ -83,7 +90,7 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={step.title}>
-      <div className="modal-overlay absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="modal-overlay absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={guardedClose} />
       <div className={`absolute inset-x-0 bottom-0 top-10 bg-white rounded-t-[40px] flex flex-col modal-content transition-transform ${shown ? '' : 'translate-y-full'} md:relative md:top-auto md:inset-x-auto md:h-[85vh] md:rounded-[32px] md:mx-auto md:mt-[7vh] shadow-2xl overflow-hidden`}>
         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-20">
           <div>
@@ -93,13 +100,13 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
             </div>
             <h2 className="text-2xl font-black text-slate-800 mt-2 tracking-tight">{step.id}. {step.title}</h2>
           </div>
-          <button ref={closeRef} onClick={onClose} aria-label="닫기" className="w-11 h-11 shrink-0 flex items-center justify-center bg-slate-100 rounded-full text-slate-600 hover:bg-slate-200 transition-colors"><i className="fas fa-times" aria-hidden /></button>
+          <button ref={closeRef} onClick={guardedClose} aria-label="닫기" className="w-11 h-11 shrink-0 flex items-center justify-center bg-slate-100 rounded-full text-slate-600 hover:bg-slate-200 transition-colors"><i className="fas fa-times" aria-hidden /></button>
         </div>
 
         <div className="flex-grow overflow-hidden flex flex-col md:flex-row relative">
           <div className="flex-grow overflow-y-auto bg-slate-50/50 p-6 md:w-1/2 border-r border-slate-100">
             {step.summary && <div className="note-box !mt-0">{step.summary}</div>}
-            {loggedIn && <StepPanel stepId={step.id} steps={stepRefs} />}
+            {loggedIn && <StepPanel key={step.id} stepId={step.id} steps={stepRefs} />}
 
             {step.official.length > 0 && (
               <div>
@@ -154,8 +161,8 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
         </div>
 
         <div className="border-t border-slate-100 p-5 bg-white flex justify-between items-center sticky bottom-0 z-20">
-          <button onClick={() => onGo(index - 1)} style={{ visibility: index === 0 ? 'hidden' : 'visible' }} className="flex items-center gap-2 px-5 py-3 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"><i className="fas fa-chevron-left" />이전 단계</button>
-          <button onClick={() => onGo(index + 1)} style={{ visibility: index === steps.length - 1 ? 'hidden' : 'visible' }} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">다음 단계<i className="fas fa-chevron-right" /></button>
+          <button onClick={() => guard(() => onGo(index - 1))} style={{ visibility: index === 0 ? 'hidden' : 'visible' }} className="flex items-center gap-2 px-5 py-3 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"><i className="fas fa-chevron-left" />이전 단계</button>
+          <button onClick={() => guard(() => onGo(index + 1))} style={{ visibility: index === steps.length - 1 ? 'hidden' : 'visible' }} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">다음 단계<i className="fas fa-chevron-right" /></button>
         </div>
       </div>
     </div>

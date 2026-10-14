@@ -182,7 +182,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts }: {
                 className="flex items-center pl-4 pr-3 cursor-pointer border-b border-slate-50 hover:bg-blue-50 transition-colors h-[50px] group shrink-0"
                 onClick={() => onSelect(i)} onKeyDown={onActivate(() => onSelect(i))}
                 onMouseEnter={(e) => showTip(s.label, e)} onMouseMove={(e) => showTip(s.label, e)} onMouseLeave={() => showTip(null)}>
-                <span className="text-[12px] font-bold text-slate-500 group-hover:text-blue-700 truncate transition-colors">{s.label}</span>
+                <span title={s.label} className="min-w-0 text-[12px] leading-tight font-bold text-slate-500 group-hover:text-blue-700 line-clamp-2 break-keep transition-colors">{s.label}</span>
                 {statuses && <span className="ml-auto pl-1"><StatusMark st={st} c={c} /></span>}
               </div>
             );

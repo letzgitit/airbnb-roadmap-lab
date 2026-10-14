@@ -18,7 +18,13 @@ interface Ctx {
   editingBy: (key: string) => EditingMark | undefined;
   setEditing: (key: string | null) => void;
   refresh: () => void;
+  // 저장 안 한 편집 내용 추적: 폼마다 key 로 등록. scope 'modal' = 단계 창 안의 폼(창을 닫으면 사라짐)
+  markDirty: (key: string, scope: DirtyScope, dirty: boolean) => void;
+  hasDirty: (scope?: DirtyScope) => boolean;
+  // 앱 안 확인 창 「저장 안 한 내용이 있어요」. true = 버리고 닫기, false = 계속 편집
+  confirmDiscard: () => Promise<boolean>;
 }
+export type DirtyScope = 'modal' | 'page';
 const C = createContext<Ctx | null>(null);
 export function useProgress(): Ctx {
   const v = useContext(C);
@@ -89,6 +95,9 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const [editKey, setEditKey] = useState<string | null>(null);
   const conflictBtn = useRef<HTMLButtonElement>(null);
   const conflictReturn = useRef<HTMLElement | null>(null);
+  const dirtyRef = useRef(new Map<string, DirtyScope>());
+  const [discardAsk, setDiscardAsk] = useState<{ resolve: (v: boolean) => void } | null>(null);
+  const discardBtn = useRef<HTMLButtonElement>(null);
 
   const docRef = useRef<ProgressDoc | null>(null);
   const meRef = useRef<Me | null>(null);
@@ -221,9 +230,47 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     };
   }, [conflict, takeLatest]);
 
+  const markDirty = useCallback<Ctx['markDirty']>((key, scope, dirty) => {
+    if (dirty) dirtyRef.current.set(key, scope); else dirtyRef.current.delete(key);
+  }, []);
+  const hasDirty = useCallback<Ctx['hasDirty']>((scope) => [...dirtyRef.current.values()].some((v) => !scope || v === scope), []);
+  const discardRef = useRef<{ resolve: (v: boolean) => void } | null>(null);
+  const confirmDiscard = useCallback<Ctx['confirmDiscard']>(() => new Promise<boolean>((resolve) => {
+    discardRef.current?.resolve(false);
+    discardRef.current = { resolve };
+    setDiscardAsk({ resolve });
+  }), []);
+  const answerDiscard = useCallback((v: boolean) => {
+    const cur = discardRef.current;
+    discardRef.current = null;
+    setDiscardAsk(null);
+    cur?.resolve(v);
+  }, []);
+
+  // 탭 닫기·새로고침: 저장 안 한 내용이 있으면 브라우저 경고
+  useEffect(() => {
+    const onUnload = (e: BeforeUnloadEvent) => { if (dirtyRef.current.size > 0) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, []);
+
+  // 확인 창: 「계속 편집」에 포커스, Esc = 계속 편집(뒤의 단계 창·폼까지 가지 않게 먼저 가로챈다)
+  useEffect(() => {
+    if (!discardAsk) return;
+    const back = document.activeElement as HTMLElement | null;
+    discardBtn.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); answerDiscard(false); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      if (back && document.contains(back)) back.focus();
+    };
+  }, [discardAsk, answerDiscard]);
+
   const value = useMemo<Ctx>(() => ({
     status, doc, me, refreshing, send, toast, editingBy, setEditing: setEditKey, refresh: () => { setRefreshing(true); void refresh().finally(() => setRefreshing(false)); },
-  }), [status, doc, me, refreshing, send, toast, editingBy, refresh]);
+    markDirty, hasDirty, confirmDiscard,
+  }), [status, doc, me, refreshing, send, toast, editingBy, refresh, markDirty, hasDirty, confirmDiscard]);
 
   const curRec = conflict?.body.current as Record<string, unknown> | undefined;
   const curDesc = conflict ? describe(conflict.body.kind, curRec) : '';
@@ -258,6 +305,19 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
                 if ('patch' in c.op) await send({ ...c.op, force: true } as Op, c.opts);
               }}>내 내용으로 덮어쓰기</button>
               <button ref={conflictBtn} type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700" onClick={takeLatest}>최신 내용 받기</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {discardAsk && (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-desc">
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => answerDiscard(false)} />
+          <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full">
+            <p id="discard-title" className="font-extrabold text-slate-800 text-[16px]">저장 안 한 내용이 있어요</p>
+            <p id="discard-desc" className="mt-2 text-[14px] text-slate-600 leading-relaxed">지금 닫으면 고친 내용이 사라져요.</p>
+            <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2">
+              <button type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200" onClick={() => answerDiscard(true)}>버리고 닫기</button>
+              <button ref={discardBtn} type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700" onClick={() => answerDiscard(false)}>계속 편집</button>
             </div>
           </div>
         </div>
