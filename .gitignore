@@ -48,3 +48,4 @@ config.js
 !.env.example
 next-env.d.ts
 *.tsbuildinfo
+.vercel
