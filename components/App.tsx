@@ -37,14 +37,11 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
 
   // 저장 안 한 편집이 있는 시트는 떠나기 전에 앱 안 확인 창을 거친다
   // (단계 창 = 그 창 안의 폼, 집 정보·기록 = 어느 범위의 폼이든)
-  const guard = useCallback(async (kind: SheetKind) => {
-    if (kind !== 'step' && kind !== 'records') return true;
-    if (!hasDirty(kind === 'step' ? 'modal' : undefined)) return true;
-    return confirmDiscard();
-  }, [hasDirty, confirmDiscard]);
+  const isDirty = useCallback((kind: SheetKind) => (kind === 'step' ? hasDirty('modal') : kind === 'records' ? hasDirty() : false), [hasDirty]);
+  const guard = useCallback(async (kind: SheetKind) => !isDirty(kind) || (await confirmDiscard()), [isDirty, confirmDiscard]);
 
   // 시트는 한 번에 하나만, 주소 해시(#step-3 · #notice · #records · #scripts)와 함께 열고 닫는다
-  const { sheet, shown, open: openSheet, close: closeSheet, goStep } = useSheetRouter({ stepIds, loggedIn, status, guard });
+  const { sheet, shown, open: openSheet, close: closeSheet, goStep } = useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm: confirmDiscard });
 
   const chartSteps = useMemo(() => steps.map((s) => ({ id: s.id, label: `${s.id}. ${s.title}` })), [steps]);
   const statuses = useMemo(() => {

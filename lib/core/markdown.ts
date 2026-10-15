@@ -41,7 +41,7 @@ export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title
   out.push(`- 단계 완료: ${doneSteps} / ${steps.length}`);
   out.push(`- 할 일 완료: ${done.length} / ${live.length}`);
   out.push('');
-  out.push('## 매물 정보');
+  out.push('## 집 정보');
   out.push('');
   if (props.length === 0) out.push('- (없음)');
   for (const p of props) out.push(`- ${p.label}: ${p.value}`);

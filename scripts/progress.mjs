@@ -53,7 +53,7 @@ function describeOp(op) {
   switch (op.op) {
     case 'task.add': return `할 일 추가 [${op.stepId}단계] "${op.text}"${op.due ? ` 마감 ${op.due}` : ''}`;
     case 'log.add': return `기록 추가 [${op.kind}] "${op.text}"`;
-    case 'property.add': return `매물 정보 추가 ${op.label}: ${op.value}`;
+    case 'property.add': return `집 정보 추가 ${op.label}: ${op.value}`;
     case 'step.update': return `${op.stepId}단계 수정 (v${op.baseVersion}${op.force ? ', 덮어쓰기' : ''})${p}`;
     default: return `${op.op} ${op.id ?? op.key ?? ''}${op.baseVersion !== undefined ? ` (v${op.baseVersion})` : ''}${op.force ? ' 덮어쓰기' : ''}${p}`;
   }
@@ -65,7 +65,7 @@ function printGet(doc, steps) {
   const doneSteps = steps.filter((s) => doc.steps[String(s.id)]?.status === 'done').length;
   console.log(`문서 version ${doc.version} · 마지막 수정 ${doc.lastAction ? `${doc.lastAction.by} ${kst(doc.lastAction.at)} ${doc.lastAction.text}` : '-'}`);
   console.log(`진행률: 단계 ${doneSteps}/${steps.length} 완료 · 할 일 ${doneN}/${live.length} 완료`);
-  console.log('\n[매물 정보]');
+  console.log('\n[집 정보]');
   const props = Object.values(doc.property).filter((p) => !p.deletedAt);
   if (!props.length) console.log('  (없음)');
   for (const p of props) console.log(`  ${p.label}: ${p.value}   (id ${p.id} v${p.version})`);

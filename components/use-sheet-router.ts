@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StepSection } from '@/lib/client/step-sections';
 
-// 한 번에 하나만 열리는 시트(단계 · 최근 바뀐 규정 · 집 정보·기록 · 멘트함)와 주소 해시를 맞춘다.
+// 한 번에 하나만 열리는 시트(단계 · 주의사항 · 집 정보·기록 · 멘트함)와 주소 해시를 맞춘다.
 //   #step-3 · #notice · #records(로그인 때만) · #scripts
 // - UI 로 열면 항목을 쌓는다(pushState) → 폰의 뒤로 가기가 시트를 닫는다.
 // - UI 로 닫을 때 그 항목을 우리가 쌓았으면 뒤로 가기 한 번, 아니면 해시만 지운다(replaceState).
 // - 뒤로 가기·앞으로 가기·주소 직접 수정(popstate/hashchange)도 같은 시트 상태로 이어진다.
+// - 저장 안 한 편집이 있는 채로 뒤로 가기를 누르면 시트 항목을 곧바로 되돌려 놓고 확인 창을 띄운다
+//   (확인 창이 떠 있는 동안 뒤로 가기를 또 눌러도 사이트를 떠나지 않는다).
 // - 탭·아코디언 상태는 해시에 넣지 않는다.
 
 export type SheetState =
@@ -32,13 +34,17 @@ function parseHash(raw: string): Want {
 const SHEET_MARK = () => ({ sheet: 1 });
 const ownEntry = () => !!(window.history.state && window.history.state.sheet);
 const bareUrl = () => `${window.location.pathname}${window.location.search}`;
+// 손가락을 대는 순간(pointerdown)은 아직 「사용자 활동」이 아니라 뗄 때(pointerup · touchend) 생긴다
+const ACTIVATION_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
 
-export function useSheetRouter({ stepIds, loggedIn, status, guard }: {
+export function useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm }: {
   stepIds: number[];
   loggedIn: boolean;
   status: ProgressStatus;
-  /** 시트를 떠나기 전 확인(저장 안 한 편집). false 면 머문다. */
-  guard: (kind: SheetKind) => Promise<boolean>;
+  /** 그 시트에 저장 안 한 편집이 있나 */
+  isDirty: (kind: SheetKind) => boolean;
+  /** 「저장 안 한 내용이 있어요」 확인 창. true = 버리고 떠나기 */
+  confirm: () => Promise<boolean>;
 }) {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [shown, setShown] = useState(false);
@@ -47,8 +53,9 @@ export function useSheetRouter({ stepIds, loggedIn, status, guard }: {
   const backing = useRef(false);                     // 우리가 history.back() 을 불렀고 popstate 를 기다리는 중
   const asking = useRef(false);                      // 「저장 안 한 내용」 확인 창 응답을 기다리는 중
   const wantRecords = useRef(false);                 // #records 로 들어왔고 로그인 여부를 기다리는 중
-  const latest = useRef({ stepIds, loggedIn, status, guard });
-  useEffect(() => { latest.current = { stepIds, loggedIn, status, guard }; });
+  const unsettle = useRef<(() => void) | null>(null); // 딥링크 정리를 첫 사용자 동작까지 기다리는 중이면 그 해제 함수
+  const latest = useRef({ stepIds, loggedIn, status, isDirty, confirm });
+  useEffect(() => { latest.current = { stepIds, loggedIn, status, isDirty, confirm }; });
 
   const show = useCallback((s: SheetState) => {
     if (animTimer.current) clearTimeout(animTimer.current);
@@ -77,20 +84,35 @@ export function useSheetRouter({ stepIds, loggedIn, status, guard }: {
 
   // 주소로 들어온 시트(공유 링크·새로고침)는 앞 항목이 이 사이트가 아닐 수 있다.
   // 그 항목을 홈으로 바꾸고 시트 항목을 한 칸 쌓아, 뒤로 가기·✕ 가 사이트 밖으로 나가지 않게 한다.
-  // (Next 가 history 를 덧씌운 뒤에 써야 해서 한 틱 미룬다)
+  // 크로뮴은 「사용자 활동 없이 쌓은 기록」을 뒤로 가기에서 건너뛰므로, 첫 사용자 동작 때 쌓는다.
+  // (그 전에는 뒤로 가기가 사이트를 떠나도 괜찮다고 본다. Esc 는 활동으로 치지 않아 ✕ 쪽 replaceState 경로가 처리한다.)
   const settleDeepLink = useCallback(() => {
-    window.setTimeout(() => {
+    if (unsettle.current) return;
+    const stop = () => {
+      ACTIVATION_EVENTS.forEach((e) => window.removeEventListener(e, onInteract, true));
+      unsettle.current = null;
+    };
+    const onInteract = () => {
+      const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+      if (ua && !ua.hasBeenActive) return;            // 아직 활동이 아니면 다음 이벤트(손 뗄 때)를 기다린다
+      stop();
       if (ownEntry() || !window.location.hash) return;
       const hash = window.location.hash;
       window.history.replaceState(null, '', bareUrl());
       window.history.pushState(SHEET_MARK(), '', hash);
-    }, 0);
+    };
+    ACTIVATION_EVENTS.forEach((e) => window.addEventListener(e, onInteract, true));
+    unsettle.current = stop;
   }, []);
 
   // ── UI 에서 열기 ──
   const open = useCallback((s: SheetState) => {
     if (live.current) return;                         // 한 번에 하나
     if (s.kind === 'records' && !latest.current.loggedIn) return;
+    wantRecords.current = false;                      // 로그인 확인을 기다리던 #records 딥링크는 취소
+    unsettle.current?.();
+    // 아직 정리되지 않은 딥링크 주소(해시는 있는데 우리가 쌓은 항목이 아님)는 비운 뒤에 쌓는다
+    if (window.location.hash && !ownEntry()) window.history.replaceState(null, '', bareUrl());
     window.history.pushState(SHEET_MARK(), '', hashFor(s));
     show(s);
   }, [hashFor, show]);
@@ -98,6 +120,7 @@ export function useSheetRouter({ stepIds, loggedIn, status, guard }: {
   // ── UI 에서 닫기(✕ · 바깥 · Esc — 저장 안 한 편집 확인은 이미 끝난 뒤) ──
   const close = useCallback(() => {
     if (!live.current) return;
+    if (backing.current) return;                      // ✕ 를 빠르게 두 번 눌러도 뒤로 가기는 한 번만
     if (ownEntry()) {
       backing.current = true;
       window.history.back();
@@ -126,7 +149,12 @@ export function useSheetRouter({ stepIds, loggedIn, status, guard }: {
   // ── 뒤로 가기 · 앞으로 가기 · 주소 직접 수정 ──
   useEffect(() => {
     const onNav = async () => {
-      if (asking.current) return;
+      // 확인 창이 떠 있는 동안의 뒤로 가기는 전부 「시트 항목 되돌리기」로 막는다(사이트를 떠나지 않게)
+      if (asking.current) {
+        const c = live.current;
+        if (c && window.location.hash !== hashFor(c)) window.history.pushState(SHEET_MARK(), '', hashFor(c));
+        return;
+      }
       const cur = live.current;
       if (backing.current) {                          // 우리가 시작한 닫기(확인은 이미 끝남)
         backing.current = false;
@@ -137,13 +165,15 @@ export function useSheetRouter({ stepIds, loggedIn, status, guard }: {
       const next = want ? stateFor(want) : null;
       if (cur && next && next.kind === cur.kind && (next.kind !== 'step' || (cur.kind === 'step' && next.index === cur.index))) return;
       if (cur) {
-        asking.current = true;
-        let ok = false;
-        try { ok = await latest.current.guard(cur.kind); } finally { asking.current = false; }
-        if (live.current !== cur) return;             // 기다리는 사이 이미 바뀌었다
-        if (!ok) {                                    // 머물기: 지워진 해시를 되돌려 시트를 유지한다
+        if (latest.current.isDirty(cur.kind)) {
+          // 확인하는 동안 시트 항목 위에 머문다: 지워진 해시를 곧바로 되돌려 쌓아 둔다
           window.history.pushState(SHEET_MARK(), '', hashFor(cur));
-          return;
+          asking.current = true;
+          let ok = false;
+          try { ok = await latest.current.confirm(); } finally { asking.current = false; }
+          if (live.current !== cur) return;           // 기다리는 사이 이미 바뀌었다
+          if (ok) close();                            // 버리고 닫기: 우리가 쌓은 항목에서 뒤로 한 번
+          return;                                     // 계속 편집: 시트 항목이 이미 되돌려져 있다
         }
         hide();
       }
@@ -162,7 +192,7 @@ export function useSheetRouter({ stepIds, loggedIn, status, guard }: {
       window.removeEventListener('popstate', handler);
       window.removeEventListener('hashchange', handler);
     };
-  }, [clearHash, hashFor, hide, show, stateFor]);
+  }, [clearHash, close, hashFor, hide, show, stateFor]);
 
   // ── 처음 불러올 때 주소의 해시가 유효하면 그 시트를 연다 ──
   useEffect(() => {
@@ -174,11 +204,13 @@ export function useSheetRouter({ stepIds, loggedIn, status, guard }: {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     show(next);
     settleDeepLink();
+    return () => { unsettle.current?.(); };
   }, [clearHash, settleDeepLink, show, stateFor]);
 
   // ── #records 는 로그인을 확인한 뒤에만 열고, 로그인이 아니면 해시를 지운다 ──
   useEffect(() => {
     if (!wantRecords.current) return;
+    if (live.current) { wantRecords.current = false; return; }   // 그 사이 다른 시트를 열었으면 records 가 덮지 않는다
     if (loggedIn) {
       wantRecords.current = false;
       // eslint-disable-next-line react-hooks/set-state-in-effect
