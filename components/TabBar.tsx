@@ -37,7 +37,7 @@ export function TabBar({ items, value, onChange, label, idPrefix }: {
 
   return (
     <div ref={listRef} role="tablist" aria-label={label} onKeyDown={onKey}
-      className="relative flex overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      className="relative flex overflow-x-auto px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {items.map((t) => {
         const on = value === t.id;
         const danger = t.tone === 'danger';
@@ -47,11 +47,11 @@ export function TabBar({ items, value, onChange, label, idPrefix }: {
         return (
           <button key={t.id} ref={(el) => { refs.current[t.id] = el; }} type="button" role="tab" id={tabDomId(idPrefix, t.id)}
             aria-selected={on} aria-controls={on ? panelDomId(idPrefix, t.id) : undefined} tabIndex={on ? 0 : -1} onClick={() => onChange(t.id)}
-            className={`relative flex min-h-11 flex-1 shrink-0 items-center justify-center whitespace-nowrap px-2.5 text-[15px] ${tone}`}>
-            {danger && !on && <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500" aria-hidden />}
+            className={`relative flex min-h-11 flex-1 shrink-0 items-center justify-center whitespace-nowrap px-1.5 text-[15px] ${tone}`}>
+            {danger && !on && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500" aria-hidden />}
             {t.label}
             {t.count != null && t.count > 0 && <span className="ml-1">{t.count}</span>}
-            {on && <span className={`absolute inset-x-2.5 bottom-0 h-[3px] rounded-full ${danger ? 'bg-red-600' : 'bg-slate-900'}`} aria-hidden />}
+            {on && <span className={`absolute inset-x-1.5 bottom-0 h-[3px] rounded-full ${danger ? 'bg-red-600' : 'bg-slate-900'}`} aria-hidden />}
           </button>
         );
       })}

@@ -29,8 +29,6 @@
     padding: 16px;
   }
 
-  .status-seg button { transition: background-color 0.15s, color 0.15s; }
-
   /* 검색 결과 상자 */
   .search-dropdown {
     background: white;

@@ -35,7 +35,7 @@ export const btnGhost = 'shrink-0 whitespace-nowrap min-h-11 px-4 py-2 rounded-x
 // 작은 글자 단추(「전체 보기」「복원」 등): 글자는 작아도 누르는 칸은 44px
 export const textBtn = 'inline-flex items-center min-h-11 px-2 -mx-2 text-[13px] font-bold text-blue-700 hover:underline';
 
-// ── 한 줄 모양: 우리 할 일 · 집 정보 · 기록 · 가이드 체크리스트가 모두 같은 틀 ──
+// ── 한 줄 모양: 우리 할 일 · 집 정보 · 기록 · 추천 할 일이 모두 같은 틀 ──
 //   [앞 44px 조작] [글: 15px 본문 + 있으면 13px 보조 한 줄] [뒤 44px 아이콘 단추(휴지통)]
 export const rowCls = 'flex items-start border-b border-slate-100 last:border-b-0';
 export const leadCls = 'flex h-11 w-11 shrink-0 items-center justify-center';

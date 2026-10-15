@@ -7,7 +7,7 @@ import { SECTION_ORDER, TAB_LABEL, sectionCount, type StepSection, type StepTab 
 import { Sheet } from './Sheet';
 import { TabBar, panelDomId, tabDomId, type TabItem } from './TabBar';
 import { WarningList } from './WarningList';
-import { StepInfo, StepTasks } from './progress/StepPanel';
+import { StepInfo, StepStatusPill, StepTasks } from './progress/StepPanel';
 import { useProgress } from './progress/ProgressProvider';
 import { leadCls, rowCls } from './progress/bits';
 
@@ -15,7 +15,7 @@ const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
 const sectionTitle = 'mb-1 text-[15px] font-bold text-slate-700';
 const row = 'border-b border-slate-200 py-4 last:border-b-0';
 
-// 단계 창: 탭 5개(챙길 것 · 주의 · 기준 · 필살기 · 사례). 한 열로만 보이고, 항목마다 따로 여는 상세 화면은 없다.
+// 단계 창: 탭 5개(할 일 · 주의사항 · 규정 · 노하우 · 경험담). 한 열로만 보이고, 항목마다 따로 여는 상세 화면은 없다.
 export function StepModal({ steps, index, section, open, shown, loggedIn, onClose, beforeClose, onGo }: {
   steps: Step[]; index: number; section: StepSection | null; open: boolean; shown: boolean; loggedIn: boolean;
   onClose: () => void; beforeClose: () => Promise<boolean>; onGo: (i: number) => void;
@@ -25,7 +25,7 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<StepTab>('todo');
 
-  // 열 때·단계를 바꿀 때는 「챙길 것」부터. 검색에서 갈래를 달고 왔으면 그 탭을 바로 연다.
+  // 열 때·단계를 바꿀 때는 「할 일」부터. 검색에서 갈래를 달고 왔으면 그 탭을 바로 연다.
   const resetKey = `${open ? 1 : 0}|${index}|${section ?? ''}`;
   const [seenKey, setSeenKey] = useState(resetKey);
   if (seenKey !== resetKey) {
@@ -60,6 +60,8 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
       eyebrow={<>
         <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">{step.id}단계</span>
         <span className="text-[12px] font-bold text-slate-500">{dayLabel(step.day)}</span>
+        {/* 진행 상태: 로그인했을 때만(알약 → 작은 메뉴). 탭 막대와 닮지 않게 머리글 줄에 둔다 */}
+        {loggedIn && <StepStatusPill key={step.id} stepId={step.id} />}
       </>}
       title={step.title}
       tabs={<TabBar items={items} value={cur} onChange={(id) => setTab(id as StepTab)} label="단계 내용" idPrefix={uid} />}
@@ -71,15 +73,15 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
             className="flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-[15px] font-bold text-white transition-colors hover:bg-blue-700">다음 단계<i className="fas fa-chevron-right" aria-hidden /></button>
         </div>
       }>
-      {/* 「챙길 것」은 다른 탭으로 옮겨도 그대로 둔다(안 보이게만): 쓰던 메모·할 일 입력과 저장 안 한 편집 보호가 끊기지 않게 */}
+      {/* 「할 일」은 다른 탭으로 옮겨도 그대로 둔다(안 보이게만): 쓰던 메모·할 일 입력과 저장 안 한 편집 보호가 끊기지 않게 */}
       <div role="tabpanel" id={panelDomId(uid, 'todo')} aria-labelledby={tabDomId(uid, 'todo')} hidden={cur !== 'todo'} className="flex flex-col gap-6 p-5">
         {step.summary && <div className="rounded-2xl bg-slate-50 px-4 py-3.5 text-[15px] leading-relaxed text-slate-800">{step.summary}</div>}
-        {/* 위에서부터: 요약 → 우리 할 일 → 가이드 체크리스트 → 단계 정보(접힘) */}
+        {/* 위에서부터: 요약 → 우리 할 일 → 추천 할 일 → 목표일 · 메모(접힘) */}
         {loggedIn && <StepTasks key={`t${step.id}`} stepId={step.id} steps={stepRefs} />}
         {step.checklist.length > 0 && (
-          <section aria-label="가이드 체크리스트">
-            <h3 className={sectionTitle}>가이드 체크리스트</h3>
-            {loggedIn && <p className="mb-1 text-[13px] leading-snug text-slate-500">필요한 건 ＋를 눌러 우리 할 일에 넣으세요.</p>}
+          <section aria-label="추천 할 일">
+            <h3 className={sectionTitle}>추천 할 일</h3>
+            {loggedIn && <p className="mb-1 text-[13px] leading-snug text-slate-500">＋를 누르면 우리 할 일에 들어가요.</p>}
             <ul>{step.checklist.map((c, i) => <ChecklistRow key={i} text={c} stepId={step.id} loggedIn={loggedIn} />)}</ul>
           </section>
         )}
@@ -121,7 +123,7 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
   if (k === 'tips') {
     return (
       <>
-        <p className="pt-3 text-[13px] text-slate-500">대부분 현장 경험에서 나온 요령이에요.</p>
+        <p className="pt-3 text-[13px] text-slate-500">대부분 현장 경험에서 나온 노하우예요.</p>
         <ul>
           {step.tips.map((t, i) => (
             <li key={i} className={row}>
@@ -153,7 +155,7 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
   );
 }
 
-// 가이드 체크리스트 한 줄. 로그인 전: 누를 수 없는 목록(앞 조작 없음). 로그인 후: 앞 44px 「＋」 한 가지 동작,
+// 추천 할 일 한 줄. 로그인 전: 누를 수 없는 목록(앞 조작 없음). 로그인 후: 앞 44px 「＋」 한 가지 동작,
 // 이미 우리 할 일에 있으면 초록 체크 + 옅은 글자(누를 수 없음). 줄 끝 단추는 없다.
 function ChecklistRow({ text, stepId, loggedIn }: { text: string; stepId: number; loggedIn: boolean }) {
   const { doc, send, toast } = useProgress();

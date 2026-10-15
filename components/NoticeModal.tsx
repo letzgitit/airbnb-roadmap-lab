@@ -9,7 +9,7 @@ import { WarningList } from './WarningList';
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
 type Tab = 'rules' | 'steps';
 
-// 주의사항 창: 「바뀐 규정」(한 번에 한 항목만 펼치는 아코디언) | 「단계별 주의」(14단계의 주의 문장을 단계 이름 아래에 모아서)
+// 주의사항 창: 「바뀐 규정」(한 번에 한 항목만 펼치는 아코디언) | 「단계별 주의사항」(14단계의 주의 문장을 단계 이름 아래에 모아서)
 export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose }: {
   steps: Step[]; updates: UpdateItem[]; open: boolean; shown: boolean; initialIndex?: number | null; onClose: () => void;
 }) {
@@ -43,7 +43,7 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
   const warnCount = withWarnings.reduce((n, s) => n + s.warnings.length, 0);
   const items: TabItem[] = [
     { id: 'rules', label: '바뀐 규정', count: updates.length },
-    { id: 'steps', label: '단계별 주의', count: warnCount },
+    { id: 'steps', label: '단계별 주의사항', count: warnCount },
   ];
 
   return (

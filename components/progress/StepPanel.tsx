@@ -10,7 +10,7 @@ import {
   TRASH_NOTE, TrashButton, useBusy, useDirty, useEditing, useFormEsc,
 } from './bits';
 
-// 고른 상태는 흰 바탕 + 진한 글자(파랑은 누르는 주 버튼·링크·현재 위치에만 쓴다)
+// 진행 상태 세 가지(시작 전 · 진행 중 · 완료)
 const STATUS: { v: StepStatus; label: string }[] = [
   { v: 'todo', label: '시작 전' },
   { v: 'doing', label: '진행 중' },
@@ -22,7 +22,7 @@ const STICKY_MS = 8000; // 방금 체크한 줄이 제자리를 지키는 시간
 interface StepRef { id: number; title: string }
 
 // ───────────────────────── 우리 할 일 ─────────────────────────
-// 단계 창 「챙길 것」의 우리 할 일. 안 끝난 일만 목록에 두고, 끝낸 일은 맨 끝의 「끝낸 일 n개」 안에 접어 둔다.
+// 단계 창 「할 일」 탭의 우리 할 일. 안 끝난 일만 목록에 두고, 완료한 일은 맨 끝의 「완료한 일 n개」 안에 접어 둔다.
 export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] }) {
   const { doc } = useProgress();
   // 편집 폼이 열려 있는 할 일 id: 상대가 그 사이 지우거나 옮겨도 폼을 지우지 않고 그대로 둔다
@@ -94,7 +94,7 @@ export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] 
           <li className={rowCls}>
             <button type="button" aria-expanded={doneExpanded} onClick={() => setShowDone((v) => !v)}
               className="flex min-h-11 w-full items-center justify-between gap-3 text-left text-[15px] font-semibold text-slate-600 hover:bg-slate-50">
-              <span>끝낸 일 {done.length}개</span>
+              <span>완료한 일 {done.length}개</span>
               <i className={`fas ${doneExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
             </button>
           </li>
@@ -259,13 +259,95 @@ function TaskRow({ t, steps, panelStepId, onEditChange, onToggle, onGone }: {
   );
 }
 
-// ───────────────────────── 단계 정보 ─────────────────────────
-// 단계 상태 · 목표일 · 메모. 평소에는 한 줄(요약)로 접어 두고, 누르면 펼쳐진다. 「챙길 것」 맨 아래에 둔다.
+// ───────────────────────── 진행 상태 ─────────────────────────
+// 시트 머리글의 「● 진행 중 ⌄」 알약: 누르면 세 가지 중 고르는 작은 메뉴(현재 것에 체크, 44px 줄).
+// 탭 막대처럼 보이지 않게 알약 모양 + 작은 색 점(시작 전 회색 · 진행 중 파랑 · 완료 초록).
+// 고르면 예전과 같은 step.update(status)를 보내므로 동시에 고친 경우의 충돌 창도 그대로 쓴다.
+const STATUS_DOT: Record<StepStatus, string> = { todo: 'bg-slate-400', doing: 'bg-blue-600', done: 'bg-emerald-600' };
+
+export function StepStatusPill({ stepId }: { stepId: number }) {
+  const { doc, send } = useProgress();
+  const uid = useId();
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const st = doc?.steps[String(stepId)];
+  const status: StepStatus = st?.status ?? 'todo';
+  const cur = STATUS.find((x) => x.v === status) ?? STATUS[0];
+
+  // 메뉴가 열려 있는 동안: 현재 항목에 포커스, Esc = 메뉴만 닫기(뒤의 시트까지 닫지 않게 먼저 가로챈다)
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      e.preventDefault();
+      setOpen(false);
+      btnRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open]);
+
+  if (!doc) return null;
+
+  const pick = (v: StepStatus) => {
+    setOpen(false);
+    btnRef.current?.focus();
+    if (v === status) return;
+    void send({ op: 'step.update', stepId, baseVersion: st?.version ?? 0, patch: { status: v } });
+  };
+  const onMenuKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? [])];
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    let n = -1;
+    if (e.key === 'ArrowDown') n = (i + 1) % items.length;
+    else if (e.key === 'ArrowUp') n = (i - 1 + items.length) % items.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = items.length - 1;
+    else if (e.key === 'Tab') { setOpen(false); return; }
+    if (n < 0) return;
+    e.preventDefault();
+    items[n]?.focus();
+  };
+
+  return (
+    <div className="relative -my-1">
+      <button ref={btnRef} type="button" aria-haspopup="menu" aria-expanded={open} aria-controls={`${uid}-menu`} aria-label={`진행 상태: ${cur.label}`}
+        onClick={() => setOpen((v) => !v)}
+        className="relative inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white pl-2.5 pr-2.5 text-[13px] font-bold text-slate-700 hover:bg-slate-50 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} aria-hidden />
+        <span>{cur.label}</span>
+        <i className="fas fa-chevron-down text-[10px] text-slate-500" aria-hidden />
+      </button>
+      {open && (
+        <>
+          {/* 바깥을 누르면 메뉴만 닫힌다(투명한 막이 시트 바깥 어두운 막까지 덮어, 시트가 같이 닫히지 않는다) */}
+          <div className="fixed inset-0 z-20" aria-hidden onClick={() => setOpen(false)} />
+          <div ref={menuRef} id={`${uid}-menu`} role="menu" aria-label="진행 상태" onKeyDown={onMenuKey}
+            className="absolute left-0 top-full z-30 mt-1.5 w-40 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl">
+            {STATUS.map((x) => (
+              <button key={x.v} type="button" role="menuitemradio" aria-checked={status === x.v} onClick={() => pick(x.v)}
+                className="flex min-h-11 w-full items-center gap-2.5 px-3.5 text-left text-[15px] font-semibold text-slate-800 hover:bg-slate-50">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[x.v]}`} aria-hidden />
+                <span className="flex-1">{x.label}</span>
+                {status === x.v && <i className="fas fa-check text-[13px] text-slate-700" aria-hidden />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ───────────────────────── 목표일 · 메모 ─────────────────────────
+// 평소에는 한 줄(요약)로 접어 두고, 누르면 펼쳐진다. 「할 일」 탭 맨 아래에 둔다. 진행 상태는 시트 머리글의 알약에 있다.
 export function StepInfo({ stepId }: { stepId: number }) {
   const { doc, send } = useProgress();
   const uid = useId();
   const st = doc?.steps[String(stepId)];
-  const status = st?.status ?? 'todo';
   const ed = useEditing(`step:${stepId}`);
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState('');
@@ -279,24 +361,17 @@ export function StepInfo({ stepId }: { stepId: number }) {
   const escStep = useFormEsc(dirty, ed.stop);
   if (!doc) return null;
 
-  const setStatus = (v: StepStatus) => {
-    if (v === status) return;
-    void send({ op: 'step.update', stepId, baseVersion: st?.version ?? 0, patch: { status: v } });
-  };
-  // 접힌 줄의 요약: 상태 · 목표일(있을 때) · 메모(있을 때)
-  const summary = [
-    STATUS.find((s) => s.v === status)?.label ?? '',
-    st?.targetDate ? `목표 ${shortDate(st.targetDate)}` : '',
-    st?.note?.trim() ? '메모 있음' : '',
-  ].filter(Boolean);
+  // 접힌 줄의 요약: 목표일(있을 때) · 메모 있음(있을 때), 둘 다 없으면 「없음」
+  const summary = [st?.targetDate ? shortDate(st.targetDate) : '', st?.note?.trim() ? '메모 있음' : ''].filter(Boolean);
+  if (summary.length === 0) summary.push('없음');
 
   return (
-    <section aria-label="단계 정보">
+    <section aria-label="목표일 · 메모">
       <button type="button" aria-expanded={open} aria-controls={`${uid}-info`} onClick={() => setOpen((v) => !v)}
         className="flex min-h-11 w-full items-center justify-between gap-3 border-t border-slate-100 text-left">
-        <span className="shrink-0 text-[15px] font-bold text-slate-700">단계 정보</span>
+        <span className="shrink-0 text-[15px] font-bold text-slate-700">목표일 · 메모</span>
         <span className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[13px] font-semibold text-slate-500">
-          {summary.map((s) => <span key={s}>{s}</span>)}
+          {summary.map((x) => <span key={x}>{x}</span>)}
           <EditBadge k={`step:${stepId}`} />
         </span>
         <i className={`fas ${open ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
@@ -304,15 +379,8 @@ export function StepInfo({ stepId }: { stepId: number }) {
 
       {/* 접어도 지우지 않는다: 쓰던 메모와 저장 안 한 편집 보호가 끊기지 않게 */}
       <div id={`${uid}-info`} hidden={!open} className="pt-2">
-        <div className="status-seg grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="단계 상태">
-          {STATUS.map((s) => (
-            <button key={s.v} type="button" onClick={() => setStatus(s.v)} aria-pressed={status === s.v}
-              className={`min-h-11 rounded-lg text-[15px] ${status === s.v ? 'bg-white font-bold text-slate-900 shadow-sm' : 'font-semibold text-slate-600 hover:bg-white/60'}`}>{s.label}</button>
-          ))}
-        </div>
-
         {!ed.open ? (
-          <div className="mt-3 flex items-start justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1 text-[15px] text-slate-700">
               <div><span className="mr-2 font-bold text-slate-500">목표일</span>{st?.targetDate ?? <span className="text-slate-500">미정</span>}</div>
               <div className="whitespace-pre-wrap"><span className="mr-2 font-bold text-slate-500">메모</span>{st?.note || <span className="text-slate-500">없음</span>}</div>
@@ -323,7 +391,7 @@ export function StepInfo({ stepId }: { stepId: number }) {
             }}>수정</button>
           </div>
         ) : (
-          <form className="mt-3 space-y-2" onKeyDown={escStep} onSubmit={(e) => {
+          <form className="space-y-2" onKeyDown={escStep} onSubmit={(e) => {
             e.preventDefault();
             void run(() => send({ op: 'step.update', stepId, baseVersion: base, patch: { targetDate: date || null, note } }, {
               onSuccess: ed.stop,

@@ -84,7 +84,7 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
     const stepHits: Hit[] = [];
     steps.forEach((s, i) => {
       const base = `${s.id}. ${s.title}`;
-      // 제목·요약·체크리스트에 걸리면 단계만 연다(「챙길 것」 탭)
+      // 제목·요약·추천 할 일에 걸리면 단계만 연다(「할 일」 탭)
       const head = [s.title, s.summary, ...s.checklist].find(has);
       if (head) stepHits.push({ kind: 'step', i, section: null, label: base, text: head });
       // 네 갈래 목록에 걸리면 그 탭까지 연다(갈래마다 첫 번째 걸린 글 하나). 라벨은 탭 이름 그대로.
@@ -165,7 +165,7 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
 
       <main>
         <div className="chart-wrapper">
-          {!loggedIn && <p className="mb-4 max-w-[720px] px-1 text-[15px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 챙길 것과 주의사항이 나와요.</p>}
+          {!loggedIn && <p className="mb-4 max-w-[720px] px-1 text-[15px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 할 일과 주의사항이 나와요.</p>}
           <HomeEntries ruleCount={updates.length} warnCount={warnCount} loggedIn={loggedIn}
             onOpenNotice={() => openNotice(null)} onOpenRecords={() => openSheet({ kind: 'records' })} />
           <div className="mb-3 mt-2 flex flex-col items-start gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
