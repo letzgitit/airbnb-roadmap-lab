@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { signIn, signOut } from 'next-auth/react';
 import type { Content, StepStatus } from '@/lib/core/types';
 import { SECTION_LABEL, SECTION_ORDER, type StepSection } from '@/lib/client/step-sections';
@@ -12,6 +12,7 @@ import { NoticeModal } from './NoticeModal';
 import { ProgressProvider, useProgress } from './progress/ProgressProvider';
 import { Summary } from './progress/Summary';
 import { RecordsModal } from './progress/RecordsModal';
+import { useSheetRouter, type SheetKind } from './use-sheet-router';
 
 export default function App({ content, loginReady }: { content: Content; loginReady: boolean }) {
   return (
@@ -19,23 +20,6 @@ export default function App({ content, loginReady }: { content: Content; loginRe
       <Inner content={content} loginReady={loginReady} />
     </ProgressProvider>
   );
-}
-
-function useDialog() {
-  const [open, setOpen] = useState(false);
-  const [shown, setShown] = useState(false);
-  const t = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const show = useCallback(() => {
-    if (t.current) clearTimeout(t.current);
-    setOpen(true);
-    t.current = setTimeout(() => setShown(true), 10);
-  }, []);
-  const hide = useCallback(() => {
-    setShown(false);
-    if (t.current) clearTimeout(t.current);
-    t.current = setTimeout(() => setOpen(false), 300);
-  }, []);
-  return { open, shown, show, hide };
 }
 
 // 검색 결과 한 줄: 어디에 걸렸는지(label)와, 눌렀을 때 갈 곳
@@ -46,29 +30,21 @@ const MAX_HITS = 8;
 
 function Inner({ content, loginReady }: { content: Content; loginReady: boolean }) {
   const { steps, scripts, updates } = content;
-  const { status, doc } = useProgress();
+  const { status, doc, hasDirty, confirmDiscard } = useProgress();
   const loggedIn = status === 'ready' && !!doc;
-  const step = useDialog();
-  const tool = useDialog();
-  const notice = useDialog();
-  const records = useDialog();
-  const { show: showStep } = step;
-  const { show: showNotice } = notice;
-  const { hide: hideRecords } = records;
-  const [index, setIndex] = useState(0);
-  const [section, setSection] = useState<StepSection | null>(null);
-  const [noticeIdx, setNoticeIdx] = useState<number | null>(null);
   const [query, setQuery] = useState('');
+  const stepIds = useMemo(() => steps.map((s) => s.id), [steps]);
 
-  // 로그아웃·세션 만료로 현황이 사라지면 「집 정보 · 기록」 창도 같이 닫는다(화면 잠금이 남지 않게)
-  const recordsOpen = loggedIn && records.open;
-  useEffect(() => { if (!loggedIn) hideRecords(); }, [loggedIn, hideRecords]);
+  // 저장 안 한 편집이 있는 시트는 떠나기 전에 앱 안 확인 창을 거친다
+  // (단계 창 = 그 창 안의 폼, 집 정보·기록 = 어느 범위의 폼이든)
+  const guard = useCallback(async (kind: SheetKind) => {
+    if (kind !== 'step' && kind !== 'records') return true;
+    if (!hasDirty(kind === 'step' ? 'modal' : undefined)) return true;
+    return confirmDiscard();
+  }, [hasDirty, confirmDiscard]);
 
-  // 창이 하나라도 열려 있으면 뒤 화면 스크롤을 잠근다
-  useEffect(() => {
-    document.body.style.overflow = step.open || tool.open || notice.open || recordsOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [step.open, tool.open, notice.open, recordsOpen]);
+  // 시트는 한 번에 하나만, 주소 해시(#step-3 · #notice · #records · #scripts)와 함께 열고 닫는다
+  const { sheet, shown, open: openSheet, close: closeSheet, goStep } = useSheetRouter({ stepIds, loggedIn, status, guard });
 
   const chartSteps = useMemo(() => steps.map((s) => ({ id: s.id, label: `${s.id}. ${s.title}` })), [steps]);
   const statuses = useMemo(() => {
@@ -88,9 +64,9 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
     return m;
   }, [loggedIn, doc]);
 
-  const openStep = useCallback((i: number, sec: StepSection | null = null) => { setIndex(i); setSection(sec); showStep(); }, [showStep]);
+  const openStep = useCallback((i: number, section: StepSection | null = null) => openSheet({ kind: 'step', index: i, section }), [openSheet]);
   const openStepById = useCallback((id: number) => { const i = steps.findIndex((s) => s.id === id); if (i >= 0) openStep(i); }, [steps, openStep]);
-  const openNotice = useCallback((idx: number | null = null) => { setNoticeIdx(idx); showNotice(); }, [showNotice]);
+  const openNotice = useCallback((idx: number | null = null) => openSheet({ kind: 'notice', initialIndex: idx }), [openSheet]);
 
   const results = useMemo<Hit[] | null>(() => {
     const q = query.trim().toLowerCase();
@@ -99,10 +75,10 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
     const stepHits: Hit[] = [];
     steps.forEach((s, i) => {
       const base = `${s.id}. ${s.title}`;
-      // 제목·요약·체크리스트에 걸리면 단계만 연다
+      // 제목·요약·체크리스트에 걸리면 단계만 연다(「챙길 것」 탭)
       const head = [s.title, s.summary, ...s.checklist].find(has);
       if (head) stepHits.push({ kind: 'step', i, section: null, label: base, text: head });
-      // 네 갈래 목록에 걸리면 그 목록까지 연다(갈래마다 첫 번째 걸린 글 하나)
+      // 네 갈래 목록에 걸리면 그 탭까지 연다(갈래마다 첫 번째 걸린 글 하나)
       const pool: Record<StepSection, string[]> = {
         warnings: s.warnings, official: s.official.map((o) => o.text), tips: s.tips.map((t) => t.text), community: s.community.map((c) => c.text),
       };
@@ -131,40 +107,40 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
     <div className="app-container">
       <header className="gradient-header relative">
         <div className="header-bg" />
-        <div className="relative z-30 px-6 pt-10 pb-12">
-          <div className="flex flex-wrap justify-between items-start gap-4 mb-8">
-            <div>
-              <h1 className="text-3xl font-black text-white leading-tight tracking-tight">외도민 타임 라인</h1>
-              <p className="text-sm text-blue-100 mt-2 font-medium opacity-90">Created by <span className="font-bold text-amber-300">주money</span></p>
-            </div>
-            <div className="flex flex-col items-start sm:items-end gap-2">
-              <button onClick={tool.show} className="toolbox-btn"><i className="fas fa-comment-medical text-lg" /><span>상황별 필승 멘트함</span></button>
-              {status === 'anon' && (loginReady ? (
-                <button onClick={() => void signIn('google', { callbackUrl: '/' })} className="text-[12px] font-bold text-blue-100 hover:text-white underline underline-offset-4">
-                  <i className="fab fa-google mr-1" />우리 현황 보기 (로그인)
-                </button>
-              ) : (
-                <button type="button" disabled aria-disabled="true" className="text-[12px] font-semibold text-blue-100/80 cursor-not-allowed">
-                  <i className="fab fa-google mr-1" aria-hidden />로그인 준비 중
-                </button>
-              ))}
-              {status === 'forbidden' && (
-                <button onClick={() => void signOut({ callbackUrl: '/' })} className="text-[12px] font-bold text-amber-200 underline underline-offset-4">허용되지 않은 계정이에요 · 로그아웃</button>
-              )}
-            </div>
+        <div className="relative z-30 px-5 pt-4 pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="min-w-0 text-2xl font-black leading-tight tracking-tight text-white">외도민 타임 라인</h1>
+            <button type="button" onClick={() => openSheet({ kind: 'scripts' })} aria-label="상황별 필승 멘트함" className="toolbox-btn h-10 shrink-0 gap-2 px-3 py-0 text-[13px]">
+              <i className="fas fa-comment-medical text-base" aria-hidden /><span>멘트함</span>
+            </button>
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3">
+            <p className="text-xs font-medium text-blue-100 opacity-90">Created by <span className="font-bold text-amber-300">주money</span></p>
+            {status === 'anon' && (loginReady ? (
+              <button type="button" onClick={() => void signIn('google', { callbackUrl: '/' })} className="inline-flex min-h-9 items-center text-[12px] font-bold text-blue-100 underline underline-offset-4 hover:text-white">
+                <i className="fab fa-google mr-1" aria-hidden />우리 현황 보기 (로그인)
+              </button>
+            ) : (
+              <button type="button" disabled aria-disabled="true" className="inline-flex min-h-9 cursor-not-allowed items-center text-[12px] font-semibold text-blue-100/80">
+                <i className="fab fa-google mr-1" aria-hidden />로그인 준비 중
+              </button>
+            ))}
+            {status === 'forbidden' && (
+              <button type="button" onClick={() => void signOut({ callbackUrl: '/' })} className="inline-flex min-h-9 items-center text-[12px] font-bold text-amber-200 underline underline-offset-4">허용되지 않은 계정이에요 · 로그아웃</button>
+            )}
           </div>
 
-          <div className="relative z-30">
+          <div className="relative z-30 mt-2">
             <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="임대인 설득, 조명 색온도, 구청 실사 등 키워드 검색" aria-label="검색"
-              className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/10 border border-white/30 text-white placeholder-white/60 focus:bg-white focus:text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-500/30 transition-all text-sm font-semibold" />
-            <i className="fas fa-search absolute left-4 top-4.5 text-white/50 text-xl pt-1" />
+              className="h-11 w-full rounded-2xl border border-white/30 bg-white/10 pl-11 pr-4 text-sm font-semibold text-white placeholder-white/60 transition-all focus:bg-white focus:text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-500/30" />
+            <i className="fas fa-search pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base text-white/60" aria-hidden />
             {results && (
-              <div className="absolute top-full left-0 w-full mt-3 search-dropdown z-50">
-                {results.length === 0 && <div className="p-4 text-center text-slate-400 text-sm">검색 결과가 없습니다.</div>}
+              <div className="search-dropdown absolute left-0 top-full z-50 mt-3 w-full">
+                {results.length === 0 && <div className="p-4 text-center text-sm text-slate-400">검색 결과가 없습니다.</div>}
                 {results.map((r, k) => (
-                  <button key={k} type="button" className="block w-full text-left p-4 border-b border-slate-50 active:bg-blue-50 hover:bg-slate-50 transition-colors" onClick={() => goHit(r)}>
-                    <div className="text-[11px] text-blue-700 font-black mb-1">{r.label}</div>
-                    <div className="text-[13px] font-bold text-slate-800 line-clamp-2">{r.text}</div>
+                  <button key={k} type="button" className="block w-full border-b border-slate-50 p-4 text-left transition-colors hover:bg-slate-50 active:bg-blue-50" onClick={() => goHit(r)}>
+                    <div className="mb-1 text-[11px] font-black text-blue-700">{r.label}</div>
+                    <div className="line-clamp-2 text-[13px] font-bold text-slate-800">{r.text}</div>
                   </button>
                 ))}
               </div>
@@ -175,10 +151,12 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
 
       <main>
         <div className="chart-wrapper">
-          {loggedIn && <Summary steps={steps} onOpenStep={openStepById} onOpenRecords={records.show} />}
+          {loggedIn
+            ? <Summary steps={steps} onOpenStep={openStepById} onOpenRecords={() => openSheet({ kind: 'records' })} />
+            : <p className="mb-4 px-1 text-[14px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 챙길 것과 주의사항이 나와요.</p>}
           <NoticeRow updates={updates} onOpen={() => openNotice(null)} />
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 px-2 gap-4">
-            <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2"><i className="fas fa-calendar-alt text-blue-600" /> 타임 라인 (Day 0 ~ 45)</h3>
+          <div className="mb-6 flex flex-col items-start gap-4 px-2 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="flex items-center gap-2 text-base font-extrabold text-slate-800"><i className="fas fa-calendar-alt text-blue-600" /> 타임 라인 (Day 0 ~ 45)</h3>
             <div className="flex flex-wrap gap-3 text-[11px] font-bold">
               <Legend cls="bg-slate-100 text-slate-600" dot="bg-slate-400">준비</Legend>
               <Legend cls="bg-red-50 text-red-600" dot="bg-red-500">계약</Legend>
@@ -191,15 +169,15 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
         </div>
       </main>
 
-      <StepModal steps={steps} index={index} section={section} open={step.open} shown={step.shown} loggedIn={loggedIn} onClose={step.hide}
-        onGo={(i) => { if (i >= 0 && i < steps.length) { setIndex(i); setSection(null); } }} />
-      <ScriptsModal scripts={scripts} open={tool.open} shown={tool.shown} onClose={tool.hide} />
-      <NoticeModal updates={updates} open={notice.open} shown={notice.shown} initialIndex={noticeIdx} onClose={notice.hide} />
-      {loggedIn && <RecordsModal open={records.open} shown={records.shown} onClose={records.hide} />}
+      <StepModal steps={steps} index={sheet?.kind === 'step' ? sheet.index : 0} section={sheet?.kind === 'step' ? sheet.section : null}
+        open={sheet?.kind === 'step'} shown={shown} loggedIn={loggedIn} onClose={closeSheet} beforeClose={() => guard('step')} onGo={goStep} />
+      <ScriptsModal scripts={scripts} open={sheet?.kind === 'scripts'} shown={shown} onClose={closeSheet} />
+      <NoticeModal updates={updates} open={sheet?.kind === 'notice'} initialIndex={sheet?.kind === 'notice' ? sheet.initialIndex : null} shown={shown} onClose={closeSheet} />
+      {loggedIn && <RecordsModal open={sheet?.kind === 'records'} shown={shown} onClose={closeSheet} beforeClose={() => guard('records')} />}
     </div>
   );
 }
 
 function Legend({ cls, dot, children }: { cls: string; dot: string; children: React.ReactNode }) {
-  return <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full ${cls}`}><div className={`w-2.5 h-2.5 rounded-full ${dot}`} />{children}</div>;
+  return <div className={`flex items-center gap-1.5 rounded-full px-2 py-1 ${cls}`}><div className={`h-2.5 w-2.5 rounded-full ${dot}`} />{children}</div>;
 }

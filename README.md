@@ -9,6 +9,11 @@
 - `content/` — 콘텐츠 JSON(다른 작업이 관리). 없으면 `fixtures/content-sample/` 사용
 - `scripts/` — `progress.mjs`(CLI, `README-progress.md`), `seed-progress.mjs`, `verify-sync.mjs`
 
+## 주소로 바로 열기
+창(시트)은 한 번에 하나만 열리고 주소 해시와 함께 움직입니다. 폰의 뒤로 가기가 창을 닫습니다.
+- `/#step-3` 단계 창 · `/#notice` 최근 바뀐 규정 · `/#scripts` 멘트함 · `/#records` 집 정보·기록(로그인했을 때만, 아니면 무시)
+- 탭·펼침 상태는 주소에 넣지 않습니다.
+
 ## 실행
 ```bash
 npm i
