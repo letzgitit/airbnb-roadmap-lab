@@ -4,13 +4,13 @@ import { useCallback, useMemo, useState } from 'react';
 import { signIn, signOut } from 'next-auth/react';
 import type { Content, StepStatus } from '@/lib/core/types';
 import { SECTION_ORDER, TAB_LABEL, type StepSection } from '@/lib/client/step-sections';
-import { TimelineChart, TYPE_DOT, TYPE_LABEL, TYPE_ORDER } from './TimelineChart';
+import { dueState, todayStr } from '@/lib/client/format';
+import { TimelineChart, TYPE_DOT, TYPE_LABEL, TYPE_ORDER, type StepCounts } from './TimelineChart';
 import { StepModal } from './StepModal';
 import { ScriptsModal } from './ScriptsModal';
-import { NoticeRow } from './NoticeRow';
+import { HomeEntries } from './HomeEntries';
 import { NoticeModal } from './NoticeModal';
 import { ProgressProvider, useProgress } from './progress/ProgressProvider';
-import { Summary } from './progress/Summary';
 import { RecordsModal } from './progress/RecordsModal';
 import { useSheetRouter, type SheetKind } from './use-sheet-router';
 
@@ -50,17 +50,23 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
     steps.forEach((s) => { m[s.id] = doc.steps[String(s.id)]?.status; });
     return m;
   }, [loggedIn, doc, steps]);
+  // 단계별 할 일 개수. 「오늘 n」 · 「기한 지남 n」은 안 끝난 할 일만 센다(마감 기준은 할 일 줄의 날짜 표시와 같다).
+  const today = todayStr();
   const counts = useMemo(() => {
     if (!loggedIn || !doc) return null;
-    const m: Record<number, { done: number; total: number }> = {};
+    const m: Record<number, StepCounts> = {};
     Object.values(doc.tasks).forEach((t) => {
       if (t.deletedAt) return;
-      const c = (m[t.stepId] ??= { done: 0, total: 0 });
-      c.total += 1; if (t.done) c.done += 1;
+      const c = (m[t.stepId] ??= { done: 0, total: 0, today: 0, late: 0 });
+      c.total += 1;
+      if (t.done) { c.done += 1; return; }
+      const due = dueState(t.due, today);
+      if (due === 'today') c.today += 1;
+      else if (due === 'late') c.late += 1;
     });
     return m;
-  }, [loggedIn, doc]);
-  // 지금 하는 단계: 진행 중인 첫 단계, 없으면 시작 안 한 첫 단계(홈 「지금」 단추와 같은 기준)
+  }, [loggedIn, doc, today]);
+  // 지금 하는 단계: 진행 중인 첫 단계, 없으면 시작 안 한 첫 단계(타임라인의 「지금」 줄 기준)
   const currentId = useMemo(() => {
     if (!statuses) return null;
     const first = (want: StepStatus) => steps.find((s) => (statuses[s.id] ?? 'todo') === want)?.id;
@@ -68,7 +74,6 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
   }, [statuses, steps]);
 
   const openStep = useCallback((i: number, section: StepSection | null = null) => openSheet({ kind: 'step', index: i, section }), [openSheet]);
-  const openStepById = useCallback((id: number) => { const i = steps.findIndex((s) => s.id === id); if (i >= 0) openStep(i); }, [steps, openStep]);
   const openNotice = useCallback((idx: number | null = null) => openSheet({ kind: 'notice', initialIndex: idx }), [openSheet]);
   const warnCount = useMemo(() => steps.reduce((n, s) => n + s.warnings.length, 0), [steps]);
 
@@ -120,6 +125,11 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
           </div>
           <div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3">
             <p className="text-xs text-slate-500">주money</p>
+            {/* 로그아웃은 여기 한 곳뿐(익명일 때 로그인 링크가 있는 자리) */}
+            {loggedIn && (
+              <button type="button" onClick={() => void signOut({ redirect: true, callbackUrl: '/' })}
+                className="-mr-2 inline-flex min-h-9 items-center px-2 text-[13px] font-semibold text-slate-600 hover:underline">로그아웃</button>
+            )}
             {status === 'anon' && (loginReady ? (
               <button type="button" onClick={() => void signIn('google', { callbackUrl: '/' })} className="inline-flex min-h-9 items-center text-[13px] font-bold text-blue-700 underline underline-offset-4">
                 <i className="fab fa-google mr-1.5" aria-hidden />우리 현황 보기 (로그인)
@@ -155,10 +165,9 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
 
       <main>
         <div className="chart-wrapper">
-          {loggedIn
-            ? <Summary steps={steps} onOpenStep={openStepById} onOpenRecords={() => openSheet({ kind: 'records' })} />
-            : <p className="mb-4 max-w-[720px] px-1 text-[15px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 챙길 것과 주의사항이 나와요.</p>}
-          <NoticeRow ruleCount={updates.length} warnCount={warnCount} onOpen={() => openNotice(null)} />
+          {!loggedIn && <p className="mb-4 max-w-[720px] px-1 text-[15px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 챙길 것과 주의사항이 나와요.</p>}
+          <HomeEntries ruleCount={updates.length} warnCount={warnCount} loggedIn={loggedIn}
+            onOpenNotice={() => openNotice(null)} onOpenRecords={() => openSheet({ kind: 'records' })} />
           <div className="mb-3 mt-2 flex flex-col items-start gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-[17px] font-bold text-slate-900">단계별 일정 (Day 0~45)</h2>
             <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] font-semibold text-slate-700" aria-label="색 설명">

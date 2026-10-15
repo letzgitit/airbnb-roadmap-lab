@@ -9,6 +9,8 @@ import { onActivate } from '@/lib/client/a11y';
 Chart.register(BarController, BarElement, CategoryScale, LinearScale);
 
 export interface ChartStep { id: number; label: string }
+/** 단계별 할 일 개수: 끝낸 것 / 전체, 그리고 안 끝난 것 중 마감이 오늘인 것 · 이미 지난 것 */
+export interface StepCounts { done: number; total: number; today: number; late: number }
 
 // 단계 종류별 색(한 가지 색, 번짐 없음). 빨강은 「주의」, 파랑은 「누르는 것」과 「지금」에만 쓰므로
 // 계약은 짙은 슬레이트, 설비는 노랑.
@@ -24,7 +26,7 @@ export const TYPE_LABEL: Record<TimelineType, string> = {
 export const TYPE_ORDER: TimelineType[] = ['prep', 'milestone', 'critical', 'setup', 'admin', 'open'];
 
 const rangeOf = (id: number) => TIMELINE[id] ?? DEFAULT_RANGE;
-const LABEL_W = 220; // 데스크톱 왼쪽 단계 이름 칸 너비(px)
+const LABEL_W = 260; // 데스크톱 왼쪽 단계 이름 칸 너비(px) — 오른쪽에 「지금 · 할 일 n/m」과 「오늘 · 기한 지남」 개수가 들어가도 이름이 두 줄 안에 들어오게
 const PERIOD_DAYS = 45; // 전체 일정 길이(Day 0~45)
 const NOW_BG = 'bg-[#EFF6FF] hover:bg-[#EFF6FF]';
 
@@ -35,7 +37,7 @@ function titleCls(cur: boolean, done: boolean) {
 export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: {
   steps: ChartStep[];
   statuses: Record<number, StepStatus | undefined> | null;
-  counts: Record<number, { done: number; total: number }> | null;
+  counts: Record<number, StepCounts> | null;
   onSelect: (index: number) => void;
   /** 지금 하는 단계(진행 중인 첫 단계, 없으면 시작 안 한 첫 단계). 로그인 전엔 null */
   currentId: number | null;
@@ -169,6 +171,8 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
                 <span className="mt-0.5 flex flex-wrap gap-x-3 text-[13px] font-semibold text-slate-500">
                   <span>Day {r.start}~{r.end}</span>
                   {c && c.total > 0 && <span>할 일 {c.done}/{c.total}</span>}
+                  {c && c.today > 0 && <span className="font-bold text-slate-900">오늘 {c.today}</span>}
+                  {c && c.late > 0 && <span className="font-bold text-red-600">기한 지남 {c.late}</span>}
                 </span>
                 <span className="relative mt-2 block h-1.5 w-full rounded-[3px] bg-[#f1f5f9]" aria-hidden>
                   <span className="absolute inset-y-0 block rounded-[3px]"
@@ -202,10 +206,21 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
                 onClick={() => onSelect(i)} onKeyDown={onActivate(() => onSelect(i))}
                 onMouseEnter={(e) => showTip(s.label, e)} onMouseMove={(e) => showTip(s.label, e)} onMouseLeave={() => showTip(null)}>
                 <span title={s.label} className={`min-w-0 flex-1 text-[13px] leading-tight line-clamp-2 ${titleCls(cur, done)}`}>{s.label}</span>
-                <span className="shrink-0 text-right leading-tight">
-                  {cur && <span className="block text-[12px] font-bold text-blue-700">지금</span>}
-                  {done && <i className="fas fa-check text-[12px] text-slate-400" aria-label="완료" />}
-                  {c && c.total > 0 && <span className="block text-[12px] font-semibold text-slate-500">할 일 {c.done}/{c.total}</span>}
+                {/* 오른쪽 두 줄: 위 = 지금 · 완료 표시 + 할 일 n/m, 아래 = 오늘 n · 기한 지남 n(0이면 안 보임) */}
+                <span className="shrink-0 text-right text-[12px] leading-tight">
+                  {(cur || done || (c && c.total > 0)) && (
+                    <span className="flex items-center justify-end gap-x-2">
+                      {cur && <span className="font-bold text-blue-700">지금</span>}
+                      {done && <i className="fas fa-check text-slate-400" aria-label="완료" />}
+                      {c && c.total > 0 && <span className="font-semibold text-slate-500">할 일 {c.done}/{c.total}</span>}
+                    </span>
+                  )}
+                  {c && (c.today > 0 || c.late > 0) && (
+                    <span className="mt-0.5 flex items-center justify-end gap-x-2">
+                      {c.today > 0 && <span className="font-bold text-slate-900">오늘 {c.today}</span>}
+                      {c.late > 0 && <span className="font-bold text-red-600">기한 지남 {c.late}</span>}
+                    </span>
+                  )}
                 </span>
               </div>
             );
