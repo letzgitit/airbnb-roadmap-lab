@@ -33,7 +33,8 @@ export function dayLabel(day: string | number | null | undefined): string {
 }
 
 // 화면에 보일 사람 이름: 시스템 계정 · 개발용 가짜 로그인 이름을 사람 말로 바꾼다(실제 이름은 MEMBER_NAMES 에서 온다).
-const NAME_ALIAS: Record<string, string> = { claude: '클로드', me: '남편', wife: '아내' };
+// 「나」는 MEMBER_NAMES 가 「…:남편」으로 바뀌기 전(2026-10-15 오전)에 저장된 기록 — 아내 화면에서 헷갈리지 않게 남편으로 보인다.
+const NAME_ALIAS: Record<string, string> = { claude: '클로드', me: '남편', wife: '아내', 나: '남편' };
 export function displayName(name: string | null | undefined): string {
   const n = (name ?? '').trim();
   if (!n) return '';
