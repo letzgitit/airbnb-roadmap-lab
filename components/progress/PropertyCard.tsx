@@ -17,9 +17,10 @@ export function PropertyCard() {
   const items = Object.values(doc.property).filter((p) => !p.deletedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   return (
-    <div className="min-w-0 rounded-3xl border border-slate-100 bg-slate-50/60 p-4">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <h4 className="text-[14px] font-extrabold text-slate-800 flex items-center gap-2"><i className="fas fa-house text-blue-600" aria-hidden /> 매물 정보</h4>
+    // 「집 정보 · 기록」 창 안에서만 쓴다(창이 바깥 틀이라 카드 테두리·배경은 두지 않는다)
+    <section className="min-w-0" aria-label="집 정보">
+      {/* 위의 「집 정보」 탭이 이미 이름표라서 제목은 다시 쓰지 않고, 추가 단추만 둔다 */}
+      <div className="flex justify-end mb-1">
         <button type="button" className={textBtn} onClick={() => setAdding((v) => !v)} aria-expanded={adding}>{adding ? '닫기' : '+ 항목 추가'}</button>
       </div>
       {adding && (
@@ -33,11 +34,11 @@ export function PropertyCard() {
         </form>
       )}
       {items.length === 0 ? (
-        <p className="text-[14px] text-slate-500 font-semibold">주소, 조건, 인도일, 렌트프리, 첫 월세일 같은 매물 정보를 자유롭게 적어 두세요.</p>
+        <p className="text-[14px] text-slate-500 font-semibold">주소, 조건, 인도일, 렌트프리, 첫 월세일 같은 집 정보를 자유롭게 적어 두세요.</p>
       ) : (
         <dl className="divide-y divide-slate-100">{items.map((p) => <PropRow key={p.id} p={p} />)}</dl>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -81,7 +82,7 @@ function PropRow({ p }: { p: PropertyItem }) {
       <div className="flex shrink-0">
         <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => { setLabel(p.label); setValue(p.value); setOrig({ label: p.label, value: p.value }); setBase(p.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
         <button type="button" aria-label="삭제" className={`${iconBtn} hover:text-red-600`} onClick={() => {
-          void send({ op: 'property.delete', id: p.id }).then((r) => { if (r.ok) toast('매물 정보를 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'property.restore', id: p.id }) } }); });
+          void send({ op: 'property.delete', id: p.id }).then((r) => { if (r.ok) toast('집 정보를 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'property.restore', id: p.id }) } }); });
         }}><i className="fas fa-trash text-[13px]" aria-hidden /></button>
       </div>
     </div>

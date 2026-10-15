@@ -1,38 +1,34 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Step } from '@/lib/core/types';
-import { onActivate } from '@/lib/client/a11y';
+import { SECTION_LABEL, SECTION_ORDER, sectionCount, type StepSection } from '@/lib/client/step-sections';
 import { StepPanel } from './progress/StepPanel';
 import { useProgress } from './progress/ProgressProvider';
 
-// 누르면 상세 칸에 더 보여 주는 항목(요령·톡방 사례·주의사항)
-interface Item { summary: string; badge?: string; detail: ReactNode }
-type Sel = { s: 'tips' | 'community'; i: number };
-
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
 const sectionTitle = 'text-[14px] font-bold text-slate-700 mt-8 mb-3 flex items-center gap-2';
+const cardBase = 'rounded-[20px] border px-[18px] py-4 mb-3.5';
 
-function buildItems(step: Step): Record<Sel['s'], Item[]> {
-  const meta = (children: ReactNode) => <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-600 mb-3">{children}</div>;
-  return {
-    tips: step.tips.map((t) => ({ summary: t.text, detail: (<><h5>요령</h5><p>{t.text}</p>{t.from && <p className="text-[13px] !mb-0">출처: {t.from}</p>}</>) })),
-    community: step.community.map((c) => ({
-      summary: c.text, badge: c.kind,
-      detail: (<><h5>톡방 사례</h5>{meta(<>{c.kind && <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[12px] font-bold">{c.kind}</span>}{c.date && <span>{c.date}</span>}</>)}<p>{c.text}</p></>),
-    })),
-  };
-}
+// 목록 한 줄의 모양(아이콘·바탕). 주의사항만 붉은 기운을 둔다.
+const ROW: Record<StepSection, { icon: string; iconCls: string; border: string; bg: string }> = {
+  warnings: { icon: 'fas fa-triangle-exclamation', iconCls: 'text-red-600', border: 'border-red-100', bg: 'bg-red-50/60' },
+  official: { icon: 'fas fa-scale-balanced', iconCls: 'text-slate-500', border: 'border-slate-200', bg: 'bg-white' },
+  tips: { icon: 'fas fa-magic', iconCls: 'text-slate-500', border: 'border-slate-200', bg: 'bg-white' },
+  community: { icon: 'fas fa-comments', iconCls: 'text-slate-500', border: 'border-slate-200', bg: 'bg-white' },
+};
 
-export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }: {
-  steps: Step[]; index: number; open: boolean; shown: boolean; loggedIn: boolean;
+interface View { sel: StepSection | null; panel: boolean }
+
+export function StepModal({ steps, index, section, open, shown, loggedIn, onClose, onGo }: {
+  steps: Step[]; index: number; section: StepSection | null; open: boolean; shown: boolean; loggedIn: boolean;
   onClose: () => void; onGo: (i: number) => void;
 }) {
   const step = steps[index];
-  const items = useMemo(() => (step ? buildItems(step) : null), [step]);
-  const [sel, setSel] = useState<Sel | null>(null);
-  const [panel, setPanel] = useState(false);
+  const [view, setView] = useState<View>({ sel: null, panel: false });
   const closeRef = useRef<HTMLButtonElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const rowRefs = useRef<Partial<Record<StepSection, HTMLButtonElement | null>>>({});
   const { hasDirty, confirmDiscard } = useProgress();
   // 단계 창 안의 편집 폼에 저장 안 한 내용이 있으면, 닫기·이전/다음 단계 전에 앱 안 확인 창을 띄운다
   const guard = (fn: () => void) => {
@@ -43,13 +39,21 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
   const closeRefFn = useRef(guardedClose);
   useEffect(() => { closeRefFn.current = guardedClose; });
 
+  // 열 때·단계를 바꿀 때 무엇을 보여 줄지 정한다.
+  //  - 검색에서 section 을 달고 왔으면 그 목록을 바로 연다
+  //  - 아니면 넓은 화면은 오른쪽 칸이 비지 않게 첫 목록을 골라 두고, 폰은 아무것도 안 고른 채 닫아 둔다
   useEffect(() => {
     if (!open) return;
-    // 열 때·단계를 바꿀 때는 아무것도 고르지 않은 빈 안내 상태로 시작한다
+    const s = steps[index];
+    if (!s) return;
+    const has = (k: StepSection) => sectionCount(s, k) > 0;
+    const wide = window.matchMedia('(min-width: 768px)').matches;
+    const next: View = section && has(section)
+      ? { sel: section, panel: true }
+      : { sel: wide ? (SECTION_ORDER.find(has) ?? null) : null, panel: false };
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSel(null);
-    setPanel(false);
-  }, [open, index]);
+    setView(next);
+  }, [open, index, section, steps]);
 
   // 열리면 닫기 버튼으로 포커스, Esc 로 닫기, 닫히면 연 요소로 포커스 복귀
   useEffect(() => {
@@ -64,30 +68,21 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
     };
   }, [open]);
 
-  if (!open || !step || !items) return null;
-  const current = sel ? items[sel.s][sel.i] : undefined;
+  if (!open || !step) return null;
   const stepRefs = steps.map((s) => ({ id: s.id, title: s.title }));
-  const pick = (s: Sel['s'], i: number) => { setSel({ s, i }); setPanel(true); };
+  const cats = SECTION_ORDER.filter((k) => sectionCount(step, k) > 0);
+  // 단계를 바꾼 첫 그림에서 이전 단계의 선택이 남아 있어도(효과가 고치기 전) 빈 목록을 그리지 않는다
+  const cur = view.sel && sectionCount(step, view.sel) > 0 ? view.sel : null;
 
-  const clickable = (key: Sel['s'], title: string, icon: string, tone: { card: string; text: string }) => items[key].length > 0 && (
-    <div key={key}>
-      <h5 className={sectionTitle}><i className={`${icon} text-slate-500`} aria-hidden /> {title}</h5>
-      {items[key].map((item, i) => {
-        const on = sel?.s === key && sel.i === i;
-        return (
-        <div key={i} className={`guide-card ${on ? '!border-blue-400 !bg-white' : tone.card}`} role="button" tabIndex={0} aria-current={on ? 'true' : undefined} onClick={() => pick(key, i)} onKeyDown={onActivate(() => pick(key, i))}>
-          <div className="flex justify-between items-center gap-3">
-            <span className={`text-[14px] leading-relaxed line-clamp-2 ${tone.text}`}>{item.summary}</span>
-            <span className="flex items-center gap-2 shrink-0">
-              {item.badge && <span className="px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 text-[12px] font-bold">{item.badge}</span>}
-              <i className="fas fa-chevron-right text-slate-400 text-[12px]" aria-hidden />
-            </span>
-          </div>
-        </div>
-        );
-      })}
-    </div>
-  );
+  const pick = (k: StepSection) => {
+    setView({ sel: k, panel: true });
+    // 폰: 밀려 들어온 오른쪽 칸의 「목록으로」로 포커스(스크롤은 건드리지 않는다). 넓은 화면은 그 단추가 없어 아무 일도 안 일어난다.
+    requestAnimationFrame(() => backRef.current?.focus({ preventScroll: true }));
+  };
+  const closePanel = () => {
+    setView((v) => ({ ...v, panel: false }));
+    if (cur) rowRefs.current[cur]?.focus({ preventScroll: true });
+  };
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={step.title}>
@@ -109,30 +104,6 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
             {step.summary && <div className="note-box !mt-0">{step.summary}</div>}
             {loggedIn && <StepPanel key={step.id} stepId={step.id} steps={stepRefs} />}
 
-            {step.official.length > 0 && (
-              <div>
-                <h5 className={sectionTitle}><i className="fas fa-scale-balanced text-slate-500" aria-hidden /> 공식 기준</h5>
-                {step.official.map((o, i) => {
-                  const url = safeUrl(o.url);
-                  return (
-                    <div key={i} className="rounded-[20px] border border-slate-200 bg-white px-[18px] py-4 mb-3.5">
-                      <p className="text-[15px] font-semibold text-slate-900 leading-relaxed">{o.text}</p>
-                      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] font-semibold text-slate-600">
-                        {o.region && <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[12px] font-bold">{o.region}</span>}
-                        {o.checked && <span>확인일 {o.checked}</span>}
-                        {url
-                          ? <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline underline-offset-2 font-bold break-all">{o.source || o.url}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
-                          : o.source && <span>출처 {o.source}</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {clickable('tips', '고수들의 필살기', 'fas fa-magic', { card: 'bg-slate-50', text: 'font-normal text-slate-800' })}
-            {clickable('community', '톡방 사례', 'fas fa-comments', { card: 'bg-slate-50', text: 'font-normal text-slate-700' })}
-
             {step.checklist.length > 0 && (
               <div>
                 <h5 className={sectionTitle}><i className="fas fa-check-circle text-slate-500" aria-hidden /> 필수 체크리스트</h5>
@@ -140,32 +111,42 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
               </div>
             )}
 
-            {step.warnings.length > 0 && (
-              <div>
-                <h5 className={sectionTitle}><i className="fas fa-exclamation-triangle text-slate-500" aria-hidden /> 실패 방지 주의사항</h5>
-                {step.warnings.map((w, i) => (
-                  <div key={i} className="rounded-[20px] border border-red-100 bg-red-50/60 px-[18px] py-4 mb-3.5">
-                    <p className="text-[14px] font-semibold text-red-700 leading-relaxed">{w}</p>
-                  </div>
-                ))}
+            {/* 긴 목록은 여기서 펼치지 않는다. 한 줄씩 눌러 오른쪽 칸(폰은 밀려 들어오는 창)에서 본다 */}
+            {cats.length > 0 && (
+              <div className="mt-6">
+                {cats.map((k) => {
+                  const on = cur === k;
+                  const r = ROW[k];
+                  return (
+                    <button key={k} ref={(el) => { rowRefs.current[k] = el; }} type="button" onClick={() => pick(k)} aria-current={on ? 'true' : undefined}
+                      className={`w-full min-h-14 mb-2.5 flex items-center justify-between gap-3 rounded-[20px] border px-[18px] py-3 text-left transition-colors ${r.bg} ${on ? 'border-blue-400' : `${r.border} hover:border-blue-300`}`}>
+                      <span className="flex min-w-0 items-center gap-2.5 text-[15px] font-bold text-slate-800">
+                        <i className={`${r.icon} ${r.iconCls}`} aria-hidden />{SECTION_LABEL[k]}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2 text-[14px] font-bold text-slate-600">
+                        {sectionCount(step, k)}<i className="fas fa-chevron-right text-slate-400 text-[12px]" aria-hidden />
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          <div className={`detail-panel md:relative md:translate-x-0 md:w-1/2 md:bg-white md:shadow-none ${panel ? 'active' : ''}`}>
+          <div className={`detail-panel md:relative md:translate-x-0 md:w-1/2 md:bg-white md:shadow-none ${view.panel ? 'active' : ''}`}>
             <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-4 sticky top-0 bg-white z-20 md:bg-slate-50/30">
-              <button onClick={() => setPanel(false)} aria-label="목록으로" className="w-11 h-11 shrink-0 flex items-center justify-center bg-slate-100 rounded-xl md:hidden"><i className="fas fa-arrow-left text-sm" aria-hidden /></button>
-              <h3 className="font-bold text-slate-800 text-lg truncate">내용 상세 보기</h3>
+              <button ref={backRef} onClick={closePanel} aria-label="목록으로" className="w-11 h-11 shrink-0 flex items-center justify-center bg-slate-100 rounded-xl md:hidden"><i className="fas fa-arrow-left text-sm" aria-hidden /></button>
+              <h3 className="font-bold text-slate-800 text-lg truncate">
+                {cur ? <>{SECTION_LABEL[cur]} <span className="font-semibold text-slate-500">{sectionCount(step, cur)}</span></> : '내용 상세 보기'}
+              </h3>
             </div>
-            <div className="flex-grow overflow-y-auto p-8 bg-white">
-              <div className="prose prose-blue prose-sm text-slate-700 w-full max-w-none">
-                {current ? current.detail : (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
-                    <i className="fas fa-mouse-pointer text-4xl opacity-20" aria-hidden />
-                    <p className="font-normal">왼쪽 목록에서 요령이나 톡방 사례를 누르면 여기에 자세히 보여요.</p>
-                  </div>
-                )}
-              </div>
+            <div className="flex-grow overflow-y-auto p-6 md:p-8 bg-white">
+              {cur ? <SectionCards step={step} k={cur} /> : (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-500 space-y-4">
+                  <i className="fas fa-mouse-pointer text-4xl opacity-20" aria-hidden />
+                  <p className="font-normal text-center">주의사항·공식 기준·필살기·톡방 사례를 고르면 여기에 보여요.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -176,6 +157,69 @@ export function StepModal({ steps, index, open, shown, loggedIn, onClose, onGo }
         </div>
       </div>
     </div>
+  );
+}
+
+// 오른쪽 칸(폰은 밀려 들어오는 창)에 보이는, 고른 갈래의 전체 목록
+function SectionCards({ step, k }: { step: Step; k: StepSection }) {
+  if (k === 'warnings') {
+    return (
+      <>
+        {step.warnings.map((w, i) => (
+          <div key={i} className={`${cardBase} border-red-100 bg-red-50/60`}>
+            <p className="text-[14px] font-semibold text-red-700 leading-relaxed">{w}</p>
+          </div>
+        ))}
+      </>
+    );
+  }
+  if (k === 'official') {
+    return (
+      <>
+        {step.official.map((o, i) => {
+          const url = safeUrl(o.url);
+          return (
+            <div key={i} className={`${cardBase} border-slate-200 bg-white`}>
+              <p className="text-[15px] font-semibold text-slate-900 leading-relaxed">{o.text}</p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] font-semibold text-slate-600">
+                {o.region && <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[12px] font-bold">{o.region}</span>}
+                {o.checked && <span>확인일 {o.checked}</span>}
+                {url
+                  ? <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline underline-offset-2 font-bold break-all">{o.source || o.url}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
+                  : o.source && <span>출처 {o.source}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </>
+    );
+  }
+  if (k === 'tips') {
+    return (
+      <>
+        {step.tips.map((t, i) => (
+          <div key={i} className={`${cardBase} border-slate-200 bg-white`}>
+            <p className="text-[15px] font-medium text-slate-800 leading-relaxed">{t.text}</p>
+            {t.from && <p className="mt-2 text-[13px] font-semibold text-slate-600">출처: {t.from}</p>}
+          </div>
+        ))}
+      </>
+    );
+  }
+  return (
+    <>
+      {step.community.map((c, i) => (
+        <div key={i} className={`${cardBase} border-slate-200 bg-white`}>
+          {(c.kind || c.date) && (
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-600">
+              {c.kind && <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[12px] font-bold">{c.kind}</span>}
+              {c.date && <span>{c.date}</span>}
+            </div>
+          )}
+          <p className="text-[15px] font-medium text-slate-800 leading-relaxed">{c.text}</p>
+        </div>
+      ))}
+    </>
   );
 }
 

@@ -16,13 +16,14 @@ export function TrashCard() {
 
   const rows: Row[] = [
     ...Object.values(doc.tasks).filter((t) => t.deletedAt).map((t) => ({ key: t.id, kind: `할 일 ${t.stepId}단계`, text: t.text, by: t.deletedBy, at: t.deletedAt!, restore: { op: 'task.restore', id: t.id } as Op })),
-    ...Object.values(doc.property).filter((p) => p.deletedAt).map((p) => ({ key: p.id, kind: '매물 정보', text: `${p.label}: ${p.value}`, by: p.deletedBy, at: p.deletedAt!, restore: { op: 'property.restore', id: p.id } as Op })),
+    ...Object.values(doc.property).filter((p) => p.deletedAt).map((p) => ({ key: p.id, kind: '집 정보', text: `${p.label}: ${p.value}`, by: p.deletedBy, at: p.deletedAt!, restore: { op: 'property.restore', id: p.id } as Op })),
     ...doc.log.filter((l) => l.deletedAt).map((l) => ({ key: l.id, kind: `기록 ${l.kind}`, text: l.text, by: l.deletedBy, at: l.deletedAt!, restore: { op: 'log.restore', id: l.id } as Op })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   if (rows.length === 0) return null;
 
   return (
-    <section className="mx-4 mb-10 rounded-3xl bg-white border border-slate-100 shadow-sm p-5" aria-label="삭제한 항목">
+    // 「집 정보 · 기록」 창 맨 아래 한 줄(기본 접힘). 창이 바깥 틀이라 카드 테두리·바깥 여백은 두지 않는다.
+    <section className="mt-8 border-t border-slate-100 pt-3" aria-label="삭제한 항목">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2"><i className="fas fa-trash-can text-slate-500" aria-hidden /> 삭제한 항목 <span className="text-slate-500 font-semibold">{rows.length}</span></h3>
         <button type="button" className={textBtn} onClick={() => setOpen((v) => !v)} aria-expanded={open}>{open ? '접기' : '보기'}</button>

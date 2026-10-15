@@ -22,8 +22,8 @@ export function LogCard() {
   const shown = all ? items : items.slice(0, 5);
 
   return (
-    <div className="mx-4 mb-6 rounded-3xl bg-white border border-slate-100 shadow-sm p-5" aria-label="최근 기록">
-      <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2 mb-4"><i className="fas fa-clipboard-list text-blue-600" aria-hidden /> 최근 기록</h3>
+    // 「집 정보 · 기록」 창 안에서만 쓴다(창이 바깥 틀이라 카드 테두리·바깥 여백은 두지 않는다)
+    <section className="min-w-0" aria-label="최근 기록">
       <form className="flex flex-col sm:flex-row gap-2 mb-4" onSubmit={(e) => {
         e.preventDefault();
         void run(() => send({ op: 'log.add', kind, text }, { onSuccess: () => setText('') }));
@@ -37,7 +37,7 @@ export function LogCard() {
         {items.length === 0 && <li className="text-[14px] text-slate-500 font-semibold">아직 기록이 없어요.</li>}
       </ul>
       {items.length > 5 && <button type="button" className={`${textBtn} mt-2`} onClick={() => setAll((v) => !v)}>{all ? '접기' : `전체 ${items.length}건 보기`}</button>}
-    </div>
+    </section>
   );
 }
 
