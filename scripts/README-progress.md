@@ -2,7 +2,14 @@
 
 사이트 DB가 「우리 현황」의 정본입니다. 터미널에서 같은 DB를 읽고 쓰는 CLI이고, 사이트 API와 **같은 병합·version 규칙**(`lib/core/engine.ts`)을 씁니다.
 
-- 저장소: `.env.local`(또는 환경변수)에 `KV_REST_API_URL`/`KV_REST_API_TOKEN` 또는 `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`이 있으면 **원격 Upstash(운영)**, 없으면 로컬 `.data/progress.json`.
+- 저장소: 환경변수(`.env.local`·`.env`도 읽음)에 `KV_REST_API_URL`/`KV_REST_API_TOKEN` 또는 `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`이 있으면 **원격 Upstash(운영)**, 없으면 로컬 `.data/progress.json`.
+- 🔴 운영 키는 `.env.local`에 넣지 않습니다(공개 저장소이고, 로컬 시험이 운영 데이터를 건드립니다). 저장소 밖에 받아 그 명령 안에서만 쓰고 바로 지웁니다:
+  ```bash
+  OUT=/저장소/밖/폴더   # 예: 세션 스크래치패드
+  npx vercel@latest env pull "$OUT/prod.env" --environment=production --yes   # 저장소 폴더에서 실행
+  (set -a; . "$OUT/prod.env"; node scripts/progress.mjs get)                  # 키는 이 괄호 안에서만
+  rm "${OUT:?}/prod.env"
+  ```
 - 어느 저장소에 붙었는지 **매번 stderr 첫 줄**에 나옵니다: `[저장소] redis xxx.upstash.io  ← 원격(운영) 데이터` / `[저장소] file .data/progress.json  (로컬 연습용)`. 결과 JSON은 stdout에만 나옵니다.
 - 🔴 원격(운영)에 쓰는 `apply`·`seed`는 **`--yes`가 있어야** 실제로 씁니다. 없으면 적용할 내용 요약만 보여 주고 종료 코드 3으로 멈춥니다.
 - 모르는 옵션(`--dryrun` 같은 오타)은 실행하지 않고 멈춥니다.
