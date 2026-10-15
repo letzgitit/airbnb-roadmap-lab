@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditingMark, Me, ProgressDoc } from '@/lib/core/types';
 import type { Op } from '@/lib/core/validate';
+import { withGa } from '@/lib/client/format';
 
 type Status = 'loading' | 'anon' | 'forbidden' | 'ready';
 export interface SendResult { ok: boolean; status: number; body: Record<string, unknown> | null }
@@ -275,7 +276,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const curRec = conflict?.body.current as Record<string, unknown> | undefined;
   const curDesc = conflict ? describe(conflict.body.kind, curRec) : '';
   const mine = conflict && curRec && 'patch' in conflict.op ? describe(conflict.body.kind, { ...curRec, ...(conflict.op.patch as Record<string, unknown>) }) : '';
-  const who = conflict ? String(conflict.body.by || '상대') : '';
+  const who = conflict ? withGa(String(conflict.body.by || '상대')) : '';
 
   return (
     <C.Provider value={value}>
@@ -291,10 +292,10 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       </div>
       {conflict && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="conflict-title" aria-describedby="conflict-desc">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-slate-900/50" />
           <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full">
             <div className="text-[13px] font-bold text-red-600 mb-2"><i className="fas fa-exclamation-triangle mr-1" aria-hidden />동시에 고쳤어요</div>
-            <p id="conflict-title" className="font-extrabold text-slate-800 text-[16px] leading-snug">{who}가 방금 이 항목을 고쳤어요.</p>
+            <p id="conflict-title" className="font-extrabold text-slate-800 text-[16px] leading-snug">{who} 방금 이 항목을 고쳤어요.</p>
             <div id="conflict-desc" className="mt-3 space-y-1.5 text-[14px] text-slate-600 leading-relaxed">
               <p>최신 내용: <span className="font-bold text-slate-800 break-words">{curDesc || '(확인 불가)'}</span></p>
               {mine && <p>내가 쓴 것: <span className="font-semibold text-slate-700 break-words">{mine}</span></p>}

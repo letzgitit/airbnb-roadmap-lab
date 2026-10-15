@@ -6,10 +6,6 @@ import { relTime } from '@/lib/client/format';
 import { useProgress } from './ProgressProvider';
 import { btnGhost, btnPrimary, EditBadge, iconBtn, inputCls, Stamp, textBtn, useBusy, useDirty, useEditing, useFormEsc } from './bits';
 
-const KIND_STYLE: Record<LogKind, string> = {
-  결정: 'bg-red-50 text-red-700', 통화: 'bg-blue-50 text-blue-700', 일정: 'bg-purple-50 text-purple-700', 메모: 'bg-slate-100 text-slate-700',
-};
-
 export function LogCard() {
   const { doc, send } = useProgress();
   const [kind, setKind] = useState<LogKind>('메모');
@@ -32,9 +28,9 @@ export function LogCard() {
         <input className={inputCls} placeholder="정한 것, 통화 결과, 메모" maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} aria-label="기록 내용" />
         <button className={btnPrimary} disabled={busy || !text.trim()}>기록</button>
       </form>
-      <ul className="space-y-2">
+      <ul>
         {shown.map((l) => <LogRow key={l.id} l={l} />)}
-        {items.length === 0 && <li className="text-[14px] text-slate-500 font-semibold">아직 기록이 없어요.</li>}
+        {items.length === 0 && <li className="text-[15px] text-slate-500 font-semibold">아직 기록이 없어요.</li>}
       </ul>
       {items.length > 5 && <button type="button" className={`${textBtn} mt-2`} onClick={() => setAll((v) => !v)}>{all ? '접기' : `전체 ${items.length}건 보기`}</button>}
     </section>
@@ -55,7 +51,7 @@ function LogRow({ l }: { l: LogEntry }) {
 
   if (ed.open) {
     return (
-      <li className="rounded-2xl border border-blue-200 bg-blue-50/40 p-3">
+      <li className="my-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
         <form className="space-y-2" onKeyDown={esc} onSubmit={(e) => {
           e.preventDefault();
           void run(() => send({ op: 'log.update', id: l.id, baseVersion: base, patch: { kind, text } }, {
@@ -75,15 +71,15 @@ function LogRow({ l }: { l: LogEntry }) {
     );
   }
   return (
-    <li className="flex items-start gap-3 rounded-2xl bg-slate-50 pl-3 pr-1 py-1">
-      <span className={`mt-3 shrink-0 text-[12px] font-bold px-2 py-0.5 rounded-full ${KIND_STYLE[l.kind]}`}>{l.kind}</span>
-      <div className="min-w-0 flex-1 py-2.5">
-        <div className="text-[14px] font-bold text-slate-800 whitespace-pre-wrap break-words">{l.text}</div>
+    <li className="flex items-start gap-3 border-b border-slate-200 py-1 last:border-b-0">
+      <span className="w-9 shrink-0 pt-3.5 text-[13px] font-bold text-slate-500">{l.kind}</span>
+      <div className="min-w-0 flex-1 py-3">
+        <div className="whitespace-pre-wrap text-[15px] font-semibold leading-relaxed text-slate-800">{l.text}</div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1"><Stamp by={l.by} at={l.at} rel={relTime} /><EditBadge k={`log:${l.id}`} /></div>
       </div>
       <div className="flex shrink-0">
-        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => { setText(l.text); setKind(l.kind); setOrig({ kind: l.kind, text: l.text }); setBase(l.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
-        <button type="button" aria-label="삭제" className={`${iconBtn} hover:text-red-600`} onClick={() => {
+        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-slate-800`} onClick={() => { setText(l.text); setKind(l.kind); setOrig({ kind: l.kind, text: l.text }); setBase(l.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
+        <button type="button" aria-label="삭제" className={`${iconBtn} hover:text-slate-800`} onClick={() => {
           void send({ op: 'log.delete', id: l.id }).then((r) => { if (r.ok) toast('기록을 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'log.restore', id: l.id }) } }); });
         }}><i className="fas fa-trash text-[13px]" aria-hidden /></button>
       </div>

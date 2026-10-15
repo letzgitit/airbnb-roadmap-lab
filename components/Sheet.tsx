@@ -24,7 +24,7 @@ export interface SheetProps {
 
 // 모든 창(단계 · 최근 바뀐 규정 · 집 정보·기록 · 멘트함)이 쓰는 공용 시트:
 // 폰은 아래에서 올라오는 시트(위쪽 둥근 모서리), 넓은 화면은 가운데 카드.
-export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, children, onClose, beforeClose, bodyRef, bodyClassName = 'bg-slate-50/50' }: SheetProps) {
+export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, children, onClose, beforeClose, bodyRef, bodyClassName = 'bg-white' }: SheetProps) {
   const uid = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const askRef = useRef<() => void>(() => {});
@@ -66,13 +66,13 @@ export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, chi
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={`${uid}-title`}>
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => askRef.current()} />
-      <div className={`absolute inset-x-0 bottom-0 top-10 flex flex-col overflow-hidden rounded-t-[32px] bg-white shadow-2xl transition-transform duration-300 ease-out ${shown ? '' : 'translate-y-full'} md:relative md:top-auto md:mx-auto md:mt-[7vh] md:h-[85vh] md:max-w-[760px] md:rounded-[32px]`}>
+      <div className="absolute inset-0 bg-slate-900/50" onClick={() => askRef.current()} />
+      <div className={`absolute inset-x-0 bottom-0 top-10 flex flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-transform duration-300 ease-out ${shown ? '' : 'translate-y-full'} md:relative md:top-auto md:mx-auto md:mt-[7vh] md:h-[85vh] md:max-w-[760px] md:rounded-3xl`}>
         <div className="shrink-0 border-b border-slate-100 bg-white">
           <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
             <div className="min-w-0">
               {eyebrow && <div className="mb-1.5 flex items-center gap-2">{eyebrow}</div>}
-              <h2 id={`${uid}-title`} className="text-xl font-black leading-snug tracking-tight text-slate-900">{title}</h2>
+              <h2 id={`${uid}-title`} className="text-xl font-black leading-snug text-slate-900">{title}</h2>
               {subtitle && <p className="mt-1 text-[13px] font-medium leading-snug text-slate-600">{subtitle}</p>}
             </div>
             <button ref={closeRef} type="button" onClick={() => askRef.current()} aria-label="닫기"

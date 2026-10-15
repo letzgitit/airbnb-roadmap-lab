@@ -1,24 +1,31 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import type { UpdateItem } from '@/lib/core/types';
+import type { Step, UpdateItem } from '@/lib/core/types';
 import { Sheet } from './Sheet';
+import { TabBar, panelDomId, tabDomId, type TabItem } from './TabBar';
+import { WarningList } from './WarningList';
 
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
+type Tab = 'rules' | 'steps';
 
-// 「최근 바뀐 규정」 창: 한 번에 한 항목만 펼치는 아코디언. 홈에선 이 창으로만 들어온다(입구 줄·검색).
-export function NoticeModal({ updates, open, shown, initialIndex, onClose }: {
-  updates: UpdateItem[]; open: boolean; shown: boolean; initialIndex?: number | null; onClose: () => void;
+// 주의사항 창: 「바뀐 규정」(한 번에 한 항목만 펼치는 아코디언) | 「단계별 주의」(14단계의 주의 문장을 단계 이름 아래에 모아서)
+export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose }: {
+  steps: Step[]; updates: UpdateItem[]; open: boolean; shown: boolean; initialIndex?: number | null; onClose: () => void;
 }) {
   const uid = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useState<Tab>('rules');
   const [expanded, setExpanded] = useState<number | null>(null);
   const [wasOpen, setWasOpen] = useState(false);
 
-  // 열릴 때마다 처음 상태로: 검색에서 왔으면 그 항목만 펼친 채, 아니면 전부 접힘
+  // 열릴 때마다 처음 상태로: 「바뀐 규정」 탭, 검색에서 왔으면 그 항목만 펼친 채
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setExpanded(initialIndex != null && initialIndex >= 0 && initialIndex < updates.length ? initialIndex : null);
+    if (open) {
+      setTab('rules');
+      setExpanded(initialIndex != null && initialIndex >= 0 && initialIndex < updates.length ? initialIndex : null);
+    }
   }
 
   // 검색으로 열린 항목이 화면 밖이면 목록 안에서만 스크롤한다(scrollIntoView 는 창 전체를 밀 수 있어 쓰지 않는다)
@@ -29,39 +36,60 @@ export function NoticeModal({ updates, open, shown, initialIndex, onClose }: {
     if (body && el) body.scrollTop = Math.max(0, el.offsetTop - 12);
   }, [open, initialIndex]);
 
+  // 탭을 바꾸면 본문을 맨 위로
+  useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }); }, [tab]);
+
+  const withWarnings = steps.filter((s) => s.warnings.length > 0);
+  const warnCount = withWarnings.reduce((n, s) => n + s.warnings.length, 0);
+  const items: TabItem[] = [
+    { id: 'rules', label: '바뀐 규정', count: updates.length },
+    { id: 'steps', label: '단계별 주의', count: warnCount },
+  ];
+
   return (
-    <Sheet open={open} shown={shown} onClose={onClose} bodyRef={bodyRef} bodyClassName="relative bg-slate-50/50 p-4 sm:p-5"
-      title="최근 바뀐 규정" subtitle="외도민 등록·운영에 영향을 주는 법·지침 변화예요. 눌러서 자세히 보세요.">
-      <ul className="space-y-3">
-        {updates.map((u, i) => {
-          const on = expanded === i;
-          const url = safeUrl(u.url);
-          const src = u.source || (url ? u.url : '');
-          return (
-            <li key={i} data-notice={i} className={`overflow-hidden rounded-[20px] border bg-white ${on ? 'border-blue-300' : 'border-slate-200'}`}>
-              <button type="button" aria-expanded={on} aria-controls={`${uid}-body-${i}`} onClick={() => setExpanded(on ? null : i)}
-                className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50">
-                <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">{u.date}</span>
-                <span className="min-w-0 flex-1 break-keep text-[14px] font-bold leading-snug text-slate-800">{u.title}</span>
-                <i className={`fas ${on ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
-              </button>
-              {on && (
-                <div id={`${uid}-body-${i}`} className="px-4 pb-4 pt-1">
-                  <p className="text-[14px] leading-relaxed text-slate-700">{u.text}</p>
-                  {src && (
-                    <p className="mt-3 text-[13px] font-semibold text-slate-600">
-                      출처{' '}
-                      {url
-                        ? <a href={url} target="_blank" rel="noopener noreferrer" className="break-all font-bold text-blue-700 underline underline-offset-2">{src}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
-                        : src}
-                    </p>
+    <Sheet open={open} shown={shown} onClose={onClose} bodyRef={bodyRef} bodyClassName="relative bg-white" title="주의사항"
+      tabs={<TabBar items={items} value={tab} onChange={(id) => setTab(id as Tab)} label="주의사항 종류" idPrefix={uid} />}>
+      <div role="tabpanel" id={panelDomId(uid, tab)} aria-labelledby={tabDomId(uid, tab)} className="px-5 pb-6 pt-1">
+        {tab === 'rules' ? (
+          <ul>
+            {updates.map((u, i) => {
+              const on = expanded === i;
+              const url = safeUrl(u.url);
+              const src = u.source || (url ? u.url : '');
+              return (
+                <li key={i} data-notice={i} className="border-b border-slate-200 last:border-b-0">
+                  <button type="button" aria-expanded={on} aria-controls={`${uid}-body-${i}`} onClick={() => setExpanded(on ? null : i)}
+                    className="flex min-h-14 w-full items-center gap-3 py-3 text-left">
+                    <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">{u.date}</span>
+                    <span className="min-w-0 flex-1 text-[15px] font-bold leading-snug text-slate-800">{u.title}</span>
+                    <i className={`fas ${on ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
+                  </button>
+                  {on && (
+                    <div id={`${uid}-body-${i}`} className="pb-4">
+                      <p className="text-[15px] leading-relaxed text-slate-700">{u.text}</p>
+                      {src && (
+                        <p className="mt-3 text-[13px] font-semibold text-slate-600">
+                          출처{' '}
+                          {url
+                            ? <a href={url} target="_blank" rel="noopener noreferrer" className="break-all font-bold text-blue-700 underline underline-offset-2">{src}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
+                            : src}
+                        </p>
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          withWarnings.map((s) => (
+            <section key={s.id} aria-label={`${s.id}. ${s.title}`} className="pt-5">
+              <h3 className="text-[13px] font-bold text-slate-500">{s.id}. {s.title}</h3>
+              <WarningList items={s.warnings} />
+            </section>
+          ))
+        )}
+      </div>
     </Sheet>
   );
 }

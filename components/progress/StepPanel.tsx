@@ -3,15 +3,15 @@
 import { useState } from 'react';
 import type { StepStatus, TaskItem } from '@/lib/core/types';
 import { STEP_COUNT } from '@/lib/core/types';
-import { dueLabel, relTime, todayStr } from '@/lib/client/format';
+import { dueLabel, relTime, todayStr, withGa } from '@/lib/client/format';
 import { useProgress } from './ProgressProvider';
-import { btnDanger, btnGhost, btnPrimary, EditBadge, inputCls, Stamp, useBusy, useDirty, useEditing, useFormEsc } from './bits';
+import { btnGhost, btnPrimary, EditBadge, inputCls, Stamp, useBusy, useDirty, useEditing, useFormEsc } from './bits';
 
-// 고른 상태는 흰 바탕 + 진한 글자(채운 파랑은 누르는 주 버튼에만 쓴다)
-const STATUS: { v: StepStatus; label: string; on: string }[] = [
-  { v: 'todo', label: '시작 전', on: 'text-slate-800' },
-  { v: 'doing', label: '진행 중', on: 'text-blue-700' },
-  { v: 'done', label: '완료', on: 'text-emerald-700' },
+// 고른 상태는 흰 바탕 + 진한 글자(파랑은 누르는 주 버튼·링크·현재 위치에만 쓴다)
+const STATUS: { v: StepStatus; label: string }[] = [
+  { v: 'todo', label: '시작 전' },
+  { v: 'doing', label: '진행 중' },
+  { v: 'done', label: '완료' },
 ];
 
 interface StepRef { id: number; title: string }
@@ -42,33 +42,33 @@ export function StepPanel({ stepId, steps }: { stepId: number; steps: StepRef[] 
   };
 
   return (
-    <section className="rounded-3xl border border-blue-100 bg-white p-4 shadow-sm" aria-label="우리 현황">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="우리 현황">
       <div>
-        <div className="text-[14px] font-bold text-slate-700 mb-2">우리 할 일 <span className="text-slate-500 font-semibold">{live.filter((t) => t.done).length}/{live.length}</span></div>
-        <ul className="space-y-2">
+        <div className="mb-1 text-[14px] font-bold text-slate-700">우리 할 일 <span className="font-semibold text-slate-500">{live.filter((t) => t.done).length}/{live.length}</span></div>
+        <ul>
           {live.map((t) => <TaskRow key={t.id} t={t} steps={steps} />)}
-          {live.length === 0 && <li className="text-[14px] text-slate-500 font-semibold">아직 할 일이 없어요.</li>}
+          {live.length === 0 && <li className="py-2 text-[15px] font-semibold text-slate-500">아직 할 일이 없어요.</li>}
         </ul>
         <AddTask stepId={stepId} />
       </div>
 
-      <div className="mt-5 border-t border-slate-100 pt-4">
+      <div className="mt-5 border-t border-slate-200 pt-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-[14px] font-bold text-slate-700">단계 상태</span>
           <EditBadge k={`step:${stepId}`} />
         </div>
-        <div className="status-seg grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-2xl" role="group" aria-label="단계 상태">
+        <div className="status-seg grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="단계 상태">
           {STATUS.map((s) => (
             <button key={s.v} type="button" onClick={() => setStatus(s.v)} aria-pressed={status === s.v}
-              className={`min-h-11 rounded-xl text-[14px] ${status === s.v ? `bg-white shadow-sm font-bold ${s.on}` : 'font-semibold text-slate-600 hover:bg-white/60'}`}>{s.label}</button>
+              className={`min-h-11 rounded-lg text-[14px] ${status === s.v ? 'bg-white font-bold text-slate-900 shadow-sm' : 'font-semibold text-slate-600 hover:bg-white/60'}`}>{s.label}</button>
           ))}
         </div>
 
         {!ed.open ? (
           <div className="mt-3 flex items-start justify-between gap-3">
-            <div className="text-[14px] text-slate-700 min-w-0 space-y-1">
-              <div><span className="font-bold text-slate-600 mr-2">목표일</span>{st?.targetDate ?? <span className="text-slate-500">미정</span>}</div>
-              <div className="whitespace-pre-wrap break-words"><span className="font-bold text-slate-600 mr-2">메모</span>{st?.note || <span className="text-slate-500">없음</span>}</div>
+            <div className="min-w-0 space-y-1 text-[15px] text-slate-700">
+              <div><span className="mr-2 font-bold text-slate-500">목표일</span>{st?.targetDate ?? <span className="text-slate-500">미정</span>}</div>
+              <div className="whitespace-pre-wrap"><span className="mr-2 font-bold text-slate-500">메모</span>{st?.note || <span className="text-slate-500">없음</span>}</div>
               <Stamp by={st?.updatedBy} at={st?.updatedAt} rel={relTime} />
             </div>
             <button type="button" className={btnGhost} onClick={() => {
@@ -89,7 +89,7 @@ export function StepPanel({ stepId, steps }: { stepId: number; steps: StepRef[] 
           }}>
             <label className="block text-[13px] font-bold text-slate-600">목표일<input type="date" className={`${inputCls} mt-1`} value={date} onChange={(e) => setDate(e.target.value)} /></label>
             <label className="block text-[13px] font-bold text-slate-600">메모<textarea className={`${inputCls} mt-1`} rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} /></label>
-            <div className="flex gap-2 justify-end"><button type="button" className={btnGhost} onClick={ed.stop}>취소</button><button className={btnPrimary} disabled={busy}>저장</button></div>
+            <div className="flex justify-end gap-2"><button type="button" className={btnGhost} onClick={ed.stop}>취소</button><button className={btnPrimary} disabled={busy}>저장</button></div>
           </form>
         )}
       </div>
@@ -104,7 +104,7 @@ function AddTask({ stepId }: { stepId: number }) {
   const { busy, run } = useBusy();
   useDirty(`form:add-task:${stepId}`, text.trim() !== '' || due !== '', 'modal');
   return (
-    <form className="mt-3 flex flex-col sm:flex-row gap-2" onSubmit={(e) => {
+    <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(e) => {
       e.preventDefault();
       if (!text.trim()) return;
       void run(() => send({ op: 'task.add', stepId, text, due: due || null }, { onSuccess: () => { setText(''); setDue(''); } }));
@@ -140,7 +140,7 @@ function TaskRow({ t, steps }: { t: TaskItem; steps: StepRef[] }) {
 
   if (ed.open) {
     return (
-      <li className="rounded-2xl border border-blue-200 bg-blue-50/40 p-3">
+      <li className="my-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
         <form className="space-y-2" onKeyDown={esc} onSubmit={(e) => {
           e.preventDefault();
           void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch: { text, due: due || null, stepId: sid } }, {
@@ -153,14 +153,14 @@ function TaskRow({ t, steps }: { t: TaskItem; steps: StepRef[] }) {
           }));
         }}>
           <input className={inputCls} value={text} maxLength={200} onChange={(e) => setText(e.target.value)} aria-label="할 일 내용" />
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input type="date" className={inputCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
             <select className={inputCls} value={sid} onChange={(e) => setSid(Number(e.target.value))} aria-label="단계 이동">
               {steps.slice(0, STEP_COUNT).map((s) => <option key={s.id} value={s.id}>{s.id}. {s.title}</option>)}
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" className={btnDanger} onClick={del}>삭제</button>
+            <button type="button" className={btnGhost} onClick={del}>삭제</button>
             <div className="ml-auto flex gap-2"><button type="button" className={btnGhost} onClick={ed.stop}>취소</button><button className={btnPrimary} disabled={busy}>저장</button></div>
           </div>
         </form>
@@ -169,20 +169,20 @@ function TaskRow({ t, steps }: { t: TaskItem; steps: StepRef[] }) {
   }
 
   return (
-    <li className="flex items-start rounded-2xl bg-slate-50 pr-1">
-      <label className="w-11 h-11 shrink-0 flex items-center justify-center cursor-pointer">
-        <input type="checkbox" className="h-5 w-5 accent-emerald-600 cursor-pointer" checked={t.done} aria-label={`${t.text} 완료`}
+    <li className="flex items-start border-b border-slate-200 last:border-b-0">
+      <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center">
+        <input type="checkbox" className="h-5 w-5 cursor-pointer accent-emerald-600" checked={t.done} aria-label={`${t.text} 완료`}
           onChange={(e) => void send({ op: 'task.update', id: t.id, patch: { done: e.target.checked } })} />
       </label>
-      <button type="button" aria-label={`${t.text} 수정`} className="min-w-0 flex-1 rounded-xl py-3 pr-2 text-left hover:bg-slate-100/70"
+      <button type="button" aria-label={`${t.text} 수정`} className="min-w-0 flex-1 py-3 pr-1 text-left"
         onClick={() => {
           const o = { text: t.text, due: t.due ?? '', sid: t.stepId };
           setText(o.text); setDue(o.due); setSid(o.sid); setOrig(o); setBase(t.version); ed.start();
         }}>
-        <span className={`line-clamp-2 break-words text-[14px] font-bold leading-snug ${t.done ? 'line-through text-slate-500' : 'text-slate-800'}`}>{t.text}</span>
-        <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-          {dl && <span className={`inline-flex gap-x-2 text-[12px] font-bold ${dl.late && !t.done ? 'text-red-600' : 'text-slate-500'}`}><span><i className="far fa-calendar mr-1" aria-hidden />{dl.date}</span><span>{dl.rel}</span></span>}
-          {t.done && t.doneBy && <span className="text-[12px] font-bold text-emerald-700">{t.doneBy}가 {relTime(t.doneAt)} 체크함</span>}
+        <span className={`line-clamp-2 text-[15px] font-bold leading-snug ${t.done ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{t.text}</span>
+        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {dl && <span className={`inline-flex gap-x-2 text-[13px] font-semibold ${dl.late && !t.done ? 'text-red-600' : 'text-slate-500'}`}><span><i className="far fa-calendar mr-1" aria-hidden />{dl.date}</span><span>{dl.rel}</span></span>}
+          {t.done && t.doneBy && <span className="text-[13px] font-semibold text-emerald-700">{withGa(t.doneBy)} {relTime(t.doneAt)} 체크함</span>}
           <EditBadge k={`task:${t.id}`} />
         </span>
       </button>

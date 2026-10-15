@@ -34,9 +34,9 @@ export function PropertyCard() {
         </form>
       )}
       {items.length === 0 ? (
-        <p className="text-[14px] text-slate-500 font-semibold">주소, 조건, 인도일, 렌트프리, 첫 월세일 같은 집 정보를 자유롭게 적어 두세요.</p>
+        <p className="text-[15px] text-slate-500 font-semibold">주소, 조건, 인도일, 렌트프리, 첫 월세일 같은 집 정보를 자유롭게 적어 두세요.</p>
       ) : (
-        <dl className="divide-y divide-slate-100">{items.map((p) => <PropRow key={p.id} p={p} />)}</dl>
+        <dl>{items.map((p) => <PropRow key={p.id} p={p} />)}</dl>
       )}
     </section>
   );
@@ -56,7 +56,7 @@ function PropRow({ p }: { p: PropertyItem }) {
 
   if (ed.open) {
     return (
-      <form className="py-2 flex flex-col sm:flex-row gap-2" onKeyDown={esc} onSubmit={(e) => {
+      <form className="py-3 flex flex-col sm:flex-row gap-2 border-b border-slate-200 last:border-b-0" onKeyDown={esc} onSubmit={(e) => {
         e.preventDefault();
         void run(() => send({ op: 'property.update', id: p.id, baseVersion: base, patch: { label, value } }, {
           onSuccess: ed.stop,
@@ -73,15 +73,15 @@ function PropRow({ p }: { p: PropertyItem }) {
     );
   }
   return (
-    <div className="py-1.5 flex items-start justify-between gap-2">
-      <div className="min-w-0 py-1">
-        <dt className="text-[13px] font-bold text-slate-600 flex flex-wrap items-center gap-2">{p.label}<EditBadge k={`prop:${p.id}`} /></dt>
-        <dd className="text-[14px] font-bold text-slate-800 break-words">{p.value}</dd>
+    <div className="py-1.5 flex items-start justify-between gap-2 border-b border-slate-200 last:border-b-0">
+      <div className="min-w-0 py-1.5">
+        <dt className="text-[13px] font-bold text-slate-500 flex flex-wrap items-center gap-2">{p.label}<EditBadge k={`prop:${p.id}`} /></dt>
+        <dd className="mt-0.5 text-[15px] font-semibold leading-relaxed text-slate-800">{p.value}</dd>
         <Stamp by={p.updatedBy} at={p.updatedAt} rel={relTime} />
       </div>
       <div className="flex shrink-0">
-        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-blue-700`} onClick={() => { setLabel(p.label); setValue(p.value); setOrig({ label: p.label, value: p.value }); setBase(p.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
-        <button type="button" aria-label="삭제" className={`${iconBtn} hover:text-red-600`} onClick={() => {
+        <button type="button" aria-label="수정" className={`${iconBtn} hover:text-slate-800`} onClick={() => { setLabel(p.label); setValue(p.value); setOrig({ label: p.label, value: p.value }); setBase(p.version); ed.start(); }}><i className="fas fa-pen text-[13px]" aria-hidden /></button>
+        <button type="button" aria-label="삭제" className={`${iconBtn} hover:text-slate-800`} onClick={() => {
           void send({ op: 'property.delete', id: p.id }).then((r) => { if (r.ok) toast('집 정보를 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'property.restore', id: p.id }) } }); });
         }}><i className="fas fa-trash text-[13px]" aria-hidden /></button>
       </div>

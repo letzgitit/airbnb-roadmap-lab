@@ -180,7 +180,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       return { result: next };
     }
     case 'property.add': {
-      if (Object.values(doc.property).filter((p) => !p.deletedAt).length >= MAX_PROPS) throw new OpError(400, { error: 'limit', message: '매물 정보 항목이 너무 많습니다.' });
+      if (Object.values(doc.property).filter((p) => !p.deletedAt).length >= MAX_PROPS) throw new OpError(400, { error: 'limit', message: '집 정보 항목이 너무 많습니다.' });
       const p: PropertyItem = {
         id: newId('p'), label: op.label, value: op.value,
         version: 1, createdAt: iso, updatedAt: iso, updatedBy: actor.name, deletedAt: null, deletedBy: null,

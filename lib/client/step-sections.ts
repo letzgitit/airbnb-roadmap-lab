@@ -7,15 +7,7 @@ export type StepTab = 'todo' | StepSection;
 
 export const SECTION_ORDER: readonly StepSection[] = ['warnings', 'official', 'tips', 'community'];
 
-// 검색 결과 라벨에 쓰는 이름(길게)
-export const SECTION_LABEL: Record<StepSection, string> = {
-  warnings: '실패 방지 주의사항',
-  official: '공식 기준',
-  tips: '고수들의 필살기',
-  community: '톡방 사례',
-};
-
-// 탭에 쓰는 이름(짧게)
+// 탭 이름(검색 결과 라벨도 같은 이름을 쓴다)
 export const TAB_LABEL: Record<StepTab, string> = {
   todo: '챙길 것',
   warnings: '주의',
