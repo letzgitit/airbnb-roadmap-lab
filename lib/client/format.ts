@@ -16,6 +16,12 @@ export function relTime(iso: string | null | undefined, now = Date.now()): strin
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+// 「2026-10-17」 → 「10/17」
+export function shortDate(iso: string): string {
+  const [, m, d] = iso.split('-');
+  return `${Number(m)}/${Number(d)}`;
+}
+
 // 마감까지 남은 날수(오늘 = 0, 지났으면 음수). 할 일 줄의 날짜 표시와 타임라인의 「오늘 · 기한 지남」 개수가 같은 기준을 쓰게 한다.
 function dayDiff(due: string, today: string): number {
   return Math.round((new Date(`${due}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000);

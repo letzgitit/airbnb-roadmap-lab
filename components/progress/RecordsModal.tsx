@@ -46,7 +46,7 @@ export function RecordsModal({ open, shown, onClose, beforeClose }: {
               <div className="flex flex-wrap gap-x-3 text-[13px] font-semibold text-slate-500">
                 <span>마지막 수정</span><span className="font-bold text-slate-700">{displayName(la.by)}</span><span>{relTime(la.at)}</span>
               </div>
-              <p className="mt-1 text-[15px] text-slate-700">{la.text}</p>
+              <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-slate-600">{la.text}</p>
             </>
           ) : <p className="text-[13px] font-semibold text-slate-500">아직 수정 내역이 없어요.</p>}
         </div>

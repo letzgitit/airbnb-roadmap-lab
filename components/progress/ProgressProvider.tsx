@@ -22,8 +22,21 @@ interface Ctx {
   // 저장 안 한 편집 내용 추적: 폼마다 key 로 등록. scope 'modal' = 단계 창 안의 폼(창을 닫으면 사라짐)
   markDirty: (key: string, scope: DirtyScope, dirty: boolean) => void;
   hasDirty: (scope?: DirtyScope) => boolean;
-  // 앱 안 확인 창 「저장 안 한 내용이 있어요」. true = 버리고 닫기, false = 계속 편집
+  // 앱 안 확인 창(공용). true = 확인(삭제 · 버리고 닫기), false = 취소. 포커스는 늘 안전한 쪽(취소 · 계속 편집)에 있다.
+  confirm: (o: ConfirmOpts) => Promise<boolean>;
+  // 확인 창 「저장 안 한 내용이 있어요」. true = 버리고 닫기, false = 계속 편집
   confirmDiscard: () => Promise<boolean>;
+}
+export interface ConfirmOpts {
+  title: string;
+  /** 본문: 지울 글 같은 것(두 줄까지만 보인다) */
+  body?: string;
+  /** 본문 아래 작은 안내 한 줄 */
+  note?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  /** true = 되돌리기 번거로운 동작(삭제): 확인 단추가 빨강, 취소가 중립 회색 */
+  danger?: boolean;
 }
 export type DirtyScope = 'modal' | 'page';
 const C = createContext<Ctx | null>(null);
@@ -97,8 +110,8 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const conflictBtn = useRef<HTMLButtonElement>(null);
   const conflictReturn = useRef<HTMLElement | null>(null);
   const dirtyRef = useRef(new Map<string, DirtyScope>());
-  const [discardAsk, setDiscardAsk] = useState<{ resolve: (v: boolean) => void } | null>(null);
-  const discardBtn = useRef<HTMLButtonElement>(null);
+  const [ask, setAsk] = useState<ConfirmOpts | null>(null);
+  const cancelBtn = useRef<HTMLButtonElement>(null);
 
   const docRef = useRef<ProgressDoc | null>(null);
   const meRef = useRef<Me | null>(null);
@@ -235,18 +248,22 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     if (dirty) dirtyRef.current.set(key, scope); else dirtyRef.current.delete(key);
   }, []);
   const hasDirty = useCallback<Ctx['hasDirty']>((scope) => [...dirtyRef.current.values()].some((v) => !scope || v === scope), []);
-  const discardRef = useRef<{ resolve: (v: boolean) => void } | null>(null);
-  const confirmDiscard = useCallback<Ctx['confirmDiscard']>(() => new Promise<boolean>((resolve) => {
-    discardRef.current?.resolve(false);
-    discardRef.current = { resolve };
-    setDiscardAsk({ resolve });
+  const askRef = useRef<{ resolve: (v: boolean) => void } | null>(null);
+  // 확인 창은 한 번에 하나. 떠 있는 동안 새로 물으면 앞의 질문은 「취소」로 닫는다.
+  const confirm = useCallback<Ctx['confirm']>((opts) => new Promise<boolean>((resolve) => {
+    askRef.current?.resolve(false);
+    askRef.current = { resolve };
+    setAsk(opts);
   }), []);
-  const answerDiscard = useCallback((v: boolean) => {
-    const cur = discardRef.current;
-    discardRef.current = null;
-    setDiscardAsk(null);
+  const answer = useCallback((v: boolean) => {
+    const cur = askRef.current;
+    askRef.current = null;
+    setAsk(null);
     cur?.resolve(v);
   }, []);
+  const confirmDiscard = useCallback<Ctx['confirmDiscard']>(() => confirm({
+    title: '저장 안 한 내용이 있어요', body: '지금 닫으면 고친 내용이 사라져요.', confirmLabel: '버리고 닫기', cancelLabel: '계속 편집',
+  }), [confirm]);
 
   // 탭 닫기·새로고침: 저장 안 한 내용이 있으면 브라우저 경고
   useEffect(() => {
@@ -255,23 +272,23 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('beforeunload', onUnload);
   }, []);
 
-  // 확인 창: 「계속 편집」에 포커스, Esc = 계속 편집(뒤의 단계 창·폼까지 가지 않게 먼저 가로챈다)
+  // 확인 창: 안전한 쪽(취소 · 계속 편집)에 포커스, Esc · 바깥 누르기 = 취소(뒤의 단계 창·폼까지 가지 않게 먼저 가로챈다)
   useEffect(() => {
-    if (!discardAsk) return;
+    if (!ask) return;
     const back = document.activeElement as HTMLElement | null;
-    discardBtn.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); answerDiscard(false); } };
+    cancelBtn.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); answer(false); } };
     window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('keydown', onKey, true);
       if (back && document.contains(back)) back.focus();
     };
-  }, [discardAsk, answerDiscard]);
+  }, [ask, answer]);
 
   const value = useMemo<Ctx>(() => ({
     status, doc, me, refreshing, send, toast, editingBy, setEditing: setEditKey, refresh: () => { setRefreshing(true); void refresh().finally(() => setRefreshing(false)); },
-    markDirty, hasDirty, confirmDiscard,
-  }), [status, doc, me, refreshing, send, toast, editingBy, refresh, markDirty, hasDirty, confirmDiscard]);
+    markDirty, hasDirty, confirm, confirmDiscard,
+  }), [status, doc, me, refreshing, send, toast, editingBy, refresh, markDirty, hasDirty, confirm, confirmDiscard]);
 
   const curRec = conflict?.body.current as Record<string, unknown> | undefined;
   const curDesc = conflict ? describe(conflict.body.kind, curRec) : '';
@@ -310,15 +327,21 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       )}
-      {discardAsk && (
-        <div className="fixed inset-0 z-[96] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-desc">
-          <div className="absolute inset-0 bg-slate-900/50" onClick={() => answerDiscard(false)} />
+      {ask && (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="ask-title" aria-describedby="ask-desc">
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => answer(false)} />
           <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full">
-            <p id="discard-title" className="font-bold text-slate-900 text-[17px]">저장 안 한 내용이 있어요</p>
-            <p id="discard-desc" className="mt-2 text-[15px] text-slate-600 leading-relaxed">지금 닫으면 고친 내용이 사라져요.</p>
+            <p id="ask-title" className="font-bold text-slate-900 text-[17px] leading-snug">{ask.title}</p>
+            <div id="ask-desc" className="mt-2 space-y-1.5">
+              {ask.body && <p className="line-clamp-2 break-words text-[15px] leading-relaxed text-slate-700">{ask.body}</p>}
+              {ask.note && <p className="text-[13px] leading-snug text-slate-500">{ask.note}</p>}
+            </div>
+            {/* 폰에서는 안전한 쪽(취소 · 계속 편집)이 위, 확인 쪽이 아래. 넓은 화면에서는 확인이 왼쪽 */}
             <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2">
-              <button type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200" onClick={() => answerDiscard(true)}>버리고 닫기</button>
-              <button ref={discardBtn} type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700" onClick={() => answerDiscard(false)}>계속 편집</button>
+              <button type="button" onClick={() => answer(true)}
+                className={`flex-1 min-h-11 px-4 py-3 rounded-2xl font-bold ${ask.danger ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{ask.confirmLabel ?? '확인'}</button>
+              <button ref={cancelBtn} type="button" onClick={() => answer(false)}
+                className={`flex-1 min-h-11 px-4 py-3 rounded-2xl font-bold ${ask.danger ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>{ask.cancelLabel ?? '취소'}</button>
             </div>
           </div>
         </div>

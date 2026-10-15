@@ -26,7 +26,7 @@ export interface SheetProps {
 // 폰은 아래에서 올라오는 시트(위쪽 둥근 모서리), 넓은 화면은 가운데 카드.
 export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, children, onClose, beforeClose, bodyRef, bodyClassName = 'bg-white' }: SheetProps) {
   const uid = useId();
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const askRef = useRef<() => void>(() => {});
   const asking = useRef(false);
 
@@ -50,11 +50,11 @@ export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, chi
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
-  // 열리면 닫기 버튼으로 포커스, Esc 로 닫기, 닫히면 연 요소로 포커스 복귀
+  // 열리면 시트 자체로 포커스(눈에 보이는 테두리 없음 — ✕ 단추에 파란 고리가 뜨지 않게), Esc 로 닫기, 닫히면 연 요소로 포커스 복귀
   useEffect(() => {
     if (!open) return;
     const back = document.activeElement as HTMLElement | null;
-    closeRef.current?.focus();
+    dialogRef.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') askRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => {
@@ -65,7 +65,7 @@ export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, chi
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={`${uid}-title`}>
+    <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-50 outline-none" role="dialog" aria-modal="true" aria-labelledby={`${uid}-title`}>
       <div className="absolute inset-0 bg-slate-900/50" onClick={() => askRef.current()} />
       <div className={`absolute inset-x-0 bottom-0 top-10 flex flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-transform duration-300 ease-out ${shown ? '' : 'translate-y-full'} md:relative md:top-auto md:mx-auto md:mt-[7vh] md:h-[85vh] md:max-w-[760px] md:rounded-3xl`}>
         <div className="shrink-0 border-b border-slate-100 bg-white">
@@ -75,7 +75,7 @@ export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, chi
               <h2 id={`${uid}-title`} className="text-xl font-bold leading-snug text-slate-900">{title}</h2>
               {subtitle && <p className="mt-1 text-[13px] leading-snug text-slate-600">{subtitle}</p>}
             </div>
-            <button ref={closeRef} type="button" onClick={() => askRef.current()} aria-label="닫기"
+            <button type="button" onClick={() => askRef.current()} aria-label="닫기"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200">
               <i className="fas fa-times" aria-hidden />
             </button>

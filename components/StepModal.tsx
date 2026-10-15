@@ -7,8 +7,9 @@ import { SECTION_ORDER, TAB_LABEL, sectionCount, type StepSection, type StepTab 
 import { Sheet } from './Sheet';
 import { TabBar, panelDomId, tabDomId, type TabItem } from './TabBar';
 import { WarningList } from './WarningList';
-import { StepPanel } from './progress/StepPanel';
+import { StepInfo, StepTasks } from './progress/StepPanel';
 import { useProgress } from './progress/ProgressProvider';
+import { leadCls, rowCls } from './progress/bits';
 
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
 const sectionTitle = 'mb-1 text-[15px] font-bold text-slate-700';
@@ -73,13 +74,16 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
       {/* 「챙길 것」은 다른 탭으로 옮겨도 그대로 둔다(안 보이게만): 쓰던 메모·할 일 입력과 저장 안 한 편집 보호가 끊기지 않게 */}
       <div role="tabpanel" id={panelDomId(uid, 'todo')} aria-labelledby={tabDomId(uid, 'todo')} hidden={cur !== 'todo'} className="flex flex-col gap-6 p-5">
         {step.summary && <div className="rounded-2xl bg-slate-50 px-4 py-3.5 text-[15px] leading-relaxed text-slate-800">{step.summary}</div>}
-        {loggedIn && <StepPanel key={step.id} stepId={step.id} steps={stepRefs} />}
+        {/* 위에서부터: 요약 → 우리 할 일 → 가이드 체크리스트 → 단계 정보(접힘) */}
+        {loggedIn && <StepTasks key={`t${step.id}`} stepId={step.id} steps={stepRefs} />}
         {step.checklist.length > 0 && (
-          <section aria-label="필수 체크리스트">
-            <h3 className={sectionTitle}>필수 체크리스트</h3>
+          <section aria-label="가이드 체크리스트">
+            <h3 className={sectionTitle}>가이드 체크리스트</h3>
+            {loggedIn && <p className="mb-1 text-[13px] leading-snug text-slate-500">필요한 건 ＋를 눌러 우리 할 일에 넣으세요.</p>}
             <ul>{step.checklist.map((c, i) => <ChecklistRow key={i} text={c} stepId={step.id} loggedIn={loggedIn} />)}</ul>
           </section>
         )}
+        {loggedIn && <StepInfo key={`i${step.id}`} stepId={step.id} />}
       </div>
       {cur !== 'todo' && (
         <div role="tabpanel" id={panelDomId(uid, cur)} aria-labelledby={tabDomId(uid, cur)} className="px-5 pb-6 pt-1">
@@ -149,27 +153,31 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
   );
 }
 
-// 필수 체크리스트 한 줄: 로그인했을 때만 「할 일로 추가」 한 가지 동작. 로그인 전엔 누를 수 없는 줄(상자 없는 목록).
+// 가이드 체크리스트 한 줄. 로그인 전: 누를 수 없는 목록(앞 조작 없음). 로그인 후: 앞 44px 「＋」 한 가지 동작,
+// 이미 우리 할 일에 있으면 초록 체크 + 옅은 글자(누를 수 없음). 줄 끝 단추는 없다.
 function ChecklistRow({ text, stepId, loggedIn }: { text: string; stepId: number; loggedIn: boolean }) {
   const { doc, send, toast } = useProgress();
   const [busy, setBusy] = useState(false);
   const taskText = text.trim().slice(0, 200);
   const added = loggedIn && !!doc && Object.values(doc.tasks).some((t) => !t.deletedAt && t.stepId === stepId && t.text.trim() === taskText);
+  if (!loggedIn) {
+    return <li className="border-b border-slate-100 py-3 text-[15px] font-semibold leading-snug text-slate-800 last:border-b-0">{text}</li>;
+  }
   return (
-    <li className="flex items-center gap-3 border-b border-slate-200 py-3 last:border-b-0">
-      <span className="min-w-0 flex-1 text-[15px] font-semibold leading-relaxed text-slate-800">{text}</span>
-      {loggedIn && (added ? (
-        <span className="inline-flex min-h-11 shrink-0 items-center gap-1 px-1 text-[13px] font-bold text-emerald-700"><i className="fas fa-check" aria-hidden />할 일에 있음</span>
+    <li className={rowCls}>
+      {added ? (
+        <span className={`${leadCls} text-emerald-600`} role="img" aria-label="이미 우리 할 일에 있어요"><i className="fas fa-check" aria-hidden /></span>
       ) : (
-        <button type="button" disabled={busy} className="min-h-11 shrink-0 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        <button type="button" disabled={busy} aria-label={`${text} 할 일에 추가`} className={`${leadCls} rounded-xl text-blue-700 hover:bg-slate-50 disabled:opacity-40`}
           onClick={async () => {
             setBusy(true);
             try {
               const r = await send({ op: 'task.add', stepId, text: taskText });
-              if (r.ok) toast(`${stepId}단계 할 일에 추가했어요.`);
+              if (r.ok) toast('우리 할 일에 넣었어요.');
             } finally { setBusy(false); }
-          }}>할 일로 추가</button>
-      ))}
+          }}><i className="fas fa-plus text-[14px]" aria-hidden /></button>
+      )}
+      <span className={`min-w-0 flex-1 py-3 text-[15px] font-semibold leading-snug ${added ? 'text-slate-500' : 'text-slate-800'}`}>{text}</span>
     </li>
   );
 }
