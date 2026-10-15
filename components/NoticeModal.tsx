@@ -60,7 +60,7 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
                 <li key={i} data-notice={i} className="border-b border-slate-200 last:border-b-0">
                   <button type="button" aria-expanded={on} aria-controls={`${uid}-body-${i}`} onClick={() => setExpanded(on ? null : i)}
                     className="flex min-h-14 w-full items-center gap-3 py-3 text-left">
-                    <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">{u.date}</span>
+                    <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold tabular-nums text-slate-700">{u.date}</span>
                     <span className="min-w-0 flex-1 text-[15px] font-bold leading-snug text-slate-800">{u.title}</span>
                     <i className={`fas ${on ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
                   </button>

@@ -69,7 +69,7 @@ export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, chi
       <div className="absolute inset-0 bg-slate-900/50" onClick={() => askRef.current()} />
       <div className={`absolute inset-x-0 bottom-0 top-10 flex flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-transform duration-300 ease-out ${shown ? '' : 'translate-y-full'} md:relative md:top-auto md:mx-auto md:mt-[7vh] md:h-[85vh] md:max-w-[760px] md:rounded-3xl`}>
         <div className="shrink-0 border-b border-slate-100 bg-white">
-          <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
+          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
             <div className="min-w-0">
               {eyebrow && <div className="mb-1.5 flex items-center gap-2">{eyebrow}</div>}
               <h2 id={`${uid}-title`} className="text-xl font-bold leading-snug text-slate-900">{title}</h2>
