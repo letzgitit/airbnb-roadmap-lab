@@ -26,7 +26,8 @@ export function Summary({ steps, onOpenStep, onOpenRecords }: {
   const lastLine = la ? `마지막 수정 · ${la.by} · ${relTime(la.at)} — ${la.text}` : '';
 
   return (
-    <section className="mb-6 min-w-0 rounded-3xl border border-blue-100 bg-blue-50/50 p-4" aria-label="우리 현황 요약">
+    // 넓은 화면에선 한 줄이 너무 길어지지 않게 720px 까지만(타임라인 왼쪽 끝에 맞춰 왼쪽 정렬)
+    <section className="mb-6 min-w-0 max-w-[720px] rounded-3xl border border-blue-100 bg-blue-50/50 p-4" aria-label="우리 현황 요약">
       <div className="flex items-center justify-between gap-2 mb-2">
         <h4 className="text-[14px] font-extrabold text-slate-800 flex items-center gap-2"><i className="fas fa-heart text-blue-600" aria-hidden /> 우리 현황</h4>
         <span className="flex items-center gap-3 text-[13px] font-semibold text-slate-600">{me?.name}<button type="button" className={textBtn} onClick={() => void signOut({ redirect: true, callbackUrl: '/' })}>로그아웃</button></span>
@@ -34,9 +35,10 @@ export function Summary({ steps, onOpenStep, onOpenRecords }: {
 
       {now ? (
         <button type="button" onClick={() => onOpenStep(now.id)}
-          className="w-full min-h-11 flex items-center justify-between gap-3 rounded-2xl bg-white border border-blue-200 px-4 py-2.5 text-left hover:border-blue-400">
-          <span className="min-w-0 text-[15px] font-bold text-slate-800 break-keep">
-            지금: {now.id}단계 {now.title} <span className="text-blue-700">({statusOf(now.id) === 'doing' ? '진행 중' : '시작 전'})</span>
+          className="w-full min-h-14 flex items-center justify-between gap-3 rounded-2xl bg-white border border-blue-200 px-4 py-2.5 text-left hover:border-blue-400">
+          <span className="min-w-0">
+            <span className="block text-[12px] font-bold text-blue-700">{statusOf(now.id) === 'doing' ? '지금 하는 단계' : '다음 단계'} · {now.id}/{steps.length}</span>
+            <span className="block text-[16px] font-bold text-slate-800 break-keep">{now.title}</span>
           </span>
           <i className="fas fa-chevron-right text-slate-500 text-[13px] shrink-0" aria-hidden />
         </button>

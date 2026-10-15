@@ -186,14 +186,14 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
         version: 1, createdAt: iso, updatedAt: iso, updatedBy: actor.name, deletedAt: null, deletedBy: null,
       };
       doc.property[p.id] = p;
-      touch(doc, actor, iso, `매물 정보 추가: ${clip(p.label)}`);
+      touch(doc, actor, iso, `집 정보 추가: ${clip(p.label)}`);
       return { result: p };
     }
     case 'property.update': {
       const cur = guardUpdate(own(doc.property, op.id), 'property', op.baseVersion, op.force, false);
       const next: PropertyItem = { ...cur, ...op.patch, ...bump(cur) };
       doc.property[cur.id] = next;
-      touch(doc, actor, iso, `매물 정보 수정: ${clip(next.label)}`);
+      touch(doc, actor, iso, `집 정보 수정: ${clip(next.label)}`);
       return { result: next };
     }
     case 'property.delete': {
@@ -202,7 +202,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       if (cur.deletedAt) return { result: cur };
       const next: PropertyItem = { ...cur, deletedAt: iso, deletedBy: actor.name, ...bump(cur) };
       doc.property[cur.id] = next;
-      touch(doc, actor, iso, `매물 정보 삭제: ${clip(cur.label)}`);
+      touch(doc, actor, iso, `집 정보 삭제: ${clip(cur.label)}`);
       return { result: next };
     }
     case 'property.restore': {
@@ -211,7 +211,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       if (!cur.deletedAt) return { result: cur };
       const next: PropertyItem = { ...cur, deletedAt: null, deletedBy: null, ...bump(cur) };
       doc.property[cur.id] = next;
-      touch(doc, actor, iso, `매물 정보 복원: ${clip(cur.label)}`);
+      touch(doc, actor, iso, `집 정보 복원: ${clip(cur.label)}`);
       return { result: next };
     }
   }

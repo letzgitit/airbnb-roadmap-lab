@@ -29,6 +29,8 @@ export function useEditing(k: string) {
 export const inputCls = 'w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[14px] font-semibold text-slate-800 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-400';
 export const btnPrimary = 'shrink-0 whitespace-nowrap min-h-11 px-4 py-2 rounded-xl bg-blue-600 text-white text-[14px] font-bold hover:bg-blue-700 disabled:opacity-50';
 export const btnGhost = 'shrink-0 whitespace-nowrap min-h-11 px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-[14px] font-bold hover:bg-slate-200';
+// 지우기 단추(편집 폼 안): 빨강 글자, 바탕은 옅게
+export const btnDanger = 'shrink-0 whitespace-nowrap min-h-11 px-4 py-2 rounded-xl bg-red-50 text-red-700 text-[14px] font-bold hover:bg-red-100';
 // 연필·휴지통 같은 아이콘 단추(44×44)
 export const iconBtn = 'w-11 h-11 flex items-center justify-center rounded-xl text-slate-500 hover:bg-white';
 // 작은 글자 단추(「+ 항목 추가」「로그아웃」「복원」 등): 글자는 작아도 누르는 칸은 44px

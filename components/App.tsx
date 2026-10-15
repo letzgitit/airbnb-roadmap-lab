@@ -153,7 +153,7 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
         <div className="chart-wrapper">
           {loggedIn
             ? <Summary steps={steps} onOpenStep={openStepById} onOpenRecords={() => openSheet({ kind: 'records' })} />
-            : <p className="mb-4 px-1 text-[14px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 챙길 것과 주의사항이 나와요.</p>}
+            : <p className="mb-4 max-w-[720px] px-1 text-[14px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 챙길 것과 주의사항이 나와요.</p>}
           <NoticeRow updates={updates} onOpen={() => openNotice(null)} />
           <div className="mb-6 flex flex-col items-start gap-4 px-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="flex items-center gap-2 text-base font-extrabold text-slate-800"><i className="fas fa-calendar-alt text-blue-600" /> 타임 라인 (Day 0 ~ 45)</h3>

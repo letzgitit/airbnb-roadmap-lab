@@ -8,7 +8,7 @@ import { StepPanel } from './progress/StepPanel';
 import { useProgress } from './progress/ProgressProvider';
 
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
-const sectionTitle = 'text-[14px] font-bold text-slate-700 mt-8 mb-3 flex items-center gap-2';
+const sectionTitle = 'mb-3 flex items-center gap-2 text-[14px] font-bold text-slate-700';
 const cardBase = 'rounded-[20px] border px-[18px] py-4 mb-3.5';
 
 // 단계 창: 탭 5개(챙길 것 · 주의 · 기준 · 필살기 · 사례). 한 줄(한 열)로만 보이고, 항목마다 따로 여는 상세 화면은 없다.
@@ -94,10 +94,10 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
   return (
     <Sheet open={open} shown={shown} onClose={onClose} beforeClose={beforeClose} bodyRef={bodyRef}
       eyebrow={<>
-        <span className="rounded-md border border-blue-100 bg-blue-50 px-2 py-0.5 text-[12px] font-black text-blue-700">STEP {String(index + 1).padStart(2, '0')}</span>
+        <span className="rounded-md border border-blue-100 bg-blue-50 px-2 py-0.5 text-[12px] font-black text-blue-700">{step.id}단계</span>
         <span className="text-[12px] font-bold text-slate-500">{step.day}</span>
       </>}
-      title={`${step.id}. ${step.title}`}
+      title={step.title}
       tabs={tabBar}
       footer={
         <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -108,14 +108,14 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
         </div>
       }>
       {/* 「챙길 것」은 다른 탭으로 옮겨도 그대로 둔다(안 보이게만): 쓰던 메모·할 일 입력과 저장 안 한 편집 보호가 끊기지 않게 */}
-      <div role="tabpanel" id={`${uid}-panel-todo`} aria-labelledby={`${uid}-tab-todo`} hidden={cur !== 'todo'} className="p-5">
-        {step.summary && <div className="note-box !mt-0">{step.summary}</div>}
+      <div role="tabpanel" id={`${uid}-panel-todo`} aria-labelledby={`${uid}-tab-todo`} hidden={cur !== 'todo'} className="flex flex-col gap-6 p-5">
+        {step.summary && <div className="note-box m-0">{step.summary}</div>}
         {loggedIn && <StepPanel key={step.id} stepId={step.id} steps={stepRefs} />}
         {step.checklist.length > 0 && (
-          <div>
+          <section aria-label="필수 체크리스트">
             <h3 className={sectionTitle}><i className="fas fa-check-circle text-slate-500" aria-hidden /> 필수 체크리스트</h3>
             {step.checklist.map((c, i) => <ChecklistRow key={i} text={c} stepId={step.id} loggedIn={loggedIn} />)}
-          </div>
+          </section>
         )}
       </div>
       {cur !== 'todo' && (
