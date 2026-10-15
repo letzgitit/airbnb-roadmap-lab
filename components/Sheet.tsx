@@ -72,8 +72,8 @@ export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, chi
           <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
             <div className="min-w-0">
               {eyebrow && <div className="mb-1.5 flex items-center gap-2">{eyebrow}</div>}
-              <h2 id={`${uid}-title`} className="text-xl font-black leading-snug text-slate-900">{title}</h2>
-              {subtitle && <p className="mt-1 text-[13px] font-medium leading-snug text-slate-600">{subtitle}</p>}
+              <h2 id={`${uid}-title`} className="text-xl font-bold leading-snug text-slate-900">{title}</h2>
+              {subtitle && <p className="mt-1 text-[13px] leading-snug text-slate-600">{subtitle}</p>}
             </div>
             <button ref={closeRef} type="button" onClick={() => askRef.current()} aria-label="닫기"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200">

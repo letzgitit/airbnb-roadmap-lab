@@ -25,7 +25,7 @@ export function ScriptsModal({ scripts, open, shown, onClose }: { scripts: Scrip
     <Sheet open={open} shown={shown} onClose={onClose} bodyClassName="bg-white px-5 pb-8 pt-2" title="멘트함">
       {groups.map(([who, items], gi) => (
         <section key={who} className="pt-5 first:pt-3">
-          <h3 className="text-[16px] font-extrabold text-slate-800">{who}</h3>
+          <h3 className="text-[17px] font-bold text-slate-800">{who}</h3>
           <ul className="mt-1">
             {items.map((it, i) => {
               const key = `${gi}-${i}`;
@@ -39,7 +39,7 @@ export function ScriptsModal({ scripts, open, shown, onClose }: { scripts: Scrip
                   </button>
                   {on && (
                     <div id={`${uid}-${key}`} className="pb-4">
-                      {it.lines.map((l, k) => <blockquote key={k} className={`pl-4 text-[16px] font-bold leading-relaxed text-slate-800 ${k ? 'mt-3' : ''}`}>&ldquo;{l}&rdquo;</blockquote>)}
+                      {it.lines.map((l, k) => <blockquote key={k} className={`pl-4 text-[17px] font-bold leading-relaxed text-slate-800 ${k ? 'mt-3' : ''}`}>&ldquo;{l}&rdquo;</blockquote>)}
                       {it.tips.map((t, k) => <p key={k} className="mt-3 text-[15px] leading-relaxed text-slate-600">{t}</p>)}
                     </div>
                   )}

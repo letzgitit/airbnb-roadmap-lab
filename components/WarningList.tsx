@@ -7,7 +7,7 @@ export function WarningList({ items }: { items: string[] }) {
       {items.map((w, i) => (
         <li key={i} className="flex items-start gap-2.5 border-b border-slate-200 py-3.5 last:border-b-0">
           <i className="fas fa-triangle-exclamation mt-[0.4em] shrink-0 text-[12px] text-red-600" aria-hidden />
-          <span className="min-w-0 text-[15px] font-semibold leading-relaxed text-slate-800">{w}</span>
+          <span className="min-w-0 text-[15px] font-normal leading-relaxed text-slate-800">{w}</span>
         </li>
       ))}
     </ul>

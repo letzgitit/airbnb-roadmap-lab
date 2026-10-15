@@ -25,7 +25,7 @@ export function TrashCard() {
     // 「집 정보 · 기록」 창 맨 아래 한 줄(기본 접힘). 창이 바깥 틀이라 카드 테두리·바깥 여백은 두지 않는다.
     <section className="mt-8 border-t border-slate-200 pt-3" aria-label="삭제한 항목">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2"><i className="fas fa-trash-can text-slate-500" aria-hidden /> 삭제한 항목 <span className="text-slate-500 font-semibold">{rows.length}</span></h3>
+        <h3 className="text-[17px] font-bold text-slate-800 flex items-center gap-2"><i className="fas fa-trash-can text-slate-500" aria-hidden /> 삭제한 항목 <span className="text-slate-500 font-semibold">{rows.length}</span></h3>
         <button type="button" className={textBtn} onClick={() => setOpen((v) => !v)} aria-expanded={open}>{open ? '접기' : '보기'}</button>
       </div>
       {open && (

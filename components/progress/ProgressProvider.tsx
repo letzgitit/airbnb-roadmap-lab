@@ -284,9 +284,9 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       {/* 폰에선 단계 창 하단 단추 줄(이전/다음 단계)을 가리지 않게 88px 위에 띄운다 */}
       <div className="fixed bottom-[88px] md:bottom-6 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 w-[calc(100%-32px)] max-w-md pointer-events-none" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl pl-4 pr-2 py-1.5 min-h-14 text-[14px] font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900/95 text-white'}`}>
+          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl pl-4 pr-2 py-1.5 min-h-14 text-[15px] font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900/95 text-white'}`}>
             <span className="py-1.5">{t.msg}</span>
-            {t.action && <button type="button" className="shrink-0 min-h-11 min-w-11 px-3 rounded-xl text-amber-300 font-bold hover:bg-white/10" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
+            {t.action && <button type="button" className="shrink-0 min-h-11 min-w-11 px-3 rounded-xl text-white font-bold underline underline-offset-2 hover:bg-white/10" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
           </div>
         ))}
       </div>
@@ -295,8 +295,8 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
           <div className="absolute inset-0 bg-slate-900/50" />
           <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full">
             <div className="text-[13px] font-bold text-red-600 mb-2"><i className="fas fa-exclamation-triangle mr-1" aria-hidden />동시에 고쳤어요</div>
-            <p id="conflict-title" className="font-extrabold text-slate-800 text-[16px] leading-snug">{who} 방금 이 항목을 고쳤어요.</p>
-            <div id="conflict-desc" className="mt-3 space-y-1.5 text-[14px] text-slate-600 leading-relaxed">
+            <p id="conflict-title" className="font-bold text-slate-900 text-[17px] leading-snug">{who} 방금 이 항목을 고쳤어요.</p>
+            <div id="conflict-desc" className="mt-3 space-y-1.5 text-[15px] text-slate-600 leading-relaxed">
               <p>최신 내용: <span className="font-bold text-slate-800 break-words">{curDesc || '(확인 불가)'}</span></p>
               {mine && <p>내가 쓴 것: <span className="font-semibold text-slate-700 break-words">{mine}</span></p>}
             </div>
@@ -314,8 +314,8 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-[96] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-desc">
           <div className="absolute inset-0 bg-slate-900/50" onClick={() => answerDiscard(false)} />
           <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full">
-            <p id="discard-title" className="font-extrabold text-slate-800 text-[16px]">저장 안 한 내용이 있어요</p>
-            <p id="discard-desc" className="mt-2 text-[14px] text-slate-600 leading-relaxed">지금 닫으면 고친 내용이 사라져요.</p>
+            <p id="discard-title" className="font-bold text-slate-900 text-[17px]">저장 안 한 내용이 있어요</p>
+            <p id="discard-desc" className="mt-2 text-[15px] text-slate-600 leading-relaxed">지금 닫으면 고친 내용이 사라져요.</p>
             <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2">
               <button type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200" onClick={() => answerDiscard(true)}>버리고 닫기</button>
               <button ref={discardBtn} type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700" onClick={() => answerDiscard(false)}>계속 편집</button>

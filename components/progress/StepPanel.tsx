@@ -76,9 +76,9 @@ export function StepPanel({ stepId, steps }: { stepId: number; steps: StepRef[] 
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="우리 현황">
+    <section aria-label="우리 현황">
       <div>
-        <div ref={headingRef} tabIndex={-1} className="mb-1 text-[14px] font-bold text-slate-700 outline-none">우리 할 일 <span className="font-semibold text-slate-500">{mine.filter((t) => t.done).length}/{mine.length}</span></div>
+        <div ref={headingRef} tabIndex={-1} className="mb-1 text-[15px] font-bold text-slate-700 outline-none">우리 할 일 <span className="font-semibold text-slate-500">{mine.filter((t) => t.done).length}/{mine.length}</span></div>
         <ul>
           {rows.map((t) => <TaskRow key={t.id} t={t} steps={steps} panelStepId={stepId} onEditChange={reportEdit} onToggle={onToggle} onGone={focusHeading} />)}
           {mine.length === 0 && editing.size === 0 && <li className="py-2 text-[15px] font-semibold text-slate-500">아직 할 일이 없어요.</li>}
@@ -88,13 +88,13 @@ export function StepPanel({ stepId, steps }: { stepId: number; steps: StepRef[] 
 
       <div className="mt-5 border-t border-slate-200 pt-4">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="text-[14px] font-bold text-slate-700">단계 상태</span>
+          <span className="text-[15px] font-bold text-slate-700">단계 상태</span>
           <EditBadge k={`step:${stepId}`} />
         </div>
         <div className="status-seg grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="단계 상태">
           {STATUS.map((s) => (
             <button key={s.v} type="button" onClick={() => setStatus(s.v)} aria-pressed={status === s.v}
-              className={`min-h-11 rounded-lg text-[14px] ${status === s.v ? 'bg-white font-bold text-slate-900 shadow-sm' : 'font-semibold text-slate-600 hover:bg-white/60'}`}>{s.label}</button>
+              className={`min-h-11 rounded-lg text-[15px] ${status === s.v ? 'bg-white font-bold text-slate-900 shadow-sm' : 'font-semibold text-slate-600 hover:bg-white/60'}`}>{s.label}</button>
           ))}
         </div>
 
@@ -170,16 +170,18 @@ function TaskRow({ t, steps, panelStepId, onEditChange, onToggle, onGone }: {
   useDirty(`form:task:${t.id}`, dirty, 'modal');
   const esc = useFormEsc(dirty, ed.stop);
   const deleted = !!t.deletedAt;
-  const moved = !deleted && t.stepId !== panelStepId;
+  // 내가 저장하는 동안(내가 옮기는 중일 때)엔 「다른 사람이 옮겼어요」 안내를 띄우지 않는다
+  const moved = !deleted && !busy && t.stepId !== panelStepId;
 
   // 목록(StepPanel)에 「이 줄은 편집 중」을 알려, 상대가 지우거나 옮겨도 폼이 사라지지 않게 한다
   useEffect(() => { onEditChange(t.id, ed.open); }, [ed.open, t.id, onEditChange]);
   useEffect(() => () => onEditChange(t.id, false), [t.id, onEditChange]);
   // 폼을 닫으면(저장 · 취소) 다시 생긴 글 단추로 포커스를 돌린다
+  const stays = !deleted && t.stepId === panelStepId; // 이 목록에 계속 남는 줄인가
   useEffect(() => {
-    if (wasOpen.current && !ed.open) textBtn.current?.focus();
+    if (wasOpen.current && !ed.open && stays) textBtn.current?.focus();
     wasOpen.current = ed.open;
-  }, [ed.open]);
+  }, [ed.open, stays]);
 
   // 확인 창 없이 바로 지우고, 8초 동안 알림의 「되돌리기」로 취소할 수 있다(나중엔 맨 아래 「삭제한 항목」에서 복원).
   const del = () => {
@@ -197,13 +199,14 @@ function TaskRow({ t, steps, panelStepId, onEditChange, onToggle, onGone }: {
   if (ed.open) {
     return (
       <li className="my-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
-        {deleted && <p role="alert" className="mb-2 text-[14px] font-bold text-slate-800">다른 사람이 이 할 일을 삭제했어요.</p>}
-        {moved && <p role="status" className="mb-2 text-[14px] font-bold text-slate-800">다른 사람이 {t.stepId}단계로 옮겼어요.</p>}
+        {deleted && <p role="alert" className="mb-2 text-[15px] font-bold text-slate-800">다른 사람이 이 할 일을 삭제했어요.</p>}
+        {moved && <p role="status" className="mb-2 text-[15px] font-bold text-slate-800">다른 사람이 {t.stepId}단계로 옮겼어요.</p>}
         <form className="space-y-2" onKeyDown={esc} onSubmit={(e) => {
           e.preventDefault();
           if (deleted) { if (text.trim()) void saveAsNew(); return; }
+          const leaving = sid !== panelStepId; // 다른 단계로 옮겨 저장하면 이 목록에서 줄이 사라진다
           void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch: { text, due: due || null, stepId: sid } }, {
-            onSuccess: ed.stop,
+            onSuccess: () => { ed.stop(); if (leaving) onGone(); },
             onTakeLatest: (cur) => {
               const o = { text: String(cur.text ?? ''), due: String(cur.due ?? ''), sid: typeof cur.stepId === 'number' ? cur.stepId : sid };
               setText(o.text); setDue(o.due); setSid(o.sid); setOrig(o);
@@ -211,7 +214,10 @@ function TaskRow({ t, steps, panelStepId, onEditChange, onToggle, onGone }: {
             },
           }));
         }}>
-          <input className={inputCls} value={text} maxLength={200} autoFocus onChange={(e) => setText(e.target.value)} aria-label="할 일 내용" />
+          {/* 긴 할 일도 다 보이게 여러 줄 칸. Enter 로 저장(한 줄 글이라 줄바꿈은 넣지 않는다), Esc 는 취소 */}
+          <textarea className={`${inputCls} resize-none`} rows={3} value={text} maxLength={200} autoFocus aria-label="할 일 내용"
+            onChange={(e) => setText(e.target.value.replace(/\r?\n/g, ' '))}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} />
           <div className="flex flex-col gap-2 sm:flex-row">
             <input type="date" className={inputCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
             {!deleted && (

@@ -71,7 +71,7 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
                         <p className="mt-3 text-[13px] font-semibold text-slate-600">
                           출처{' '}
                           {url
-                            ? <a href={url} target="_blank" rel="noopener noreferrer" className="break-all font-bold text-blue-700 underline underline-offset-2">{src}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
+                            ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] font-bold text-blue-700 underline underline-offset-2">{src}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
                             : src}
                         </p>
                       )}
@@ -84,7 +84,7 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
         ) : (
           withWarnings.map((s) => (
             <section key={s.id} aria-label={`${s.id}. ${s.title}`} className="pt-5">
-              <h3 className="text-[13px] font-bold text-slate-500">{s.id}. {s.title}</h3>
+              <h3 className="text-[15px] font-bold text-slate-900">{s.id}. {s.title}</h3>
               <WarningList items={s.warnings} />
             </section>
           ))

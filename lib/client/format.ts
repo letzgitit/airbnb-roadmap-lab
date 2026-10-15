@@ -27,6 +27,11 @@ export function dueLabel(due: string | null, today: string): { date: string; rel
   return { date, rel: `D-${diff}`, late: false };
 }
 
+// 날짜 범위 표기는 「~」로 통일한다(데이터의 「Day 12-13」 → 「Day 12~13」)
+export function dayLabel(day: string | number | null | undefined): string {
+  return String(day ?? '').replace(/(\d)\s*[-–]\s*(\d)/g, '$1~$2');
+}
+
 // 화면에 보일 사람 이름: 시스템 계정 · 개발용 가짜 로그인 이름을 사람 말로 바꾼다(실제 이름은 MEMBER_NAMES 에서 온다).
 const NAME_ALIAS: Record<string, string> = { claude: '클로드', me: '남편', wife: '아내' };
 export function displayName(name: string | null | undefined): string {

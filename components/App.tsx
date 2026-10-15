@@ -22,10 +22,10 @@ export default function App({ content, loginReady }: { content: Content; loginRe
   );
 }
 
-// 검색 결과 한 줄: 어디에 걸렸는지(label)와, 눌렀을 때 갈 곳
+// 검색 결과 한 줄: 어디에 걸렸는지(label + 탭 이름 tag)와, 눌렀을 때 갈 곳
 type Hit =
-  | { kind: 'step'; i: number; section: StepSection | null; label: string; text: string }
-  | { kind: 'update'; idx: number; label: string; text: string };
+  | { kind: 'step'; i: number; section: StepSection | null; label: string; tag?: string; text: string }
+  | { kind: 'update'; idx: number; label: string; tag?: string; text: string };
 const MAX_HITS = 8;
 
 function Inner({ content, loginReady }: { content: Content; loginReady: boolean }) {
@@ -70,6 +70,7 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
   const openStep = useCallback((i: number, section: StepSection | null = null) => openSheet({ kind: 'step', index: i, section }), [openSheet]);
   const openStepById = useCallback((id: number) => { const i = steps.findIndex((s) => s.id === id); if (i >= 0) openStep(i); }, [steps, openStep]);
   const openNotice = useCallback((idx: number | null = null) => openSheet({ kind: 'notice', initialIndex: idx }), [openSheet]);
+  const warnCount = useMemo(() => steps.reduce((n, s) => n + s.warnings.length, 0), [steps]);
 
   const results = useMemo<Hit[] | null>(() => {
     const q = query.trim().toLowerCase();
@@ -87,13 +88,13 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
       };
       SECTION_ORDER.forEach((k) => {
         const hit = pool[k].find(has);
-        if (hit) stepHits.push({ kind: 'step', i, section: k, label: `${base} · ${TAB_LABEL[k]}`, text: hit });
+        if (hit) stepHits.push({ kind: 'step', i, section: k, label: base, tag: TAB_LABEL[k], text: hit });
       });
     });
     const updateHits: Hit[] = [];
     updates.forEach((u, idx) => {
-      if (has(u.title)) updateHits.push({ kind: 'update', idx, label: '최근 바뀐 규정', text: u.title });
-      else if (has(u.text)) updateHits.push({ kind: 'update', idx, label: '최근 바뀐 규정', text: u.text });
+      if (has(u.title)) updateHits.push({ kind: 'update', idx, label: '주의사항', tag: '바뀐 규정', text: u.title });
+      else if (has(u.text)) updateHits.push({ kind: 'update', idx, label: '주의사항', tag: '바뀐 규정', text: u.text });
     });
     // 8개 안에서 규정 변화가 단계 글에 묻히지 않게 최소 2칸은 남겨 둔다(단계 글이 적으면 더 많이)
     const upd = updateHits.slice(0, Math.max(2, MAX_HITS - stepHits.length));
@@ -111,14 +112,14 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
       <header className="border-b border-slate-200 bg-white">
         <div className="px-4 pb-3 pt-4">
           <div className="flex items-center justify-between gap-3">
-            <h1 className="min-w-0 text-2xl font-black leading-tight text-slate-900">외도민 타임 라인</h1>
+            <h1 className="min-w-0 text-2xl font-bold leading-tight text-slate-900">외도민 타임 라인</h1>
             <button type="button" onClick={() => openSheet({ kind: 'scripts' })} aria-label="멘트함"
               className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 transition-colors hover:bg-slate-50">
-              <i className="fas fa-comment-medical text-base text-slate-500" aria-hidden /><span>멘트함</span>
+              <i className="fas fa-comment-medical text-[15px] text-slate-500" aria-hidden /><span>멘트함</span>
             </button>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3">
-            <p className="text-xs font-medium text-slate-500">Created by 주money</p>
+            <p className="text-xs text-slate-500">주money</p>
             {status === 'anon' && (loginReady ? (
               <button type="button" onClick={() => void signIn('google', { callbackUrl: '/' })} className="inline-flex min-h-9 items-center text-[13px] font-bold text-blue-700 underline underline-offset-4">
                 <i className="fab fa-google mr-1.5" aria-hidden />우리 현황 보기 (로그인)
@@ -129,21 +130,21 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
               </button>
             ))}
             {status === 'forbidden' && (
-              <button type="button" onClick={() => void signOut({ callbackUrl: '/' })} className="inline-flex min-h-9 items-center text-[13px] font-bold text-slate-700 underline underline-offset-4">허용되지 않은 계정이에요 · 로그아웃</button>
+              <button type="button" onClick={() => void signOut({ callbackUrl: '/' })} className="inline-flex min-h-9 items-center gap-x-3 text-[13px] font-bold text-slate-700"><span>허용되지 않은 계정이에요</span><span className="underline underline-offset-4">로그아웃</span></button>
             )}
           </div>
 
           <div className="relative z-30 mt-2">
             <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="임대인 설득, 조명 색온도, 구청 실사 등 키워드 검색" aria-label="검색"
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-100 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-500 transition-colors focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200" />
-            <i className="fas fa-search pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden />
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-100 pl-11 pr-4 text-[15px] font-semibold text-slate-900 placeholder-slate-500 transition-colors focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200" />
+            <i className="fas fa-search pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[15px] text-slate-400" aria-hidden />
             {results && (
               <div className="search-dropdown absolute left-0 top-full z-50 mt-2 w-full">
-                {results.length === 0 && <div className="p-4 text-center text-sm text-slate-500">검색 결과가 없습니다.</div>}
+                {results.length === 0 && <div className="p-4 text-center text-[15px] text-slate-500">검색 결과가 없습니다.</div>}
                 {results.map((r, k) => (
                   <button key={k} type="button" className="block w-full border-b border-slate-100 p-4 text-left transition-colors hover:bg-slate-50 active:bg-slate-100" onClick={() => goHit(r)}>
-                    <div className="mb-1 text-[12px] font-bold text-slate-500">{r.label}</div>
-                    <div className="line-clamp-2 text-[14px] font-bold text-slate-800">{r.text}</div>
+                    <div className="mb-1 flex flex-wrap gap-x-3 text-[12px] font-bold text-slate-500"><span>{r.label}</span>{r.tag && <span>{r.tag}</span>}</div>
+                    <div className="line-clamp-2 text-[15px] font-bold text-slate-800">{r.text}</div>
                   </button>
                 ))}
               </div>
@@ -156,10 +157,10 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
         <div className="chart-wrapper">
           {loggedIn
             ? <Summary steps={steps} onOpenStep={openStepById} onOpenRecords={() => openSheet({ kind: 'records' })} />
-            : <p className="mb-4 max-w-[720px] px-1 text-[14px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 챙길 것과 주의사항이 나와요.</p>}
-          <NoticeRow updates={updates} onOpen={() => openNotice(null)} />
+            : <p className="mb-4 max-w-[720px] px-1 text-[15px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 챙길 것과 주의사항이 나와요.</p>}
+          <NoticeRow ruleCount={updates.length} warnCount={warnCount} onOpen={() => openNotice(null)} />
           <div className="mb-3 mt-2 flex flex-col items-start gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="flex items-center gap-2 text-base font-extrabold text-slate-900"><i className="fas fa-calendar-alt text-slate-500" aria-hidden /> 타임 라인 (Day 0 ~ 45)</h2>
+            <h2 className="text-[17px] font-bold text-slate-900">단계별 일정 (Day 0~45)</h2>
             <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] font-semibold text-slate-700" aria-label="색 설명">
               {TYPE_ORDER.map((t) => (
                 <li key={t} className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-full ${TYPE_DOT[t]}`} aria-hidden />{TYPE_LABEL[t]}</li>

@@ -163,6 +163,8 @@ export function useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm }: 
       }
       const want = parseHash(window.location.hash);
       const next = want ? stateFor(want) : null;
+      // 로그인 확인을 기다리던 #records 는, 해시가 다른 곳으로 바뀌면(다른 시트 · 홈) 취소해 나중에 갑자기 뜨지 않게 한다
+      if (!want || want.kind !== 'records') wantRecords.current = false;
       if (cur && next && next.kind === cur.kind && (next.kind !== 'step' || (cur.kind === 'step' && next.index === cur.index))) return;
       if (cur) {
         if (latest.current.isDirty(cur.kind)) {
@@ -179,6 +181,7 @@ export function useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm }: 
       }
       if (!want) return;
       if (!next) { clearHash(); return; }
+      wantRecords.current = false;                    // 다른 시트가 열리는 중이면 대기 중이던 #records 는 취소
       if (next.kind === 'records' && !latest.current.loggedIn) {
         if (latest.current.status === 'loading') wantRecords.current = true; else clearHash();
         return;

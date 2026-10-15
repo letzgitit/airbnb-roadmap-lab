@@ -10,12 +10,13 @@ Chart.register(BarController, BarElement, CategoryScale, LinearScale);
 
 export interface ChartStep { id: number; label: string }
 
-// 단계 종류별 색(한 가지 색, 번짐 없음). 빨강은 「주의」에만 쓰므로 계약은 짙은 슬레이트.
+// 단계 종류별 색(한 가지 색, 번짐 없음). 빨강은 「주의」, 파랑은 「누르는 것」과 「지금」에만 쓰므로
+// 계약은 짙은 슬레이트, 설비는 노랑.
 export const TYPE_COLOR: Record<TimelineType, string> = {
-  prep: '#94a3b8', milestone: '#1e293b', critical: '#f97316', setup: '#3b82f6', admin: '#a855f7', open: '#10b981',
+  prep: '#94a3b8', milestone: '#1e293b', critical: '#f97316', setup: '#eab308', admin: '#a855f7', open: '#10b981',
 };
 export const TYPE_DOT: Record<TimelineType, string> = {
-  prep: 'bg-slate-400', milestone: 'bg-slate-800', critical: 'bg-orange-500', setup: 'bg-blue-500', admin: 'bg-purple-500', open: 'bg-emerald-500',
+  prep: 'bg-slate-400', milestone: 'bg-slate-800', critical: 'bg-orange-500', setup: 'bg-yellow-500', admin: 'bg-purple-500', open: 'bg-emerald-500',
 };
 export const TYPE_LABEL: Record<TimelineType, string> = {
   prep: '준비', milestone: '계약', critical: '중요', setup: '설비', admin: '행정', open: '운영',
@@ -24,10 +25,11 @@ export const TYPE_ORDER: TimelineType[] = ['prep', 'milestone', 'critical', 'set
 
 const rangeOf = (id: number) => TIMELINE[id] ?? DEFAULT_RANGE;
 const LABEL_W = 220; // 데스크톱 왼쪽 단계 이름 칸 너비(px)
+const PERIOD_DAYS = 45; // 전체 일정 길이(Day 0~45)
 const NOW_BG = 'bg-[#EFF6FF] hover:bg-[#EFF6FF]';
 
 function titleCls(cur: boolean, done: boolean) {
-  return cur ? 'font-extrabold text-slate-900' : done ? 'font-bold text-slate-400' : 'font-bold text-slate-700';
+  return cur ? 'font-bold text-slate-900' : done ? 'font-semibold text-slate-400' : 'font-semibold text-slate-700';
 }
 
 export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: {
@@ -117,7 +119,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
               const s = steps[tooltip.dataPoints[0].dataIndex];
               const r = range(s.id);
               el.innerHTML = '';
-              const a = document.createElement('div'); a.className = 'font-bold text-sm mb-1'; a.textContent = s.label;
+              const a = document.createElement('div'); a.className = 'font-bold text-[15px] mb-1'; a.textContent = s.label;
               const b = document.createElement('div'); b.className = 'text-slate-300 font-semibold'; b.textContent = `진행 기간: Day ${r.start} ~ ${r.end}`;
               el.append(a, b);
               el.style.opacity = '1';
@@ -143,14 +145,14 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
       el.style.top = `${e.clientY - rect.top}px`;
     }
     el.innerHTML = '';
-    const d = document.createElement('div'); d.className = 'font-bold text-sm text-slate-100'; d.textContent = text;
+    const d = document.createElement('div'); d.className = 'font-bold text-[15px] text-slate-100'; d.textContent = text;
     el.append(d);
     el.style.opacity = '1';
   };
 
   return (
     <>
-    {/* 폰(768px 미만): 막대 대신 단계 목록. 지금 하는 단계는 연한 파랑 바탕 + 「지금」, 끝낸 단계는 흐린 글씨 + 체크 */}
+    {/* 폰(768px 미만): 단계 목록 + 줄마다 기간 막대(전체 45일 중 어디인지, 종류 색). 지금 하는 단계는 연한 파랑 바탕 + 「지금」, 끝낸 단계는 흐린 글씨 + 체크 + 옅은 막대 */}
     <ol className="md:hidden overflow-hidden rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100" aria-label="단계별 기간">
       {steps.map((s, i) => {
         const r = rangeOf(s.id);
@@ -162,11 +164,15 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
           <li key={s.id}>
             <button type="button" onClick={() => onSelect(i)} aria-current={cur ? 'step' : undefined}
               className={`flex min-h-[56px] w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 ${cur ? NOW_BG : ''}`}>
-              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${TYPE_DOT[r.type]}`} aria-hidden />
               <span className="min-w-0 flex-1">
                 <span className={`block text-[15px] leading-snug ${titleCls(cur, done)}`}>{s.label}</span>
-                <span className="mt-0.5 block text-[13px] font-semibold text-slate-500">
-                  Day {r.start}~{r.end}{c && c.total > 0 ? ` · 할 일 ${c.done}/${c.total}` : ''}
+                <span className="mt-0.5 flex flex-wrap gap-x-3 text-[13px] font-semibold text-slate-500">
+                  <span>Day {r.start}~{r.end}</span>
+                  {c && c.total > 0 && <span>할 일 {c.done}/{c.total}</span>}
+                </span>
+                <span className="relative mt-2 block h-1.5 w-full rounded-[3px] bg-[#f1f5f9]" aria-hidden>
+                  <span className="absolute inset-y-0 block rounded-[3px]"
+                    style={{ left: `${(r.start / PERIOD_DAYS) * 100}%`, width: `${Math.max(((r.end - r.start) / PERIOD_DAYS) * 100, 2)}%`, backgroundColor: TYPE_COLOR[r.type], opacity: done ? 0.4 : 1 }} />
                 </span>
               </span>
               {cur

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Step } from '@/lib/core/types';
+import { dayLabel } from '@/lib/client/format';
 import { SECTION_ORDER, TAB_LABEL, sectionCount, type StepSection, type StepTab } from '@/lib/client/step-sections';
 import { Sheet } from './Sheet';
 import { TabBar, panelDomId, tabDomId, type TabItem } from './TabBar';
@@ -10,7 +11,7 @@ import { StepPanel } from './progress/StepPanel';
 import { useProgress } from './progress/ProgressProvider';
 
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
-const sectionTitle = 'mb-1 text-[14px] font-bold text-slate-700';
+const sectionTitle = 'mb-1 text-[15px] font-bold text-slate-700';
 const row = 'border-b border-slate-200 py-4 last:border-b-0';
 
 // 단계 창: 탭 5개(챙길 것 · 주의 · 기준 · 필살기 · 사례). 한 열로만 보이고, 항목마다 따로 여는 상세 화면은 없다.
@@ -57,16 +58,16 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
     <Sheet open={open} shown={shown} onClose={onClose} beforeClose={beforeClose} bodyRef={bodyRef}
       eyebrow={<>
         <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">{step.id}단계</span>
-        <span className="text-[12px] font-bold text-slate-500">{step.day}</span>
+        <span className="text-[12px] font-bold text-slate-500">{dayLabel(step.day)}</span>
       </>}
       title={step.title}
       tabs={<TabBar items={items} value={cur} onChange={(id) => setTab(id as StepTab)} label="단계 내용" idPrefix={uid} />}
       footer={
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <button type="button" onClick={() => void go(index - 1)} style={{ visibility: index === 0 ? 'hidden' : 'visible' }}
-            className="flex min-h-11 items-center gap-2 rounded-xl bg-slate-100 px-4 font-bold text-slate-700 transition-colors hover:bg-slate-200"><i className="fas fa-chevron-left" aria-hidden />이전 단계</button>
+            className="flex min-h-11 items-center gap-2 rounded-xl bg-slate-100 px-4 text-[15px] font-bold text-slate-700 transition-colors hover:bg-slate-200"><i className="fas fa-chevron-left" aria-hidden />이전 단계</button>
           <button type="button" onClick={() => void go(index + 1)} style={{ visibility: index === steps.length - 1 ? 'hidden' : 'visible' }}
-            className="flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 font-bold text-white transition-colors hover:bg-blue-700">다음 단계<i className="fas fa-chevron-right" aria-hidden /></button>
+            className="flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-[15px] font-bold text-white transition-colors hover:bg-blue-700">다음 단계<i className="fas fa-chevron-right" aria-hidden /></button>
         </div>
       }>
       {/* 「챙길 것」은 다른 탭으로 옮겨도 그대로 둔다(안 보이게만): 쓰던 메모·할 일 입력과 저장 안 한 편집 보호가 끊기지 않게 */}
@@ -104,7 +105,7 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
                 {o.region && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">{o.region}</span>}
                 {o.checked && <span>확인일 {o.checked}</span>}
                 {url
-                  ? <a href={url} target="_blank" rel="noopener noreferrer" className="break-all font-bold text-blue-700 underline underline-offset-2">{o.source || o.url}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
+                  ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] font-bold text-blue-700 underline underline-offset-2">{o.source || o.url}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
                   : o.source && <span>출처 {o.source}</span>}
               </div>
             </li>
@@ -116,11 +117,11 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
   if (k === 'tips') {
     return (
       <>
-        <p className="pt-3 text-[13px] font-medium text-slate-500">대부분 현장 경험에서 나온 요령이에요.</p>
+        <p className="pt-3 text-[13px] text-slate-500">대부분 현장 경험에서 나온 요령이에요.</p>
         <ul>
           {step.tips.map((t, i) => (
             <li key={i} className={row}>
-              <p className="text-[15px] font-medium leading-relaxed text-slate-800">{t.text}</p>
+              <p className="text-[15px] font-normal leading-relaxed text-slate-800">{t.text}</p>
               {t.from && t.from !== '현장 경험' && <p className="mt-1.5 text-[13px] font-semibold text-slate-500">출처: {t.from}</p>}
             </li>
           ))}
@@ -140,7 +141,7 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
                 {c.date && <span>{c.date}</span>}
               </div>
             )}
-            <p className="text-[15px] font-medium leading-relaxed text-slate-800">{c.text}</p>
+            <p className="text-[15px] font-normal leading-relaxed text-slate-800">{c.text}</p>
           </li>
         );
       })}

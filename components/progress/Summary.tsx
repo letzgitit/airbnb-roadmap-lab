@@ -53,7 +53,7 @@ export function Summary({ steps, onOpenStep, onOpenRecords }: {
     // 넓은 화면에선 한 줄이 너무 길어지지 않게 720px 까지만(타임라인 왼쪽 끝에 맞춰 왼쪽 정렬)
     <section className="mb-4 min-w-0 max-w-[720px] rounded-2xl border border-slate-200 bg-white p-4" aria-label="우리 현황 요약">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-[16px] font-extrabold text-slate-900">우리 현황</h2>
+        <h2 className="text-[17px] font-bold text-slate-900">우리 현황</h2>
         <button type="button" className="-mx-2 inline-flex min-h-11 items-center px-2 text-[13px] font-semibold text-slate-600 hover:underline"
           onClick={() => void signOut({ redirect: true, callbackUrl: '/' })}>로그아웃</button>
       </div>
@@ -62,8 +62,10 @@ export function Summary({ steps, onOpenStep, onOpenRecords }: {
         <button type="button" onClick={() => onOpenStep(now.id)}
           className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-blue-200 bg-[#EFF6FF] px-4 py-2.5 text-left hover:border-blue-400">
           <span className="min-w-0">
-            <span className="block text-[12px] font-bold text-blue-700">{statusOf(now.id) === 'doing' ? '지금 하는 단계' : '다음 단계'} · {now.id}/{steps.length}</span>
-            <span className="block text-[16px] font-bold text-slate-800">{now.title}</span>
+            <span className="flex flex-wrap gap-x-3 text-[12px] font-bold text-blue-700">
+              <span>{statusOf(now.id) === 'doing' ? '지금 하는 단계' : '다음 단계'}</span><span>{now.id}/{steps.length}</span>
+            </span>
+            <span className="block text-[17px] font-bold text-slate-800">{now.title}</span>
           </span>
           <i className="fas fa-chevron-right shrink-0 text-[13px] text-slate-500" aria-hidden />
         </button>
@@ -80,9 +82,10 @@ export function Summary({ steps, onOpenStep, onOpenRecords }: {
         </>
       )}
 
+      {/* 상자 대신 위쪽 선 하나로 구분한 한 줄 입구(높이 56px) */}
       <button type="button" onClick={onOpenRecords}
-        className="mt-4 flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-left text-[15px] font-bold text-slate-700 hover:bg-slate-50">
-        <span className="flex items-center gap-2"><i className="fas fa-folder-open text-slate-500" aria-hidden />집 정보 · 기록</span>
+        className="mt-3 flex min-h-14 w-full items-center justify-between gap-3 border-t border-slate-100 text-left text-[15px] font-bold text-slate-700 hover:text-slate-900">
+        <span>집 정보 · 기록</span>
         <i className="fas fa-chevron-right shrink-0 text-[13px] text-slate-500" aria-hidden />
       </button>
     </section>
@@ -118,7 +121,7 @@ function TaskLine({ t, today, onOpen, finishedAt, onMark, onUnmark }: {
           } else void finish();
         }}
         className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl disabled:opacity-50 ${justDone ? 'text-emerald-600' : 'text-slate-400 hover:text-emerald-600'}`}>
-        {justDone ? <i className="fas fa-circle-check text-[22px]" aria-hidden /> : <i className="far fa-circle text-[22px]" aria-hidden />}
+        {justDone ? <i className="fas fa-circle-check text-[20px]" aria-hidden /> : <i className="far fa-circle text-[20px]" aria-hidden />}
       </button>
       <button type="button" onClick={() => onOpen(t.stepId)} className="min-h-11 min-w-0 flex-1 py-2.5 pr-1 text-left">
         <span className={`line-clamp-2 text-[15px] font-bold leading-snug ${justDone ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{t.text}</span>
