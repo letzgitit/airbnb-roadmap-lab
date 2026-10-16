@@ -235,7 +235,7 @@ function TaskRow({ t, steps, panelStepId, onEditChange, onToggle, onGone }: {
   return (
     <li className={rowCls}>
       <label className={`${leadCls} cursor-pointer`}>
-        <input type="checkbox" className="h-5 w-5 cursor-pointer accent-emerald-600" checked={t.done} aria-label={`${t.text} 완료`}
+        <input type="checkbox" className="h-5 w-5 cursor-pointer accent-[#155dfc]" checked={t.done} aria-label={`${t.text} 완료`}
           onChange={(e) => { onToggle(t); void send({ op: 'task.update', id: t.id, patch: { done: e.target.checked } }); }} />
       </label>
       <button ref={textBtnRef} type="button" aria-label={`${t.text} 수정`} className="min-w-0 flex-1 py-3 text-left"

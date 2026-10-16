@@ -303,7 +303,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       {/* 폰에선 단계 창 하단 단추 줄(이전/다음 단계)을 가리지 않게 88px 위에 띄운다 */}
       <div className="fixed bottom-[88px] md:bottom-6 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 w-[calc(100%-32px)] max-w-md pointer-events-none" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl pl-4 pr-2 py-1.5 min-h-14 text-[15px] font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-snow' : 'bg-slate-900/95 text-white'}`}>
+          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl pl-4 pr-2 py-1.5 min-h-14 text-[15px] font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-snow' : 'bg-slate-900/95 text-white dark:bg-[#cbd5e1]'}`}>
             <span className="py-1.5">{t.msg}</span>
             {t.action && <button type="button" className="shrink-0 min-h-11 min-w-11 px-3 rounded-xl text-white font-bold underline underline-offset-2 hover:bg-white/10" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
           </div>

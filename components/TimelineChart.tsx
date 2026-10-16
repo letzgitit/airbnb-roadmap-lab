@@ -19,11 +19,11 @@ export const TYPE_COLOR: Record<TimelineType, string> = {
   prep: '#94a3b8', milestone: '#1e293b', critical: '#f97316', setup: '#eab308', admin: '#a855f7', open: '#10b981',
 };
 // 캔버스는 CSS 변수를 못 쓰므로 다크일 때 따로 고른다: 짙은 슬레이트(계약)는 밝게, 점 테두리는 카드색으로
-const CHART_DARK = { milestone: '#cbd5e1', ring: '#141d2f' };
-const typeColor = (t: TimelineType, dark: boolean) => (dark && t === 'milestone' ? CHART_DARK.milestone : TYPE_COLOR[t]);
+const CHART_DARK = { milestone: '#f1f5f9', prep: '#64748b', ring: '#1a1d22', ringInner: '#111316' };
+const typeColor = (t: TimelineType, dark: boolean) => (dark && t === 'milestone' ? CHART_DARK.milestone : dark && t === 'prep' ? CHART_DARK.prep : TYPE_COLOR[t]);
 
 export const TYPE_DOT: Record<TimelineType, string> = {
-  prep: 'bg-slate-400', milestone: 'bg-slate-800', critical: 'bg-orange-500', setup: 'bg-yellow-500', admin: 'bg-purple-500', open: 'bg-emerald-500',
+  prep: 'bg-[var(--prep-bar)]', milestone: 'bg-slate-800', critical: 'bg-orange-500', setup: 'bg-yellow-500', admin: 'bg-purple-500', open: 'bg-emerald-500',
 };
 export const TYPE_LABEL: Record<TimelineType, string> = {
   prep: '준비', milestone: '계약', critical: '중요', setup: '설비', admin: '행정', open: '운영',
@@ -88,7 +88,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
           c.strokeStyle = dark ? CHART_DARK.ring : '#fff'; c.lineWidth = 2; c.stroke();
           if (s === 'done') {
             c.beginPath(); c.moveTo(x - 4, y); c.lineTo(x - 1, y + 3); c.lineTo(x + 4, y - 3);
-            c.strokeStyle = dark ? '#0b1220' : '#fff'; c.lineWidth = 2; c.lineCap = 'round'; c.stroke();
+            c.strokeStyle = dark ? CHART_DARK.ringInner : '#fff'; c.lineWidth = 2; c.lineCap = 'round'; c.stroke();
           } else { c.beginPath(); c.arc(x, y, 3, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); }
           c.restore();
         });
@@ -182,7 +182,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
                 </span>
                 <span className="relative mt-2 block h-1.5 w-full rounded-[3px] bg-slate-100" aria-hidden>
                   <span className="absolute inset-y-0 block rounded-[3px]"
-                    style={{ left: `${(r.start / PERIOD_DAYS) * 100}%`, width: `${Math.max(((r.end - r.start) / PERIOD_DAYS) * 100, 2)}%`, backgroundColor: r.type === 'milestone' ? 'var(--color-slate-800)' : TYPE_COLOR[r.type], opacity: done ? 0.4 : 1 }} />
+                    style={{ left: `${(r.start / PERIOD_DAYS) * 100}%`, width: `${Math.max(((r.end - r.start) / PERIOD_DAYS) * 100, 2)}%`, backgroundColor: r.type === 'milestone' ? 'var(--color-slate-900)' : r.type === 'prep' ? 'var(--prep-bar)' : TYPE_COLOR[r.type], opacity: done ? 0.4 : 1 }} />
                 </span>
               </span>
               {cur

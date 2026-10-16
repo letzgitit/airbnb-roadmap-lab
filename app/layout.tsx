@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { TopLoader } from '@/components/TopLoader';
+import { DEFAULT_THEME_MODE } from '@/lib/client/theme-default';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || undefined;
 const title = '외도민 타임 라인';
@@ -15,8 +16,8 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image', title, description, images: [ogImage] },
 };
 
-// 첫 그리기 전에 돌아 화면 모드를 <html> 에 먼저 반영한다(저장값 없음 = 시스템). 깜빡임을 막으려고 head 에 인라인으로 둔다.
-const themeInit = `(function(){var d=false;try{var m=localStorage.getItem('theme');d=m==='dark'||(m!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);}catch(e){}var h=document.documentElement;if(d)h.classList.add('dark');h.style.colorScheme=d?'dark':'light';})();`;
+// 첫 그리기 전에 돌아 화면 모드를 <html> 에 먼저 반영한다(저장값 없음 = DEFAULT_THEME_MODE). 깜빡임을 막으려고 head 에 인라인으로 둔다.
+const themeInit = `(function(){var d=false;try{var m=localStorage.getItem('theme');if(m!=='light'&&m!=='dark'&&m!=='system')m=${JSON.stringify(DEFAULT_THEME_MODE)};d=m==='dark'||(m==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);}catch(e){}var h=document.documentElement;if(d)h.classList.add('dark');h.style.colorScheme=d?'dark':'light';})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

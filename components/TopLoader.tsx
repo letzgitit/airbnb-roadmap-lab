@@ -47,7 +47,7 @@ export function TopLoader() {
     <div aria-busy={busy} className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-[3px]">
       {shown && (
         <div role="progressbar" aria-label="불러오는 중" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}
-          className={`h-full bg-blue-600 shadow-[0_0_6px_rgba(37,99,235,0.6)] transition-[width,opacity] duration-200 ease-out motion-reduce:transition-none dark:bg-blue-400 dark:shadow-[0_0_8px_rgba(96,165,250,0.7)] ${leaving ? 'opacity-0 !duration-300' : 'opacity-100'}`}
+          className={`h-full bg-blue-600 transition-[width,opacity] duration-200 ease-out motion-reduce:transition-none dark:bg-blue-400 ${leaving ? 'opacity-0 !duration-300' : 'opacity-100'}`}
           style={{ width: `${pct}%` }} />
       )}
     </div>

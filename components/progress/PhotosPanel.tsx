@@ -172,7 +172,7 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
       {children}
       {viewIndex >= 0 && (
         <Lightbox list={viewList} index={viewIndex} steps={steps} onIndex={(i) => setViewId(viewList[i]?.id ?? null)} onClose={() => setViewId(null)}
-          onSave={(p, body) => patch(p.id, 'PATCH', body)} onDelete={remove} onMove={move} canMove={canMove} />
+          onSave={(p, body) => patch(p.id, 'PATCH', body)} onDelete={remove} onMove={move} canMove={canMove} showMove={viewStep !== null || (sort === 'default' && !query.trim() && kind === 'all')} />
       )}
       {uploadStep !== null && <UploadDialog steps={steps} initialStep={uploadStep} onDone={() => void reload()} onClose={() => setUploadStep(null)} />}
     </C.Provider>
@@ -260,24 +260,24 @@ export function PhotosPanel({ active }: { active: boolean }) {
               onChange={(e) => setText(e.target.value)}
               onCompositionStart={() => { composing.current = true; }}
               onCompositionEnd={(e) => { composing.current = false; setQuery(e.currentTarget.value.trim()); }}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 pl-9 pr-9 text-[14px] font-semibold text-slate-900 placeholder-slate-500 [&::-webkit-search-cancel-button]:hidden focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200" />
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-9 text-[14px] font-semibold text-slate-900 placeholder-slate-500 [&::-webkit-search-cancel-button]:hidden focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
             {text && (
               <button type="button" aria-label="검색어 지우기" onClick={() => { setText(''); setQuery(''); }}
-                className="absolute right-0.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:text-slate-800">
+                className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:text-slate-800">
                 <i className="fas fa-times" aria-hidden />
               </button>
             )}
           </div>
           <select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
-            className="h-10 rounded-xl border border-slate-200 bg-white px-2.5 text-[14px] font-semibold text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200">
+            className="h-11 rounded-xl border border-slate-200 bg-white px-2.5 text-[14px] font-semibold text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200">
             <option value="default">기본 순서</option>
             <option value="newest">최신순</option>
             <option value="oldest">오래된순</option>
           </select>
-          <div role="group" aria-label="보기 거르기" className="inline-flex h-10 overflow-hidden rounded-xl border border-slate-200">
+          <div role="group" aria-label="보기 거르기" className="inline-flex h-11 overflow-hidden rounded-xl border border-slate-200">
             {([['all', '전체'], ['image', '사진'], ['doc', '문서']] as const).map(([k, label]) => (
               <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}
-                className={`px-3 text-[14px] ${kind === k ? 'bg-slate-900 font-bold text-white' : 'bg-white font-semibold text-slate-600 hover:bg-slate-50'}`}>{label}</button>
+                className={`px-3 text-[14px] ${kind === k ? 'bg-slate-200 font-bold text-slate-900' : 'bg-white font-semibold text-slate-600 hover:bg-slate-50'}`}>{label}</button>
             ))}
           </div>
         </div>
@@ -287,10 +287,20 @@ export function PhotosPanel({ active }: { active: boolean }) {
       )}
 
       {state === 'loading' && !data && (
-        <div role="status" aria-busy="true" className="py-2">
+        <div role="status" aria-busy="true">
           <span className="sr-only">사진을 불러오는 중…</span>
-          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-5" aria-hidden>
-            {[0, 1, 2, 3, 4, 5].map((k) => <span key={k} className="skeleton aspect-square rounded-lg bg-slate-100" />)}
+          {/* 실제 목록과 같은 틀: 단계 제목 줄 + 날짜 줄 + 썸네일 격자(+ 설명 줄) */}
+          <div aria-hidden>
+            <span className="skeleton mb-1 block h-[22px] w-44 rounded-md bg-slate-100" />
+            <span className="skeleton mb-1 mt-2 block h-[18px] w-16 rounded-md bg-slate-100" />
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-5">
+              {[0, 1, 2, 3, 4, 5].map((k) => (
+                <div key={k}>
+                  <span className="skeleton block aspect-square w-full rounded-lg bg-slate-100" />
+                  <span className="skeleton mt-0.5 block h-[18px] w-3/4 rounded bg-slate-100" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -535,13 +545,15 @@ function UploadDialog({ steps, initialStep, onDone, onClose }: { steps: StepName
 }
 
 // ── 크게 보기 ──
-function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMove, canMove }: {
+function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMove, canMove, showMove }: {
   list: PhotoView[]; index: number; steps: StepName[];
   onIndex: (i: number) => void; onClose: () => void;
   onSave: (p: PhotoView, body: { stepId: number; caption: string }) => Promise<boolean>;
   onDelete: (p: PhotoView) => void;
   onMove: (id: string, dir: -1 | 1) => Promise<boolean>;
   canMove: (id: string, dir: -1 | 1) => boolean;
+  /** 순서 단추를 보일지: 정렬이 기본이고 검색 · 거르기가 없을 때(또는 단계 창에서 연 경우)만 */
+  showMove: boolean;
 }) {
   const p = list[index];
   const [editing, setEditing] = useState(false);
@@ -661,11 +673,14 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
             {/* 글씨 많은 문서를 PC 에서 크게: 큰 사진만 새 탭으로 연다(로그인한 같은 창이라 그대로 열린다) */}
             {p.kind === 'image' && p.hasImage && <a href={src(p.id, 'full')} target="_blank" rel="noopener" className={darkBtn}>크게 보기</a>}
             {p.originalUrl && <a href={p.originalUrl} target="_blank" rel="noopener noreferrer" className={darkBtn}>원본 보기</a>}
-            {/* 같은 단계 안에서 한 칸씩. 맨 앞 · 맨 뒤에서는 눌리지 않는다 */}
-            <div className="flex gap-2">
-              <button type="button" disabled={busy || !canMove(p.id, -1)} onClick={() => void run(() => onMove(p.id, -1))} aria-label="같은 단계에서 앞으로 옮기기" className={`${darkBtn} disabled:opacity-40`}><i className="fas fa-arrow-left mr-1.5 text-[13px]" aria-hidden />앞으로</button>
-              <button type="button" disabled={busy || !canMove(p.id, 1)} onClick={() => void run(() => onMove(p.id, 1))} aria-label="같은 단계에서 뒤로 옮기기" className={`${darkBtn} disabled:opacity-40`}>뒤로<i className="fas fa-arrow-right ml-1.5 text-[13px]" aria-hidden /></button>
-            </div>
+            {/* 같은 단계 안에서 한 칸씩. 맨 앞 · 맨 뒤에서는 눌리지 않는다. 정렬 · 검색 · 거르기 중에는 숨긴다 */}
+            {showMove && (
+              <div className="flex w-full items-center gap-2">
+                <span className="text-[12px] font-semibold text-slate-300">순서</span>
+                <button type="button" disabled={busy || !canMove(p.id, -1)} onClick={() => void run(() => onMove(p.id, -1))} aria-label="같은 단계에서 앞자리로 옮기기" className={`${darkBtn} disabled:opacity-40`}>앞자리로</button>
+                <button type="button" disabled={busy || !canMove(p.id, 1)} onClick={() => void run(() => onMove(p.id, 1))} aria-label="같은 단계에서 뒷자리로 옮기기" className={`${darkBtn} disabled:opacity-40`}>뒷자리로</button>
+              </div>
+            )}
             <button type="button" onClick={() => setEditing(true)} className={darkBtn}>고치기</button>
             <TrashButton label="이 사진 지우기" onClick={() => onDelete(p)} />
           </div>

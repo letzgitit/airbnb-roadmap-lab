@@ -59,16 +59,15 @@ export function ThemeToggle() {
       </button>
       {open && (
         <div id={menuId} role="menu" aria-label="화면 모드" onKeyDown={onMenuKey}
-          className="absolute right-0 top-full z-[60] mt-2 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl dark:shadow-black/50">
+          className="absolute right-0 top-full z-[60] mt-2 w-max min-w-[7.5rem] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:shadow-black/50">
           {OPTIONS.map((o, i) => {
             const on = o.mode === mode;
             return (
               <button key={o.mode} ref={(el) => { itemRefs.current[i] = el; }} type="button" role="menuitemradio" aria-checked={on} tabIndex={on ? 0 : -1}
                 onClick={() => pick(o.mode)}
-                className={`flex min-h-11 w-full items-center gap-2.5 px-3.5 text-left text-[14px] hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none ${on ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
-                <i className={`fas ${o.icon} w-4 text-center text-slate-500`} aria-hidden />
+                className={`flex min-h-11 w-full items-center gap-4 whitespace-nowrap px-4 text-left text-[14px] hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none ${on ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
                 <span className="flex-1">{o.label}</span>
-                {on && <i className="fas fa-check text-[13px] text-blue-700 dark:text-blue-300" aria-hidden />}
+                {on && <i className="fas fa-check text-[13px] text-slate-900" aria-hidden />}
               </button>
             );
           })}
