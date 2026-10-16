@@ -11,6 +11,20 @@ export const NO_STORE = { 'Cache-Control': 'private, no-store, max-age=0', Vary:
 export function checkWriteRequest(req: Request): string | null {
   const ct = (req.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
   if (ct !== 'application/json') return 'bad_content_type';
+  return checkOrigin(req);
+}
+
+// 사진 올리기(multipart): HTML 폼도 multipart 를 보낼 수 있으므로 JSON 검사 대신 직접 붙이는 헤더를 요구한다.
+// 다른 출처에서 이 헤더를 붙이면 사전 요청(preflight)에서 막히고, HTML 폼은 헤더를 못 붙인다.
+export const UPLOAD_HEADER = 'x-photos-upload';
+export function checkUploadRequest(req: Request): string | null {
+  const ct = (req.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  if (ct !== 'multipart/form-data') return 'bad_content_type';
+  if (req.headers.get(UPLOAD_HEADER) !== '1') return 'bad_origin';
+  return checkOrigin(req);
+}
+
+function checkOrigin(req: Request): string | null {
   const site = req.headers.get('sec-fetch-site');
   if (site && site !== 'same-origin' && site !== 'none') return 'bad_origin';
   const origin = req.headers.get('origin');

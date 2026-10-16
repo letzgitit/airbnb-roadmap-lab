@@ -8,14 +8,16 @@ import { useProgress } from './ProgressProvider';
 import { PropertyCard } from './PropertyCard';
 import { LogCard } from './LogCard';
 import { TrashCard } from './TrashCard';
+import { PhotosPanel } from './PhotosPanel';
 
-type Tab = 'property' | 'log';
+type Tab = 'property' | 'log' | 'photos';
 const TABS: TabItem[] = [
   { id: 'property', label: '집 정보' },
   { id: 'log', label: '기록' },
+  { id: 'photos', label: '사진' },
 ];
 
-// 「집 정보 · 기록」 창(로그인했을 때만). 집 정보와 기록은 다른 창과 같은 탭 막대로 나누고, 삭제한 항목(복원)은 항상 맨 아래에 둔다.
+// 「집 정보 · 기록」 창(로그인했을 때만). 집 정보 · 기록 · 사진은 다른 창과 같은 탭 막대로 나누고, 삭제한 항목(복원)은 항상 맨 아래에 둔다.
 // 저장 안 한 편집이 있으면 닫기 전에 beforeClose 가 앱 안 확인 창을 띄운다(✕ · 바깥 · Esc · 뒤로 가기 모두).
 export function RecordsModal({ open, shown, onClose, beforeClose }: {
   open: boolean; shown: boolean; onClose: () => void; beforeClose: () => Promise<boolean>;
@@ -34,7 +36,7 @@ export function RecordsModal({ open, shown, onClose, beforeClose }: {
 
   return (
     <Sheet open={open} shown={shown} onClose={onClose} beforeClose={beforeClose} bodyClassName="bg-white px-5 pb-8 pt-3" title="집 정보 · 기록"
-      tabs={<TabBar items={TABS} value={tab} onChange={(id) => setTab(id as Tab)} label="집 정보와 기록" idPrefix={uid} />}>
+      tabs={<TabBar items={TABS} value={tab} onChange={(id) => setTab(id as Tab)} label="집 정보, 기록, 사진" idPrefix={uid} />}>
       {/* 두 탭 모두 그려 두고 안 보이는 쪽만 숨긴다: 탭을 옮겨도 쓰던 글·편집 중 표시·저장 안 한 내용 추적이 사라지지 않게 */}
       <div role="tabpanel" id={panelDomId(uid, 'property')} aria-labelledby={tabDomId(uid, 'property')} hidden={tab !== 'property'}>
         <PropertyCard />
@@ -52,8 +54,12 @@ export function RecordsModal({ open, shown, onClose, beforeClose }: {
         </div>
         <LogCard />
       </div>
+      {/* 사진은 탭을 처음 열 때 불러온다. 삭제한 사진은 사진 탭 안에서 따로 복원한다. */}
+      <div role="tabpanel" id={panelDomId(uid, 'photos')} aria-labelledby={tabDomId(uid, 'photos')} hidden={tab !== 'photos'}>
+        <PhotosPanel active={open && tab === 'photos'} />
+      </div>
 
-      <TrashCard />
+      {tab !== 'photos' && <TrashCard />}
     </Sheet>
   );
 }

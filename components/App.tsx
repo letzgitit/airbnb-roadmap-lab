@@ -12,6 +12,7 @@ import { HomeEntries } from './HomeEntries';
 import { NoticeModal } from './NoticeModal';
 import { ProgressProvider, useProgress } from './progress/ProgressProvider';
 import { RecordsModal } from './progress/RecordsModal';
+import { PhotosProvider } from './progress/PhotosPanel';
 import { useSheetRouter, type SheetKind } from './use-sheet-router';
 
 export default function App({ content, loginReady }: { content: Content; loginReady: boolean }) {
@@ -43,6 +44,8 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
   // 시트는 한 번에 하나만, 주소 해시(#step-3 · #notice · #records · #scripts)와 함께 열고 닫는다
   const { sheet, shown, open: openSheet, close: closeSheet, goStep } = useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm: confirmDiscard });
 
+  // 사진은 타임라인 단계로 묶는다(단계 이름은 공개 콘텐츠의 단계를 그대로 쓴다)
+  const photoSteps = useMemo(() => steps.map((s) => ({ id: s.id, title: s.title })), [steps]);
   const chartSteps = useMemo(() => steps.map((s) => ({ id: s.id, label: `${s.id}. ${s.title}` })), [steps]);
   const statuses = useMemo(() => {
     if (!loggedIn || !doc) return null;
@@ -113,6 +116,7 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
   };
 
   return (
+    <PhotosProvider steps={photoSteps}>
     <div className="app-container">
       <header className="border-b border-slate-200 bg-white">
         <div className="px-4 pb-3 pt-4">
@@ -186,5 +190,6 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
       <NoticeModal steps={steps} updates={updates} open={sheet?.kind === 'notice'} initialIndex={sheet?.kind === 'notice' ? sheet.initialIndex : null} shown={shown} onClose={closeSheet} />
       {loggedIn && <RecordsModal open={sheet?.kind === 'records'} shown={shown} onClose={closeSheet} beforeClose={() => guard('records')} />}
     </div>
+    </PhotosProvider>
   );
 }

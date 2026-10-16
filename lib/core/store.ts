@@ -24,7 +24,8 @@ if (cur == false and ARGV[1] == '') or (cur ~= false and cur == ARGV[1]) then
 end
 return 0`;
 
-function redisEnv() {
+// 사진 저장소(lib/core/photos.ts)도 같은 env 규칙을 쓴다
+export function redisEnv() {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   return url && token ? { url, token } : null;
@@ -33,7 +34,7 @@ function redisEnv() {
 // @upstash/redis 는 HTTP 오류 때 메시지에 「command was: <요청 본문 전체>」를 붙인다.
 // 여기선 본문 = 현황 문서 전체(주소·금액 등)라서, 그대로 두면 서버 로그·CLI 출력으로 개인정보가 샌다. 메시지를 잘라 다시 던진다.
 export class StoreError extends Error {}
-function sanitize(e: unknown, what: string): StoreError {
+export function sanitize(e: unknown, what: string): StoreError {
   const msg = e instanceof Error ? e.message : String(e);
   const head = msg.split(/,? ?command was:/i)[0].slice(0, 200);
   return new StoreError(`저장소(redis) ${what} 실패: ${head}`);

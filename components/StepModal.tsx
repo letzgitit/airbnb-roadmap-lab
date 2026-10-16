@@ -9,6 +9,7 @@ import { TabBar, panelDomId, tabDomId, type TabItem } from './TabBar';
 import { WarningList } from './WarningList';
 import { StepInfo, StepStatusPill, StepTasks } from './progress/StepPanel';
 import { useProgress } from './progress/ProgressProvider';
+import { StepPhotos } from './progress/PhotosPanel';
 import { leadCls, rowCls } from './progress/bits';
 
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
@@ -76,8 +77,10 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
       {/* 「할 일」은 다른 탭으로 옮겨도 그대로 둔다(안 보이게만): 쓰던 메모·할 일 입력과 저장 안 한 편집 보호가 끊기지 않게 */}
       <div role="tabpanel" id={panelDomId(uid, 'todo')} aria-labelledby={tabDomId(uid, 'todo')} hidden={cur !== 'todo'} className="flex flex-col gap-6 p-5">
         {step.summary && <div className="rounded-2xl bg-slate-50 px-4 py-3.5 text-[15px] leading-relaxed text-slate-800">{step.summary}</div>}
-        {/* 위에서부터: 요약 → 우리 할 일 → 추천 할 일 → 목표일 · 메모(접힘) */}
+        {/* 위에서부터: 요약 → 우리 할 일 → 사진 → 추천 할 일 → 목표일 · 메모(접힘) */}
         {loggedIn && <StepTasks key={`t${step.id}`} stepId={step.id} steps={stepRefs} />}
+        {/* 이 단계 사진(로그인했을 때만): 작은 썸네일 줄 + 「이 단계에 사진 올리기」 */}
+        {loggedIn && <StepPhotos stepId={step.id} />}
         {step.checklist.length > 0 && (
           <section aria-label="추천 할 일">
             <h3 className={sectionTitle}>추천 할 일</h3>

@@ -19,6 +19,11 @@ const nextConfig: NextConfig = {
         source: '/api/progress/:path*',
         headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
       },
+      {
+        // 사진 API(목록 · 바이트)도 같다: CDN · 공유 캐시에 사진이 남지 않게
+        source: '/api/photos/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
     ];
   },
 };

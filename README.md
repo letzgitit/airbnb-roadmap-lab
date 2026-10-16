@@ -1,13 +1,13 @@
 # airbnb-roadmap-lab (외도민 타임 라인)
 
-공개 타임라인(SSG) + 구글 로그인한 두 사람만 보는 진행 현황(진행 상태 · 할 일 · 집 정보 · 기록) Next.js 앱.
+공개 타임라인(SSG) + 구글 로그인한 두 사람만 보는 진행 현황(진행 상태 · 할 일 · 집 정보 · 기록 · 사진) Next.js 앱.
 기존 단일 HTML은 `legacy/index.html`에 보존.
 
 ## 구조
 - `app/`, `components/` — 화면. 공개 화면은 정적 생성, 현황은 로그인 뒤 `/api/progress`로만 읽음
 - `lib/core/` — 병합 엔진·검증·저장소·마크다운 내보내기(서버와 CLI 공용)
 - `content/` — 콘텐츠 JSON(다른 작업이 관리). 없으면 `fixtures/content-sample/` 사용
-- `scripts/` — `progress.mjs`(CLI, `README-progress.md`), `seed-progress.mjs`, `verify-sync.mjs`
+- `scripts/` — `progress.mjs`(CLI, `README-progress.md`), `photos.mjs`(사진 CLI, `README-photos.md`), `seed-progress.mjs`, `verify-sync.mjs`
 
 ## 주소로 바로 열기
 창(시트)은 한 번에 하나만 열리고 주소 해시와 함께 움직입니다. 폰의 뒤로 가기가 창을 닫습니다.
