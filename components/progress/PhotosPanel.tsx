@@ -4,7 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useId, useMemo, useR
 import type { PhotoView } from '@/lib/core/photos';
 import { relTime, withGa } from '@/lib/client/format';
 import { useProgress } from './ProgressProvider';
-import { btnGhost, btnPrimary, inputCls, textBtn, TRASH_NOTE, TrashButton, useBusy, useDirty } from './bits';
+import { AddRow, btnGhost, btnPrimary, inputCls, textBtn, TrashButton, useBusy, useDirty } from './bits';
+
+// 삭제 확인 창 안내(서버가 30일 보관 — lib/core/photos.ts TRASH_KEEP_MS)
+const PHOTO_TRASH_NOTE = '지운 사진은 30일 동안 사진 탭 맨 아래 「삭제한 사진」에서 되살릴 수 있어요.';
 
 // 사진: 로그인한 두 사람만 /api/photos 로 받는다(공개 화면 · 저장소 코드에는 사진도 설명도 없다).
 // 타임라인 단계별로 묶고(단계 순서, 사진이 없는 단계는 숨김), 단계 안은 찍은 날짜 순.
@@ -28,7 +31,8 @@ interface Ctx {
   ordered: PhotoView[];
   ensure: () => void;
   reload: () => Promise<void>;
-  view: (id: string) => void;
+  /** 크게 보기. stepId 를 주면 그 단계 사진 안에서만 넘긴다(단계 창 사진 줄) */
+  view: (id: string, stepId?: number) => void;
   upload: (stepId?: number) => void;
   patch: (id: string, method: 'PATCH' | 'DELETE', body?: Record<string, unknown>) => Promise<boolean>;
 }
@@ -45,6 +49,7 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
   const [data, setData] = useState<Data | null>(null);
   const [state, setState] = useState<Ctx['state']>('idle');
   const [viewId, setViewId] = useState<string | null>(null);
+  const [viewStep, setViewStep] = useState<number | null>(null);
   const [uploadStep, setUploadStep] = useState<number | null>(null);
   const started = useRef(false);
 
@@ -82,19 +87,20 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
     return steps.find((s) => st(s.id) === 'doing')?.id ?? steps.find((s) => st(s.id) !== 'done')?.id ?? steps[0]?.id ?? 1;
   }, [doc, steps]);
 
-  const viewIndex = viewId ? ordered.findIndex((p) => p.id === viewId) : -1;
+  const viewList = useMemo(() => (viewStep === null ? ordered : ordered.filter((p) => p.stepId === viewStep)), [ordered, viewStep]);
+  const viewIndex = viewId ? viewList.findIndex((p) => p.id === viewId) : -1;
   const remove = useCallback(async (p: PhotoView) => {
-    const ok = await confirm({ title: '이 사진을 지울까요?', body: p.caption || p.album || undefined, note: TRASH_NOTE, confirmLabel: '삭제', danger: true });
+    const ok = await confirm({ title: '이 사진을 지울까요?', body: p.caption || p.album || undefined, note: PHOTO_TRASH_NOTE, confirmLabel: '삭제', danger: true });
     if (!ok) return;
     // 지운 뒤에는 다음 사진(마지막이면 앞 사진)을 보여 준다
-    const i = ordered.findIndex((q) => q.id === p.id);
-    const next = ordered[i + 1] ?? ordered[i - 1] ?? null;
+    const i = viewList.findIndex((q) => q.id === p.id);
+    const next = viewList[i + 1] ?? viewList[i - 1] ?? null;
     if (await patch(p.id, 'DELETE')) { setViewId(next?.id ?? null); toast('사진을 지웠어요.'); }
-  }, [confirm, ordered, patch, toast]);
+  }, [confirm, viewList, patch, toast]);
 
   const value = useMemo<Ctx>(() => ({
     steps, data, state, ordered, ensure, reload,
-    view: (id) => setViewId(id),
+    view: (id, stepId) => { setViewStep(stepId ?? null); setViewId(id); },
     upload: (stepId) => setUploadStep(stepId ?? defaultStep),
     patch,
   }), [steps, data, state, ordered, ensure, reload, defaultStep, patch]);
@@ -103,7 +109,7 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
     <C.Provider value={value}>
       {children}
       {viewIndex >= 0 && (
-        <Lightbox list={ordered} index={viewIndex} steps={steps} onIndex={(i) => setViewId(ordered[i]?.id ?? null)} onClose={() => setViewId(null)}
+        <Lightbox list={viewList} index={viewIndex} steps={steps} onIndex={(i) => setViewId(viewList[i]?.id ?? null)} onClose={() => setViewId(null)}
           onSave={(p, body) => patch(p.id, 'PATCH', body)} onDelete={remove} />
       )}
       {uploadStep !== null && <UploadDialog steps={steps} initialStep={uploadStep} onDone={() => void reload()} onClose={() => setUploadStep(null)} />}
@@ -114,15 +120,24 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
 const stepLabel = (steps: StepName[], id: number) => { const s = steps.find((x) => x.id === id); return s ? `${s.id}. ${s.title}` : `${id}단계`; };
 
 // 썸네일 한 칸(정사각형, 화면에 가까워질 때 불러온다)
+// 썸네일 그림. 못 불러오면 깨진 그림 대신 짧은 글
+function ThumbImg({ id }: { id: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span className="flex h-full w-full items-center justify-center px-1 text-center text-[12px] font-semibold text-slate-500">못 불러왔어요</span>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src(id, 'thumb')} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} className="h-full w-full object-cover" />;
+}
+
+// 썸네일 한 칸(정사각형, 화면에 가까워질 때 불러온다). 흰 종이 사진도 경계가 보이게 옅은 안쪽 테두리.
 function Thumb({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
   return (
-    <button type="button" onClick={onOpen} aria-label={`${p.caption || p.album || '사진'} 크게 보기`}
+    <button type="button" onClick={onOpen} aria-label={`${p.caption || p.album || '사진'} 열기`}
       className="relative block aspect-square w-full overflow-hidden rounded-lg bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500">
       {p.hasImage
-        // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={src(p.id, 'thumb')} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-        : <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-500"><i className="fas fa-file-pdf text-[28px] text-red-600" aria-hidden /><span className="text-[13px] font-bold">PDF</span></span>}
-      {p.kind === 'pdf' && p.hasImage && <span className="absolute left-1 top-1 rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white">PDF</span>}
+        ? <ThumbImg id={p.id} />
+        : <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-500"><i className="fas fa-file-pdf text-[28px] text-slate-500" aria-hidden /><span className="text-[13px] font-bold">PDF</span></span>}
+      {p.kind === 'pdf' && p.hasImage && <span className="absolute left-1 top-1 rounded bg-slate-900/80 px-1.5 py-0.5 text-[12px] font-bold text-white">PDF</span>}
+      <span className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-slate-900/10" aria-hidden />
     </button>
   );
 }
@@ -152,7 +167,7 @@ export function PhotosPanel({ active }: { active: boolean }) {
   return (
     <section className="min-w-0" aria-label="사진">
       <div className="flex items-center justify-between gap-2 pb-3 pt-1">
-        <p className="text-[13px] font-semibold text-slate-500">{data ? `사진 ${data.photos.length}장` : ''}</p>
+        <p className="text-[13px] font-semibold text-slate-500">{data && data.photos.length > 0 ? `사진 ${data.photos.length}장` : ''}</p>
         <button type="button" className={btnPrimary} onClick={() => upload()}>
           <i className="fas fa-plus mr-1.5 text-[14px]" aria-hidden />사진 올리기
         </button>
@@ -199,9 +214,9 @@ export function PhotosPanel({ active }: { active: boolean }) {
               <ul className="mt-2">
                 {data.trash.map((p) => (
                   <li key={p.id} className="flex items-center gap-3 border-b border-slate-200 py-3 last:border-b-0">
-                    <span className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-slate-100">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {p.hasImage && <img src={src(p.id, 'thumb')} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                    <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-slate-100">
+                      {p.hasImage && <ThumbImg id={p.id} />}
+                      <span className="pointer-events-none absolute inset-0 rounded-md ring-1 ring-inset ring-slate-900/10" aria-hidden />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-bold text-slate-500">{stepLabel(steps, p.stepId)}</div>
@@ -227,17 +242,16 @@ export function StepPhotos({ stepId }: { stepId: number }) {
   const items = ordered.filter((p) => p.stepId === stepId);
   return (
     <section aria-label="이 단계 사진">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <h3 className="flex items-baseline gap-2 text-[15px] font-bold text-slate-700">사진{items.length > 0 && <span className="text-[13px] font-semibold text-slate-500">{items.length}</span>}</h3>
-        <button type="button" className={textBtn} onClick={() => upload(stepId)}><i className="fas fa-plus mr-1 text-[12px]" aria-hidden />이 단계에 사진 올리기</button>
-      </div>
+      <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-bold text-slate-700">사진{items.length > 0 && <span className="text-[13px] font-semibold text-slate-500">{items.length}</span>}</h3>
       {items.length > 0 ? (
         <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
-          {items.map((p) => <li key={p.id} className="w-[76px] shrink-0"><Thumb p={p} onOpen={() => view(p.id)} /></li>)}
+          {items.map((p) => <li key={p.id} className="w-[76px] shrink-0"><Thumb p={p} onOpen={() => view(p.id, stepId)} /></li>)}
         </ul>
       ) : (
         <p className="text-[13px] font-semibold text-slate-500">{state === 'error' ? '사진을 불러오지 못했어요.' : '아직 이 단계 사진이 없어요.'}</p>
       )}
+      {/* 「할 일 추가」와 같은 모양의 올리기 줄(이 단계를 골라 둔 채로 열린다) */}
+      <AddRow label="사진 올리기" onClick={() => upload(stepId)} />
     </section>
   );
 }
@@ -412,6 +426,9 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete }: {
   const [stepId, setStepId] = useState(p.stepId);
   const [caption, setCaption] = useState(p.caption);
   const [shownId, setShownId] = useState(p.id);
+  // 큰 그림 상태: 불러오는 중 · 불러옴 · 실패. actual = 원래 크기로 보며 스크롤(글씨 많은 문서용)
+  const [img, setImg] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [actual, setActual] = useState(false);
   const { busy, run } = useBusy();
   const closeRef = useRef<HTMLButtonElement>(null);
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -423,12 +440,14 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete }: {
     setEditing(false);
     setStepId(p.stepId);
     setCaption(p.caption);
+    setImg('loading');
+    setActual(false);
   }
 
   const go = useCallback((d: number) => { if (n > 1) onIndex((index + d + n) % n); }, [index, n, onIndex]);
   useEffect(() => { closeRef.current?.focus(); }, []);
-  // ←/→ = 넘기기(입력칸에 쓰는 중이면 그대로 둔다)
-  useOverlayKeys(onClose, (e) => {
+  // Esc: 고치는 중이면 고치기만 닫고, 아니면 크게 보기를 닫는다. ←/→ = 넘기기(입력칸에 쓰는 중이면 그대로 둔다)
+  useOverlayKeys(() => (editing ? setEditing(false) : onClose()), (e) => {
     const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
     if (!typing && e.key === 'ArrowRight') { e.preventDefault(); go(1); }
     else if (!typing && e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
@@ -445,13 +464,14 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete }: {
   const onTouchStart = (e: TouchEvent) => { const t = e.touches[0]; touch.current = { x: t.clientX, y: t.clientY }; };
   const onTouchEnd = (e: TouchEvent) => {
     const s = touch.current; touch.current = null;
-    if (!s) return;
+    if (!s || actual) return;                        // 원래 크기로 보는 중엔 손가락 이동 = 스크롤
     const t = e.changedTouches[0];
     const dx = t.clientX - s.x, dy = t.clientY - s.y;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
   };
 
-  const navBtn = 'absolute top-1/2 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 sm:flex';
+  // 옆 화살표는 넓은 화면만. 폰은 아래 줄의 「이전」「다음」 단추
+  const navBtn = 'absolute top-1/2 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 sm:flex';
   const darkBtn = 'inline-flex min-h-11 shrink-0 items-center rounded-xl bg-white/10 px-3 text-[15px] font-bold hover:bg-white/20';
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-slate-950" role="dialog" aria-modal="true" aria-label="사진 크게 보기">
@@ -465,10 +485,20 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete }: {
         </button>
       </div>
       <div className="relative min-h-0 flex-1 select-none" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        {p.hasImage
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img key={p.id} src={src(p.id, 'full')} alt={p.caption || p.album || '사진'} className="absolute inset-0 h-full w-full object-contain" />
-          : <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-300"><i className="fas fa-file-pdf text-[56px] text-red-500" aria-hidden /><span className="text-[15px] font-bold">PDF 문서</span></div>}
+        {p.hasImage ? (
+          // 그림을 누르면 「화면에 맞춤」 ↔ 「원래 크기(스크롤)」
+          <div className={`absolute inset-0 ${actual ? 'overflow-auto' : 'overflow-hidden'}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img key={p.id} src={src(p.id, 'full')} alt={p.caption || p.album || '사진'}
+              onLoad={() => setImg('ok')} onError={() => setImg('error')} onClick={() => setActual((v) => !v)}
+              className={`${actual ? 'm-auto block max-w-none cursor-zoom-out' : 'h-full w-full cursor-zoom-in object-contain'} ${img === 'error' ? 'invisible' : ''}`} />
+          </div>
+        ) : <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-300"><i className="fas fa-file-pdf text-[56px] text-slate-500" aria-hidden /><span className="text-[15px] font-bold">PDF 문서</span></div>}
+        {p.hasImage && img !== 'ok' && (
+          <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-[15px] font-semibold text-slate-300" aria-live="polite">
+            {img === 'loading' ? <><i className="fas fa-spinner fa-spin mr-2" aria-hidden />불러오는 중…</> : '사진을 불러오지 못했어요.'}
+          </p>
+        )}
         {n > 1 && (
           <>
             <button type="button" onClick={() => go(-1)} aria-label="이전 사진" className={`${navBtn} left-3`}><i className="fas fa-chevron-left" aria-hidden /></button>
@@ -482,8 +512,10 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete }: {
             e.preventDefault();
             void run(async () => { if (await onSave(p, { stepId, caption })) setEditing(false); });
           }}>
-            <StepSelect steps={steps} value={stepId} onChange={setStepId} />
-            <input className={inputCls} maxLength={100} value={caption} placeholder="설명" onChange={(e) => setCaption(e.target.value)} aria-label="설명" />
+            <label htmlFor={`${shownId}-step`} className="block text-[13px] font-bold text-slate-300">단계</label>
+            <StepSelect id={`${shownId}-step`} steps={steps} value={stepId} onChange={setStepId} />
+            <label htmlFor={`${shownId}-cap`} className="block text-[13px] font-bold text-slate-300">설명</label>
+            <input id={`${shownId}-cap`} className={inputCls} maxLength={100} value={caption} placeholder="예: 주방" onChange={(e) => setCaption(e.target.value)} />
             <div className="flex justify-end gap-2">
               <button type="button" className={btnGhost} onClick={() => setEditing(false)}>취소</button>
               <button className={btnPrimary} disabled={busy}>저장</button>
@@ -491,12 +523,20 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete }: {
           </form>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
+            {n > 1 && (
+              <div className="flex w-full justify-between gap-2 sm:hidden">
+                <button type="button" onClick={() => go(-1)} className={darkBtn}><i className="fas fa-chevron-left mr-1.5" aria-hidden />이전</button>
+                <button type="button" onClick={() => go(1)} className={darkBtn}>다음<i className="fas fa-chevron-right ml-1.5" aria-hidden /></button>
+              </div>
+            )}
             <p className="min-w-0 flex-1 basis-40 text-[15px] font-semibold leading-snug">{p.caption || <span className="text-slate-400">설명 없음</span>}</p>
             {p.kind === 'pdf' && (
               <a href={src(p.id, 'file')} target="_blank" rel="noopener" className="inline-flex min-h-11 shrink-0 items-center rounded-xl bg-white px-3 text-[15px] font-bold text-slate-900 hover:bg-slate-100">
-                <i className="fas fa-file-pdf mr-1.5 text-red-600" aria-hidden />PDF 열기
+                <i className="fas fa-file-pdf mr-1.5 text-slate-500" aria-hidden />PDF 열기
               </a>
             )}
+            {/* 글씨 많은 문서를 PC 에서 크게: 큰 사진만 새 탭으로 연다(로그인한 같은 창이라 그대로 열린다) */}
+            {p.kind === 'image' && p.hasImage && <a href={src(p.id, 'full')} target="_blank" rel="noopener" className={darkBtn}>크게 보기</a>}
             {p.originalUrl && <a href={p.originalUrl} target="_blank" rel="noopener noreferrer" className={darkBtn}>원본 보기</a>}
             <button type="button" onClick={() => setEditing(true)} className={darkBtn}>고치기</button>
             <TrashButton label="이 사진 지우기" onClick={() => onDelete(p)} />
