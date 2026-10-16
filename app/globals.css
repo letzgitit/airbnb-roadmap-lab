@@ -1,13 +1,71 @@
 @import "tailwindcss";
 @import "@fortawesome/fontawesome-free/css/all.min.css";
 
+/* 화면 모드(시스템 / 라이트 / 다크). <html class="dark"> 는 layout.tsx 의 인라인 스크립트와 ThemeToggle 이 붙인다. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 글자색 단추 위의 글자처럼 다크에서도 늘 흰색이어야 하는 자리용(text-white 는 다크에서 카드색으로 뒤집힌다) */
+@theme {
+  --color-snow: #fff;
+}
+
+:root {
+  color-scheme: light;
+  --page-bg: #f8fafc;   /* slate-50 */
+  --page-fg: #1e293b;   /* slate-800 */
+  --card-shadow: var(--card-shadow);
+}
+
+/* 다크: 색 토큰을 다시 정의한다. 클래스(bg-white · text-slate-500 …)는 그대로 두고 값만 바뀐다.
+   중립색은 뒤집는다 — white = 카드 면, slate-50~100 = 한 단계씩 밝은 면, slate-200~300 = 테두리, 500~900 = 밝은 글자.
+   대비(카드 #141d2f 기준): slate-500 6.6:1 · 600 8.6:1 · 700 10.7:1 · 800 12.4:1 · 900 15.6:1. 진한 파랑·빨강 바탕(bg-blue-600 등)은 그대로 둔다. */
+.dark {
+  color-scheme: dark;
+  --page-bg: #0b1220;
+  --page-fg: #dbe3ee;
+  --card-shadow: rgba(0, 0, 0, 0.6);
+  --color-white: #141d2f;
+  --color-slate-50: #1a2438;
+  --color-slate-100: #1e293b;
+  --color-slate-200: #2c3b54;
+  --color-slate-300: #3d4d68;
+  --color-slate-400: #7b8aa3;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #a8b5c9;
+  --color-slate-700: #c3cddb;
+  --color-slate-800: #dbe3ee;
+  --color-slate-900: #f1f5f9;
+  --color-slate-950: #f8fafc;
+  /* 경고 상자: 연한 빨강 바탕은 어두운 틴트로 */
+  --color-red-50: #2a1418;
+  --color-red-100: #3a1a20;
+  --color-red-200: #5c2630;
+}
+
+/* 다크에서도 어두운 채로 두는 면(사진 위 배지 · 사진 크게 보기 · 차트 말풍선): 토큰을 원래 값으로 되돌린다 */
+.dark .keep-light {
+  color-scheme: light;
+  --color-white: #fff;
+  --color-slate-50: oklch(98.4% 0.003 247.858);
+  --color-slate-100: oklch(96.8% 0.007 247.896);
+  --color-slate-200: oklch(92.9% 0.013 255.508);
+  --color-slate-300: oklch(86.9% 0.022 252.894);
+  --color-slate-400: oklch(70.4% 0.04 256.788);
+  --color-slate-500: oklch(55.4% 0.046 257.417);
+  --color-slate-600: oklch(44.6% 0.043 257.281);
+  --color-slate-700: oklch(37.2% 0.044 257.287);
+  --color-slate-800: oklch(27.9% 0.041 260.031);
+  --color-slate-900: oklch(20.8% 0.042 265.755);
+  --color-slate-950: oklch(12.9% 0.042 264.695);
+}
+
 /* Tailwind v4 에서는 비층 CSS 가 유틸리티를 이기므로 components 층에 둔다 */
 @layer components {
 
   body {
     font-family: 'Pretendard', -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-    background-color: #f8fafc; /* slate-50 */
-    color: #1e293b;            /* slate-800 */
+    background-color: var(--page-bg);
+    color: var(--page-fg);
     -webkit-tap-highlight-color: transparent;
     /* 한글은 낱말 단위로 줄바꿈하고, 칸보다 긴 덩어리(주소 등)만 어디서든 끊는다 */
     word-break: keep-all;
@@ -31,11 +89,25 @@
 
   /* 검색 결과 상자 */
   .search-dropdown {
-    background: white;
+    background: var(--color-white);
     border-radius: 16px;
-    box-shadow: 0 12px 24px -8px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 12px 24px -8px var(--card-shadow);
     max-height: 300px;
     overflow-y: auto;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
   }
+}
+
+/* 불러오는 동안 칸을 채우는 은은한 반짝임. 움직임을 줄인 설정이면 가만히 둔다 */
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.skeleton {
+  background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--color-slate-400) 35%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background-image: none; background-color: color-mix(in srgb, var(--color-slate-400) 18%, transparent); }
 }

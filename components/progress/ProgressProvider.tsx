@@ -1,5 +1,6 @@
 'use client';
 
+import { busyFetch } from '@/lib/client/busy';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditingMark, Me, ProgressDoc } from '@/lib/core/types';
 import type { Op } from '@/lib/core/validate';
@@ -134,7 +135,8 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     const cur = docRef.current;
     const seq = writes.current;
     try {
-      const res = await fetch(`/api/progress${cur ? `?since=${cur.version}` : ''}`, { headers: devHeaders(), cache: 'no-store' });
+      // 첫 읽기만 로딩 막대를 켠다(몇 초마다 도는 확인 요청은 조용히)
+      const res = await (cur ? fetch : busyFetch)(`/api/progress${cur ? `?since=${cur.version}` : ''}`, { headers: devHeaders(), cache: 'no-store' });
       // 세션이 끊기거나 허용이 취소되면 들고 있던 현황도 화면 메모리에서 지운다
       if (res.status === 401) { commit(null); setSt('anon'); return; }
       if (res.status === 403) { commit(null); setSt('forbidden'); return; }
@@ -165,7 +167,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
 
   const post = useCallback(async (op: Op): Promise<SendResult> => {
     try {
-      const res = await fetch('/api/progress/mutate', {
+      const res = await busyFetch('/api/progress/mutate', {
         method: 'POST', headers: { 'content-type': 'application/json', ...devHeaders() }, body: JSON.stringify(op),
       });
       const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
@@ -301,7 +303,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       {/* 폰에선 단계 창 하단 단추 줄(이전/다음 단계)을 가리지 않게 88px 위에 띄운다 */}
       <div className="fixed bottom-[88px] md:bottom-6 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 w-[calc(100%-32px)] max-w-md pointer-events-none" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl pl-4 pr-2 py-1.5 min-h-14 text-[15px] font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900/95 text-white'}`}>
+          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl pl-4 pr-2 py-1.5 min-h-14 text-[15px] font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-snow' : 'bg-slate-900/95 text-white'}`}>
             <span className="py-1.5">{t.msg}</span>
             {t.action && <button type="button" className="shrink-0 min-h-11 min-w-11 px-3 rounded-xl text-white font-bold underline underline-offset-2 hover:bg-white/10" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
           </div>
@@ -309,9 +311,9 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       </div>
       {conflict && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="conflict-title" aria-describedby="conflict-desc">
-          <div className="absolute inset-0 bg-slate-900/50" />
+          <div className="absolute inset-0 bg-slate-900/50 dark:bg-black/60" />
           <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full">
-            <div className="text-[13px] font-bold text-red-600 mb-2"><i className="fas fa-exclamation-triangle mr-1" aria-hidden />동시에 고쳤어요</div>
+            <div className="text-[13px] font-bold text-red-600 dark:text-red-400 mb-2"><i className="fas fa-exclamation-triangle mr-1" aria-hidden />동시에 고쳤어요</div>
             <p id="conflict-title" className="font-bold text-slate-900 text-[17px] leading-snug">{who} 방금 이 항목을 고쳤어요.</p>
             <div id="conflict-desc" className="mt-3 space-y-1.5 text-[15px] text-slate-600 leading-relaxed">
               <p>최신 내용: <span className="font-bold text-slate-800 break-words">{curDesc || '(확인 불가)'}</span></p>
@@ -322,14 +324,14 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
                 const c = conflict; setConflict(null);
                 if ('patch' in c.op) await send({ ...c.op, force: true } as Op, c.opts);
               }}>내 내용으로 덮어쓰기</button>
-              <button ref={conflictBtn} type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700" onClick={takeLatest}>최신 내용 받기</button>
+              <button ref={conflictBtn} type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-blue-600 text-snow font-bold hover:bg-blue-700" onClick={takeLatest}>최신 내용 받기</button>
             </div>
           </div>
         </div>
       )}
       {ask && (
         <div className="fixed inset-0 z-[96] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="ask-title" aria-describedby="ask-desc">
-          <div className="absolute inset-0 bg-slate-900/50" onClick={() => answer(false)} />
+          <div className="absolute inset-0 bg-slate-900/50 dark:bg-black/60" onClick={() => answer(false)} />
           <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full">
             <p id="ask-title" className="font-bold text-slate-900 text-[17px] leading-snug">{ask.title}</p>
             <div id="ask-desc" className="mt-2 space-y-1.5">
@@ -339,9 +341,9 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
             {/* 폰에서는 안전한 쪽(취소 · 계속 편집)이 위, 확인 쪽이 아래. 넓은 화면에서는 확인이 왼쪽 */}
             <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2">
               <button type="button" onClick={() => answer(true)}
-                className={`flex-1 min-h-11 px-4 py-3 rounded-2xl font-bold ${ask.danger ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{ask.confirmLabel ?? '확인'}</button>
+                className={`flex-1 min-h-11 px-4 py-3 rounded-2xl font-bold ${ask.danger ? 'bg-red-600 text-snow hover:bg-red-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{ask.confirmLabel ?? '확인'}</button>
               <button ref={cancelBtn} type="button" onClick={() => answer(false)}
-                className={`flex-1 min-h-11 px-4 py-3 rounded-2xl font-bold ${ask.danger ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>{ask.cancelLabel ?? '취소'}</button>
+                className={`flex-1 min-h-11 px-4 py-3 rounded-2xl font-bold ${ask.danger ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-blue-600 text-snow hover:bg-blue-700'}`}>{ask.cancelLabel ?? '취소'}</button>
             </div>
           </div>
         </div>

@@ -30,10 +30,10 @@ export function useEditing(k: string) {
 export const inputCls = 'w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[15px] font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-400';
 // 날짜 칸: 입력칸과 같은 모양이되 가로로 꽉 차지 않는다
 export const dateCls = 'min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[15px] font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-400';
-export const btnPrimary ='shrink-0 whitespace-nowrap min-h-11 px-4 py-2 rounded-xl bg-blue-600 text-white text-[15px] font-bold hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:bg-slate-200';
+export const btnPrimary ='shrink-0 whitespace-nowrap min-h-11 px-4 py-2 rounded-xl bg-blue-600 text-snow text-[15px] font-bold hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:bg-slate-200';
 export const btnGhost = 'shrink-0 whitespace-nowrap min-h-11 px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-[15px] font-bold hover:bg-slate-200';
 // 작은 글자 단추(「전체 보기」「복원」 등): 글자는 작아도 누르는 칸은 44px
-export const textBtn = 'inline-flex items-center min-h-11 px-2 -mx-2 text-[13px] font-bold text-blue-700 hover:underline';
+export const textBtn = 'inline-flex items-center min-h-11 px-2 -mx-2 text-[13px] font-bold text-blue-700 dark:text-blue-300 hover:underline';
 
 // ── 한 줄 모양: 우리 할 일 · 집 정보 · 기록 · 추천 할 일이 모두 같은 틀 ──
 //   [앞 44px 조작] [글: 15px 본문 + 있으면 13px 보조 한 줄] [뒤 44px 아이콘 단추(휴지통)]
@@ -50,7 +50,7 @@ export const TRASH_NOTE = '지운 것은 30일 동안 「삭제한 항목」에�
 export function TrashButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button type="button" aria-label={label} disabled={disabled} onClick={onClick}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:text-red-600 focus-visible:text-red-600 active:text-red-600 disabled:opacity-40">
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:text-red-600 dark:hover:text-red-400 focus-visible:text-red-600 dark:focus-visible:text-red-400 active:text-red-600 dark:active:text-red-400 disabled:opacity-40">
       <i className="fas fa-trash-can text-[15px]" aria-hidden />
     </button>
   );
@@ -59,7 +59,7 @@ export function TrashButton({ label, onClick, disabled }: { label: string; onCli
 // 목록 맨 끝의 「＋ ○○ 추가」 줄(누르면 그 자리에서 입력칸이 펼쳐진다)
 export function AddRow({ label, onClick, buttonRef }: { label: string; onClick: () => void; buttonRef?: React.Ref<HTMLButtonElement> }) {
   return (
-    <button ref={buttonRef} type="button" onClick={onClick} className="flex min-h-11 w-full items-center text-left text-blue-700 hover:bg-slate-50">
+    <button ref={buttonRef} type="button" onClick={onClick} className="flex min-h-11 w-full items-center text-left text-blue-700 dark:text-blue-300 hover:bg-slate-50">
       <span className={leadCls}><i className="fas fa-plus text-[14px]" aria-hidden /></span>
       <span className="text-[15px] font-semibold">{label}</span>
     </button>

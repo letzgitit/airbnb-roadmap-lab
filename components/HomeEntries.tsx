@@ -14,7 +14,7 @@ export function HomeEntries({ ruleCount, warnCount, loggedIn, onOpenNotice, onOp
     <div className={`mb-5 grid max-w-[720px] grid-cols-1 gap-2.5 ${loggedIn ? 'min-[340px]:grid-cols-2' : ''}`}>
       {hasNotice && (
         <Tile tone="danger" title="주의사항" onOpen={onOpenNotice}
-          icon={<i className="fas fa-triangle-exclamation shrink-0 text-[15px] text-red-600" aria-hidden />}>
+          icon={<i className="fas fa-triangle-exclamation shrink-0 text-[15px] text-red-600 dark:text-red-400" aria-hidden />}>
           {/* 좁은 칸에서는 쉼표 뒤에서만 줄이 바뀌도록 두 덩어리로 묶는다 */}
           <span className="inline-block">바뀐 규정 {ruleCount}건,</span>{' '}<span className="inline-block">단계별 주의사항 {warnCount}건</span>
         </Tile>

@@ -10,6 +10,7 @@ import { StepModal } from './StepModal';
 import { ScriptsModal } from './ScriptsModal';
 import { HomeEntries } from './HomeEntries';
 import { NoticeModal } from './NoticeModal';
+import { ThemeToggle } from './ThemeToggle';
 import { ProgressProvider, useProgress } from './progress/ProgressProvider';
 import { RecordsModal } from './progress/RecordsModal';
 import { PhotosProvider } from './progress/PhotosPanel';
@@ -122,10 +123,13 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
         <div className="px-4 pb-3 pt-4">
           <div className="flex items-center justify-between gap-3">
             <h1 className="min-w-0 text-2xl font-bold leading-tight text-slate-900">외도민 타임 라인</h1>
-            <button type="button" onClick={() => openSheet({ kind: 'scripts' })} aria-label="멘트함"
-              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 transition-colors hover:bg-slate-50">
-              <i className="fas fa-comment-medical text-[15px] text-slate-500" aria-hidden /><span>멘트함</span>
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button type="button" onClick={() => openSheet({ kind: 'scripts' })} aria-label="멘트함"
+                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 transition-colors hover:bg-slate-50">
+                <i className="fas fa-comment-medical text-[15px] text-slate-500" aria-hidden /><span>멘트함</span>
+              </button>
+              <ThemeToggle />
+            </div>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3">
             <p className="text-xs text-slate-500">주money</p>
@@ -135,7 +139,7 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
                 className="-mr-2 inline-flex min-h-9 items-center px-2 text-[13px] font-semibold text-slate-600 hover:underline">로그아웃</button>
             )}
             {status === 'anon' && (loginReady ? (
-              <button type="button" onClick={() => void signIn('google', { callbackUrl: '/' })} className="inline-flex min-h-9 items-center text-[13px] font-bold text-blue-700 underline underline-offset-4">
+              <button type="button" onClick={() => void signIn('google', { callbackUrl: '/' })} className="inline-flex min-h-9 items-center text-[13px] font-bold text-blue-700 dark:text-blue-300 underline underline-offset-4">
                 <i className="fab fa-google mr-1.5" aria-hidden />우리 현황 보기 (로그인)
               </button>
             ) : (

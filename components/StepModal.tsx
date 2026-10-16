@@ -71,7 +71,7 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
           <button type="button" onClick={() => void go(index - 1)} style={{ visibility: index === 0 ? 'hidden' : 'visible' }}
             className="flex min-h-11 items-center gap-2 rounded-xl bg-slate-100 px-4 text-[15px] font-bold text-slate-700 transition-colors hover:bg-slate-200"><i className="fas fa-chevron-left" aria-hidden />이전 단계</button>
           <button type="button" onClick={() => void go(index + 1)} style={{ visibility: index === steps.length - 1 ? 'hidden' : 'visible' }}
-            className="flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-[15px] font-bold text-white transition-colors hover:bg-blue-700">다음 단계<i className="fas fa-chevron-right" aria-hidden /></button>
+            className="flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-[15px] font-bold text-snow transition-colors hover:bg-blue-700">다음 단계<i className="fas fa-chevron-right" aria-hidden /></button>
         </div>
       }>
       {/* 「할 일」은 다른 탭으로 옮겨도 그대로 둔다(안 보이게만): 쓰던 메모·할 일 입력과 저장 안 한 편집 보호가 끊기지 않게 */}
@@ -114,7 +114,7 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
                 {o.region && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">{o.region}</span>}
                 {o.checked && <span>확인일 {o.checked}</span>}
                 {url
-                  ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] font-bold text-blue-700 underline underline-offset-2">{o.source || o.url}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
+                  ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] font-bold text-blue-700 dark:text-blue-300 underline underline-offset-2">{o.source || o.url}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
                   : o.source && <span>출처 {o.source}</span>}
               </div>
             </li>
@@ -146,7 +146,7 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
           <li key={i} className={row}>
             {(chip || c.date) && (
               <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-500">
-                {chip && <span className={`rounded-md px-2 py-0.5 text-[12px] font-bold ${chip === '주의' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700'}`}>{chip}</span>}
+                {chip && <span className={`rounded-md px-2 py-0.5 text-[12px] font-bold ${chip === '주의' ? 'bg-red-50 text-red-700 dark:text-red-300' : 'bg-slate-100 text-slate-700'}`}>{chip}</span>}
                 {c.date && <span>{c.date}</span>}
               </div>
             )}
@@ -171,9 +171,9 @@ function ChecklistRow({ text, stepId, loggedIn }: { text: string; stepId: number
   return (
     <li className={rowCls}>
       {added ? (
-        <span className={`${leadCls} text-emerald-600`} role="img" aria-label="이미 우리 할 일에 있어요"><i className="fas fa-check" aria-hidden /></span>
+        <span className={`${leadCls} text-emerald-600 dark:text-emerald-400`} role="img" aria-label="이미 우리 할 일에 있어요"><i className="fas fa-check" aria-hidden /></span>
       ) : (
-        <button type="button" disabled={busy} aria-label={`${text} 할 일에 추가`} className={`${leadCls} rounded-xl text-blue-700 hover:bg-slate-50 disabled:opacity-40`}
+        <button type="button" disabled={busy} aria-label={`${text} 할 일에 추가`} className={`${leadCls} rounded-xl text-blue-700 dark:text-blue-300 hover:bg-slate-50 disabled:opacity-40`}
           onClick={async () => {
             setBusy(true);
             try {

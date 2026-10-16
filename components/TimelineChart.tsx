@@ -5,6 +5,7 @@ import { BarController, BarElement, CategoryScale, Chart, LinearScale, type Plug
 import { DEFAULT_RANGE, TIMELINE, type TimelineType } from '@/lib/timeline';
 import type { StepStatus } from '@/lib/core/types';
 import { onActivate } from '@/lib/client/a11y';
+import { useIsDark } from '@/lib/client/theme';
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale);
 
@@ -17,6 +18,10 @@ export interface StepCounts { done: number; total: number; today: number; late: 
 export const TYPE_COLOR: Record<TimelineType, string> = {
   prep: '#94a3b8', milestone: '#1e293b', critical: '#f97316', setup: '#eab308', admin: '#a855f7', open: '#10b981',
 };
+// 캔버스는 CSS 변수를 못 쓰므로 다크일 때 따로 고른다: 짙은 슬레이트(계약)는 밝게, 점 테두리는 카드색으로
+const CHART_DARK = { milestone: '#cbd5e1', ring: '#141d2f' };
+const typeColor = (t: TimelineType, dark: boolean) => (dark && t === 'milestone' ? CHART_DARK.milestone : TYPE_COLOR[t]);
+
 export const TYPE_DOT: Record<TimelineType, string> = {
   prep: 'bg-slate-400', milestone: 'bg-slate-800', critical: 'bg-orange-500', setup: 'bg-yellow-500', admin: 'bg-purple-500', open: 'bg-emerald-500',
 };
@@ -28,7 +33,7 @@ export const TYPE_ORDER: TimelineType[] = ['prep', 'milestone', 'critical', 'set
 const rangeOf = (id: number) => TIMELINE[id] ?? DEFAULT_RANGE;
 const LABEL_W = 260; // 데스크톱 왼쪽 단계 이름 칸 너비(px) — 오른쪽에 「지금 · 할 일 n/m」과 「오늘 · 기한 지남」 개수가 들어가도 이름이 두 줄 안에 들어오게
 const PERIOD_DAYS = 45; // 전체 일정 길이(Day 0~45)
-const NOW_BG = 'bg-[#EFF6FF] hover:bg-[#EFF6FF]';
+const NOW_BG = 'bg-[#EFF6FF] hover:bg-[#EFF6FF] dark:bg-blue-950 dark:hover:bg-blue-950';
 
 function titleCls(cur: boolean, done: boolean) {
   return cur ? 'font-bold text-slate-900' : done ? 'font-semibold text-slate-400' : 'font-semibold text-slate-700';
@@ -48,6 +53,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
   const currentRef = useRef(currentId);
   const selectRef = useRef(onSelect);
   const tipRef = useRef<HTMLDivElement>(null);
+  const dark = useIsDark();
 
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
   useEffect(() => {
@@ -78,11 +84,11 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
           const x = el.x + 14, y = el.y;
           c.save();
           c.beginPath(); c.arc(x, y, 9, 0, Math.PI * 2);
-          c.fillStyle = s === 'done' ? '#475569' : '#2563eb'; c.fill();
-          c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
+          c.fillStyle = s === 'done' ? (dark ? '#94a3b8' : '#475569') : '#2563eb'; c.fill();
+          c.strokeStyle = dark ? CHART_DARK.ring : '#fff'; c.lineWidth = 2; c.stroke();
           if (s === 'done') {
             c.beginPath(); c.moveTo(x - 4, y); c.lineTo(x - 1, y + 3); c.lineTo(x + 4, y - 3);
-            c.strokeStyle = '#fff'; c.lineWidth = 2; c.lineCap = 'round'; c.stroke();
+            c.strokeStyle = dark ? '#0b1220' : '#fff'; c.lineWidth = 2; c.lineCap = 'round'; c.stroke();
           } else { c.beginPath(); c.arc(x, y, 3, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); }
           c.restore();
         });
@@ -96,10 +102,10 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
         labels: steps.map((s) => s.label),
         datasets: [{
           data: steps.map((s) => [range(s.id).start, range(s.id).end]),
-          backgroundColor: steps.map((s) => TYPE_COLOR[range(s.id).type]),
+          backgroundColor: steps.map((s) => typeColor(range(s.id).type, dark)),
           borderRadius: 6, borderSkipped: false, barPercentage: 0.65, categoryPercentage: 1.0,
-          hoverBorderColor: '#fff', hoverBorderWidth: 2,
-          hoverBackgroundColor: steps.map((s) => TYPE_COLOR[range(s.id).type]),
+          hoverBorderColor: dark ? CHART_DARK.ring : '#fff', hoverBorderWidth: 2,
+          hoverBackgroundColor: steps.map((s) => typeColor(range(s.id).type, dark)),
         }],
       },
       options: {
@@ -135,7 +141,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
     });
     chartRef.current = chart;
     return () => { chart.destroy(); chartRef.current = null; };
-  }, [steps]);
+  }, [steps, dark]);
 
   const showTip = (text: string | null, e?: React.MouseEvent) => {
     const el = tipRef.current;
@@ -172,15 +178,15 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
                   <span>Day {r.start}~{r.end}</span>
                   {c && c.total > 0 && <span>할 일 {c.done}/{c.total}</span>}
                   {c && c.today > 0 && <span className="font-bold text-slate-900">오늘 {c.today}</span>}
-                  {c && c.late > 0 && <span className="font-bold text-red-600">기한 지남 {c.late}</span>}
+                  {c && c.late > 0 && <span className="font-bold text-red-600 dark:text-red-400">기한 지남 {c.late}</span>}
                 </span>
-                <span className="relative mt-2 block h-1.5 w-full rounded-[3px] bg-[#f1f5f9]" aria-hidden>
+                <span className="relative mt-2 block h-1.5 w-full rounded-[3px] bg-slate-100" aria-hidden>
                   <span className="absolute inset-y-0 block rounded-[3px]"
-                    style={{ left: `${(r.start / PERIOD_DAYS) * 100}%`, width: `${Math.max(((r.end - r.start) / PERIOD_DAYS) * 100, 2)}%`, backgroundColor: TYPE_COLOR[r.type], opacity: done ? 0.4 : 1 }} />
+                    style={{ left: `${(r.start / PERIOD_DAYS) * 100}%`, width: `${Math.max(((r.end - r.start) / PERIOD_DAYS) * 100, 2)}%`, backgroundColor: r.type === 'milestone' ? 'var(--color-slate-800)' : TYPE_COLOR[r.type], opacity: done ? 0.4 : 1 }} />
                 </span>
               </span>
               {cur
-                ? <span className="shrink-0 text-[12px] font-bold text-blue-700">지금</span>
+                ? <span className="shrink-0 text-[12px] font-bold text-blue-700 dark:text-blue-300">지금</span>
                 : done
                   ? <i className="fas fa-check shrink-0 text-slate-400" aria-label="완료" />
                   : st === 'doing' ? <span className="shrink-0 text-[12px] font-bold text-slate-500">진행 중</span> : null}
@@ -210,7 +216,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
                 <span className="shrink-0 text-right text-[12px] leading-tight">
                   {(cur || done || (c && c.total > 0)) && (
                     <span className="flex items-center justify-end gap-x-2">
-                      {cur && <span className="font-bold text-blue-700">지금</span>}
+                      {cur && <span className="font-bold text-blue-700 dark:text-blue-300">지금</span>}
                       {done && <i className="fas fa-check text-slate-400" aria-label="완료" />}
                       {c && c.total > 0 && <span className="font-semibold text-slate-500">할 일 {c.done}/{c.total}</span>}
                     </span>
@@ -218,7 +224,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
                   {c && (c.today > 0 || c.late > 0) && (
                     <span className="mt-0.5 flex items-center justify-end gap-x-2">
                       {c.today > 0 && <span className="font-bold text-slate-900">오늘 {c.today}</span>}
-                      {c.late > 0 && <span className="font-bold text-red-600">기한 지남 {c.late}</span>}
+                      {c.late > 0 && <span className="font-bold text-red-600 dark:text-red-400">기한 지남 {c.late}</span>}
                     </span>
                   )}
                 </span>
@@ -239,7 +245,7 @@ export function TimelineChart({ steps, statuses, onSelect, counts, currentId }: 
           </div>
         </div>
       </div>
-      <div ref={tipRef} className="pointer-events-none absolute z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs text-white opacity-0 transition-opacity" />
+      <div ref={tipRef} className="keep-light pointer-events-none absolute z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs text-white opacity-0 transition-opacity" />
     </div>
     </>
   );

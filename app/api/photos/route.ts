@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getActor } from '@/lib/session';
-import { addPhoto, listPhotos, PhotoError, toView } from '@/lib/core/photos';
-import { checkUploadRequest, NO_STORE } from '@/lib/http';
+import { addPhoto, listPhotos, PhotoError, reorderPhotos, toView } from '@/lib/core/photos';
+import { checkUploadRequest, checkWriteRequest, NO_STORE } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';      // sharp(이미지 처리)는 Node 에서만 돈다
@@ -48,5 +48,25 @@ export async function POST(req: Request) {
     if (e instanceof PhotoError) return NextResponse.json({ error: e.code, message: e.message }, { status: e.status, headers: NO_STORE });
     console.error('photo upload failed:', e instanceof Error ? e.message : 'unknown');
     return NextResponse.json({ error: 'server_error', message: '올리지 못했어요. 잠시 뒤 다시 해 주세요.' }, { status: 500, headers: NO_STORE });
+  }
+}
+
+// 한 단계의 순서를 한 번에 바꾸기: { positions: [{ id, position }] }. 로그인 확인 · 같은 사이트 요청만(사진 하나 고치기와 같은 규칙).
+export async function PATCH(req: Request) {
+  const bad = checkWriteRequest(req);
+  if (bad) return NextResponse.json({ error: bad }, { status: 403, headers: NO_STORE });
+  const a = await getActor(req);
+  if (!a.ok) return deny(a.status);
+  try {
+    const text = await req.text();
+    const body = text.length <= 16384 ? JSON.parse(text) : null;
+    if (!body || typeof body !== 'object' || !Array.isArray(body.positions)) return NextResponse.json({ error: 'invalid_json' }, { status: 400, headers: NO_STORE });
+    const done = await reorderPhotos(body.positions, a.actor.name);
+    return NextResponse.json({ photos: done.map(toView) }, { headers: NO_STORE });
+  } catch (e) {
+    if (e instanceof PhotoError) return NextResponse.json({ error: e.code, message: e.message }, { status: e.status, headers: NO_STORE });
+    if (e instanceof SyntaxError) return NextResponse.json({ error: 'invalid_json' }, { status: 400, headers: NO_STORE });
+    console.error('photos reorder failed:', e instanceof Error ? e.message : 'unknown');
+    return NextResponse.json({ error: 'server_error', message: '저장하지 못했어요.' }, { status: 500, headers: NO_STORE });
   }
 }

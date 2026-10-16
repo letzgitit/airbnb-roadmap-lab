@@ -42,7 +42,7 @@ export function TabBar({ items, value, onChange, label, idPrefix }: {
         const on = value === t.id;
         const danger = t.tone === 'danger';
         const tone = danger
-          ? (on ? 'font-bold text-red-700' : 'font-semibold text-red-600')
+          ? (on ? 'font-bold text-red-700 dark:text-red-300' : 'font-semibold text-red-600 dark:text-red-400')
           : (on ? 'font-bold text-slate-900' : 'font-semibold text-slate-600 hover:text-slate-800');
         return (
           <button key={t.id} ref={(el) => { refs.current[t.id] = el; }} type="button" role="tab" id={tabDomId(idPrefix, t.id)}

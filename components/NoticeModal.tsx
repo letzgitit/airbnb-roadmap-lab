@@ -71,7 +71,7 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
                         <p className="mt-3 text-[13px] font-semibold text-slate-600">
                           출처{' '}
                           {url
-                            ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] font-bold text-blue-700 underline underline-offset-2">{src}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
+                            ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] font-bold text-blue-700 dark:text-blue-300 underline underline-offset-2">{src}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
                             : src}
                         </p>
                       )}

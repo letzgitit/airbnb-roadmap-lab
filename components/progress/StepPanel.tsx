@@ -247,7 +247,7 @@ function TaskRow({ t, steps, panelStepId, onEditChange, onToggle, onGone }: {
         {/* 보조 줄은 마감일 하나뿐(+ 상대가 편집 중일 때의 표시). 둘 다 없으면 줄 자체가 없다 */}
         <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 empty:hidden">
           {dl && (
-            <span className={`inline-flex gap-x-2 text-[13px] font-semibold ${dl.late && !t.done ? 'text-red-600' : 'text-slate-500'}`}>
+            <span className={`inline-flex gap-x-2 text-[13px] font-semibold ${dl.late && !t.done ? 'text-red-600 dark:text-red-400' : 'text-slate-500'}`}>
               <span><i className="far fa-calendar mr-1" aria-hidden />{dl.date}</span><span>{dl.rel}</span>
             </span>
           )}

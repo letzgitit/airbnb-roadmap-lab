@@ -51,7 +51,7 @@ const fail = (e: unknown, what: string) => {
   return NextResponse.json({ error: 'server_error', message: '저장하지 못했어요.' }, { status: 500, headers: NO_STORE });
 };
 
-// 단계 · 설명 · 묶음 이름 고치기, 되살리기: { stepId?, caption?, album?, restore? }
+// 단계 · 설명 · 묶음 이름 · 순서(position) 고치기, 되살리기: { stepId?, caption?, album?, position?, restore? }
 export async function PATCH(req: Request, ctx: RouteContext<'/api/photos/[id]'>) {
   const bad = checkWriteRequest(req);
   if (bad) return NextResponse.json({ error: bad }, { status: 403, headers: NO_STORE });
@@ -61,7 +61,7 @@ export async function PATCH(req: Request, ctx: RouteContext<'/api/photos/[id]'>)
   const body = await readJson(req);
   if (!body) return NextResponse.json({ error: 'invalid_json' }, { status: 400, headers: NO_STORE });
   try {
-    const m = await updatePhoto(id, { stepId: body.stepId, album: body.album, caption: body.caption, restore: body.restore }, a.actor.name);
+    const m = await updatePhoto(id, { stepId: body.stepId, album: body.album, caption: body.caption, restore: body.restore, position: body.position }, a.actor.name);
     return NextResponse.json({ photo: toView(m) }, { headers: NO_STORE });
   } catch (e) { return fail(e, 'update'); }
 }

@@ -38,6 +38,8 @@ export interface PhotoMeta {
   bytes: Partial<Record<Part, number>>;
   /** 앨범 안 순서(올린 순서). 클수록 나중 */
   order: number;
+  /** 같은 단계 안에서 직접 바꾼 순서(작을수록 앞). 없으면 찍은 시각 순(lib/core/photo-order.ts) */
+  position?: number | null;
   /** 찍은 시각(한국 시각 「YYYY-MM-DDTHH:mm:ss」). EXIF 찍은 시각 → 없으면 파일 수정 시각(CLI) · 올린 시각(사이트) */
   takenAt: string;
   /** 구글 드라이브 원본 주소(CLI 가 올릴 때만). 드라이브 권한이 있어야 열린다. 저장소 코드에는 두지 않는다. */
@@ -373,7 +375,14 @@ export async function addPhoto(input: AddInput): Promise<PhotoMeta> {
   return m;
 }
 
-export interface PhotoPatch { stepId?: unknown; album?: unknown; caption?: unknown; restore?: unknown }
+export interface PhotoPatch { stepId?: unknown; album?: unknown; caption?: unknown; restore?: unknown; position?: unknown }
+
+/** position: 0 이상의 정수 · null(직접 정한 순서 지우기) */
+export function cleanPosition(v: unknown): number | null {
+  if (v === null) return null;
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 100000) throw new PhotoError(400, 'position_invalid', '순서 값이 올바르지 않아요.');
+  return v;
+}
 
 // 앨범 · 설명 고치기, 삭제한 사진 되살리기. 사진 하나만 다시 쓴다(동시에 다른 사진을 고쳐도 서로 덮지 않는다).
 export async function updatePhoto(id: string, patch: PhotoPatch, by: string): Promise<PhotoMeta> {
@@ -388,11 +397,35 @@ export async function updatePhoto(id: string, patch: PhotoPatch, by: string): Pr
   if (patch.stepId !== undefined) next.stepId = cleanStep(patch.stepId);
   if (patch.album !== undefined) next.album = cleanAlbum(patch.album);
   if (patch.caption !== undefined) next.caption = cleanCaption(patch.caption);
+  if (patch.position !== undefined) next.position = cleanPosition(patch.position);
   const iso = new Date().toISOString();
   Object.assign(next, { version: cur.version + 1, updatedAt: iso, updatedBy: by });
   await backend().put(id, JSON.stringify(next));
   await purgeOld(await listPhotos());
   return next;
+}
+
+/** 한 단계의 순서를 한 번에 바꾼다: [{ id, position }]. 사진마다 하나만 다시 쓰고(version +1), 오래된 삭제 정리는 마지막에 한 번. */
+export async function reorderPhotos(items: { id: unknown; position: unknown }[], by: string): Promise<PhotoMeta[]> {
+  if (!Array.isArray(items) || items.length === 0 || items.length > 200) throw new PhotoError(400, 'invalid', '순서를 바꿀 사진이 올바르지 않아요.');
+  const jobs = items.map((it) => {
+    if (typeof it?.id !== 'string') throw new PhotoError(400, 'invalid', '사진을 찾지 못했어요.');
+    return { id: it.id, position: cleanPosition(it.position) };
+  });
+  if (new Set(jobs.map((j) => j.id)).size !== jobs.length) throw new PhotoError(400, 'invalid', '같은 사진이 두 번 들어 있어요.');
+  const curs = await Promise.all(jobs.map((j) => getPhoto(j.id)));
+  curs.forEach((c) => { if (!c) throw new PhotoError(404, 'not_found', '사진을 찾지 못했어요.'); if (c.deletedAt) throw new PhotoError(410, 'deleted', '이미 삭제한 사진이에요.'); });
+  const iso = new Date().toISOString();
+  const out: PhotoMeta[] = [];
+  for (const [i, j] of jobs.entries()) {
+    const cur = curs[i]!;
+    if ((cur.position ?? null) === j.position) { out.push(cur); continue; }
+    const next: PhotoMeta = { ...cur, position: j.position, version: cur.version + 1, updatedAt: iso, updatedBy: by };
+    await backend().put(cur.id, JSON.stringify(next));
+    out.push(next);
+  }
+  await purgeOld(await listPhotos());
+  return out;
 }
 
 // 지우기 = 삭제 표시만(30일 동안 「삭제한 사진」에서 되살릴 수 있다)
@@ -416,11 +449,11 @@ export async function purgePhoto(id: string): Promise<boolean> {
 }
 
 // 화면에 보내는 사진 정보(조각 수 같은 저장소 내부 값은 빼고)
-export type PhotoView = Pick<PhotoMeta, 'id' | 'stepId' | 'album' | 'caption' | 'kind' | 'width' | 'height' | 'order' | 'takenAt' | 'uploadedAt' | 'by' | 'version' | 'deletedAt' | 'deletedBy'> & {
+export type PhotoView = Pick<PhotoMeta, 'id' | 'stepId' | 'album' | 'caption' | 'kind' | 'width' | 'height' | 'order' | 'position' | 'takenAt' | 'uploadedAt' | 'by' | 'version' | 'deletedAt' | 'deletedBy'> & {
   hasImage: boolean; originalUrl: string | null;
 };
 export const toView = (m: PhotoMeta): PhotoView => ({
-  id: m.id, stepId: m.stepId, album: m.album, caption: m.caption, kind: m.kind, width: m.width, height: m.height, order: m.order,
+  id: m.id, stepId: m.stepId, album: m.album, caption: m.caption, kind: m.kind, width: m.width, height: m.height, order: m.order, position: m.position ?? null,
   takenAt: m.takenAt, uploadedAt: m.uploadedAt, by: m.by, version: m.version, deletedAt: m.deletedAt, deletedBy: m.deletedBy,
   hasImage: !!m.parts.thumb, originalUrl: m.originalUrl ?? null,
 });

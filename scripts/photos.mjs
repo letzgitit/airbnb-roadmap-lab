@@ -15,6 +15,7 @@ process.chdir(root);
 for (const f of ['.env.local', '.env']) { try { process.loadEnvFile(path.join(root, f)); } catch { /* 없으면 건너뜀 */ } }
 
 const P = await import('../lib/core/photos.ts');
+const { byStepPosition } = await import('../lib/core/photo-order.ts');
 
 function usage(msg) {
   if (msg) console.error(`오류: ${msg}\n`);
@@ -119,7 +120,7 @@ try {
     if (opts['--json']) { console.log(JSON.stringify(all.map(P.toView), null, 2)); process.exit(0); }
     const live = all.filter((m) => !m.deletedAt);
     const albums = new Map();
-    const sorted = live.sort((a, b) => a.stepId - b.stepId || a.takenAt.localeCompare(b.takenAt) || a.order - b.order);
+    const sorted = live.sort(byStepPosition);
     for (const m of sorted) { const k = `${m.stepId}단계`; albums.set(k, [...(albums.get(k) ?? []), m]); }
     console.log(`사진 ${live.length}장 · 단계 ${albums.size}개 · 원본 링크 ${live.filter((m) => m.originalUrl).length}장 · 삭제한 사진 ${all.length - live.length}장`);
     for (const [album, items] of albums) {
