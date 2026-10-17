@@ -5,6 +5,9 @@ import { Redis } from '@upstash/redis';
 import sharp, { type Metadata } from 'sharp';
 import { redisEnv, sanitize } from './store.ts';
 import { STEP_COUNT } from './types.ts';
+import { REF_STEP } from './photo-order.ts';
+
+export { REF_STEP, REF_LABEL } from './photo-order.ts';
 
 // 사진 · PDF 저장소(서버 API 와 CLI scripts/photos.mjs 공용).
 // 🔴 사진과 설명(주소 · 이름 · 계약서 등)은 공개 저장소에 두지 않는다. 운영은 Upstash, 로컬 연습은 .data/photos/ (git 무시).
@@ -24,7 +27,7 @@ export type PhotoKind = 'image' | 'pdf';
 
 export interface PhotoMeta {
   id: string;
-  /** 타임라인 단계(1~14). 사진 탭 · 단계 창이 이 단계로 묶어 보여 준다 */
+  /** 타임라인 단계(1~14). 사진 탭 · 단계 창이 이 단계로 묶어 보여 준다. 0 = 참고 사진(우리 집 아님, 단계 창에는 안 나온다) */
   stepId: number;
   /** 작은 묶음 이름(선택). 예: 「집 사진」 */
   album: string;
@@ -267,9 +270,10 @@ function parse(json: string | null): PhotoMeta | null {
   try { return JSON.parse(json) as PhotoMeta; } catch { return null; }
 }
 
+// 0(REF_STEP) = 참고 사진(우리 집 아님), 1~STEP_COUNT = 타임라인 단계
 export function cleanStep(v: unknown): number {
   const n = typeof v === 'string' && v.trim() ? Number(v) : v;
-  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > STEP_COUNT) throw new PhotoError(400, 'step_required', `단계를 골라 주세요(1~${STEP_COUNT}).`);
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < REF_STEP || n > STEP_COUNT) throw new PhotoError(400, 'step_required', `단계를 골라 주세요(1~${STEP_COUNT}, 참고 사진은 ${REF_STEP}).`);
   return n;
 }
 export function cleanAlbum(s: unknown): string {

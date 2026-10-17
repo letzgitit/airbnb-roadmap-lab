@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 사진 · PDF 를 터미널에서 올리고 · 보고 · 지우는 CLI. 사이트 API 와 같은 처리(lib/core/photos.ts)를 쓴다.
+// 사진 · PDF 를 터미널에서 올리고 · 보고 · 고치고 · 지우는 CLI. 사이트 API 와 같은 처리(lib/core/photos.ts)를 쓴다.
 // 저장소: 환경변수에 Upstash(KV_REST_API_* 또는 UPSTASH_REDIS_REST_*)가 있으면 원격(운영), 없으면 .data/photos/ (로컬 연습용)
 // 어느 저장소에 붙었는지는 매번 stderr 첫 줄에 찍힌다. 원격(운영)에 쓰려면 --yes 가 필요하다.
 // 🔴 사진 · 설명은 공개 저장소에 두지 않는다. manifest 도 저장소 밖(예: 스크래치패드)에 둔다.
@@ -15,17 +15,21 @@ process.chdir(root);
 for (const f of ['.env.local', '.env']) { try { process.loadEnvFile(path.join(root, f)); } catch { /* 없으면 건너뜀 */ } }
 
 const P = await import('../lib/core/photos.ts');
-const { byStepPosition } = await import('../lib/core/photo-order.ts');
+const { byStepPosition, REF_STEP } = await import('../lib/core/photo-order.ts');
+const { STEP_COUNT } = await import('../lib/core/types.ts');
+// 단계 표시: 0 = 참고 사진(우리 집 아님)
+const stepTag = (n) => (n === REF_STEP ? '참고 사진' : `${n}단계`);
 
 function usage(msg) {
   if (msg) console.error(`오류: ${msg}\n`);
   console.error(`사용법:
   node scripts/photos.mjs list [--json]
-  node scripts/photos.mjs add --step <1~14> <파일...> [--album "묶음 이름"] [--caption "설명"] [--doc] [--original-url <주소>] [--by <이름>] [--yes]
+  node scripts/photos.mjs add --step <0~${STEP_COUNT}> <파일...> [--album "묶음 이름"] [--caption "설명"] [--doc] [--original-url <주소>] [--by <이름>] [--yes]
   node scripts/photos.mjs add-manifest <manifest.json> [--by <이름>] [--yes]
   node scripts/photos.mjs delete <id> [--purge] [--yes]
   node scripts/photos.mjs restore <id> [--yes]
-  --step   타임라인 단계 번호(필수). manifest 는 항목마다 "step"
+  node scripts/photos.mjs update <id> [--step N] [--album "묶음 이름"] [--caption "설명"] [--yes]
+  --step   타임라인 단계 번호(1~${STEP_COUNT}, add 는 필수). ${REF_STEP} = 참고 사진(우리 집 아님: 다른 집 현장 등, 단계와 따로 맨 끝 칸). manifest 는 항목마다 "step"
   --doc    글씨 많은 문서(계약서 · 등기부): 큰 사진을 2400px 로
   --original-url  「원본 보기」 주소. 없으면 구글 드라이브(데스크톱) 안 파일의 드라이브 id 로 자동으로 만든다
   --purge  삭제 표시가 아니라 바로 완전히 지움(되살릴 수 없음)
@@ -93,7 +97,7 @@ async function driveUrl(file) {
 const kb = (n) => (n ? `${Math.round(n / 1024)}KB` : '-');
 
 async function addItems(items, by) {
-  needYes([`올릴 파일 ${items.length}개:`, ...items.map((it, i) => `#${i} [${it.step}단계${it.album ? ` · ${it.album}` : ''}] ${path.basename(it.file)}${it.caption ? ` — ${it.caption}` : ''}${it.doc ? ' (문서)' : ''}`)]);
+  needYes([`올릴 파일 ${items.length}개:`, ...items.map((it, i) => `#${i} [${stepTag(it.step)}${it.album ? ` · ${it.album}` : ''}] ${path.basename(it.file)}${it.caption ? ` — ${it.caption}` : ''}${it.doc ? ' (문서)' : ''}`)]);
   const added = [], failed = [];
   for (const [i, it] of items.entries()) {
     try {
@@ -121,8 +125,9 @@ try {
     const live = all.filter((m) => !m.deletedAt);
     const albums = new Map();
     const sorted = live.sort(byStepPosition);
-    for (const m of sorted) { const k = `${m.stepId}단계`; albums.set(k, [...(albums.get(k) ?? []), m]); }
-    console.log(`사진 ${live.length}장 · 단계 ${albums.size}개 · 원본 링크 ${live.filter((m) => m.originalUrl).length}장 · 삭제한 사진 ${all.length - live.length}장`);
+    for (const m of sorted) { const k = stepTag(m.stepId); albums.set(k, [...(albums.get(k) ?? []), m]); }
+    const refN = live.filter((m) => m.stepId === REF_STEP).length;
+    console.log(`사진 ${live.length}장 · 단계 ${albums.size - (refN ? 1 : 0)}개${refN ? ` · 참고 사진 ${refN}장` : ''} · 원본 링크 ${live.filter((m) => m.originalUrl).length}장 · 삭제한 사진 ${all.length - live.length}장`);
     for (const [album, items] of albums) {
       const by = new Map();
       for (const m of items) by.set(m.album || '(묶음 없음)', (by.get(m.album || '(묶음 없음)') ?? 0) + 1);
@@ -153,10 +158,27 @@ try {
     const m = await P.getPhoto(id);
     if (!m) throw new Error(`사진을 찾지 못했습니다: ${id}`);
     const what = cmd === 'restore' ? '되살리기' : opts['--purge'] ? '완전히 지우기(되살릴 수 없음)' : '삭제 표시(30일 보관)';
-    needYes([`${what}: ${m.id} [${m.stepId}단계${m.album ? ` · ${m.album}` : ''}] ${m.caption}`]);
+    needYes([`${what}: ${m.id} [${stepTag(m.stepId)}${m.album ? ` · ${m.album}` : ''}] ${m.caption}`]);
     if (cmd === 'restore') console.log(JSON.stringify({ ok: true, photo: P.toView(await P.updatePhoto(id, { restore: true }, by)) }));
     else if (opts['--purge']) console.log(JSON.stringify({ ok: await P.purgePhoto(id), id }));
     else console.log(JSON.stringify({ ok: true, photo: P.toView(await P.deletePhoto(id, by)) }));
+  } else if (cmd === 'update') {
+    // 단계 · 묶음 이름 · 설명 고치기(사이트의 「고치기」와 같은 updatePhoto). 준 항목만 바꾼다
+    const id = pos[0];
+    if (!id) usage('사진 id 가 필요합니다.');
+    const patch = {};
+    if (opts['--step'] !== undefined) patch.stepId = opts['--step'];   // 문자열 그대로(검사는 cleanStep)
+    if (opts['--album'] !== undefined) patch.album = opts['--album'];
+    if (opts['--caption'] !== undefined) patch.caption = opts['--caption'];
+    if (!Object.keys(patch).length) usage('바꿀 항목(--step · --album · --caption)을 하나 이상 주세요.');
+    const m = await P.getPhoto(id);
+    if (!m) throw new Error(`사진을 찾지 못했습니다: ${id}`);
+    const lines = [`고치기: ${m.id} [${stepTag(m.stepId)}${m.album ? ` · ${m.album}` : ''}] ${m.caption}`];
+    if ('stepId' in patch) lines.push(`  단계: ${stepTag(m.stepId)} → ${stepTag(Number(patch.stepId))}`);
+    if ('album' in patch) lines.push(`  묶음 이름: "${m.album}" → "${patch.album}"`);
+    if ('caption' in patch) lines.push(`  설명: "${m.caption}" → "${patch.caption}"`);
+    needYes(lines);
+    console.log(JSON.stringify({ ok: true, photo: P.toView(await P.updatePhoto(id, patch, by)) }));
   } else usage(cmd ? `모르는 명령 ${cmd}` : undefined);
 } catch (e) {
   console.error(e instanceof Error ? e.message : e);

@@ -5,7 +5,7 @@ import type { PhotoView } from '@/lib/core/photos';
 import { relTime, withGa } from '@/lib/client/format';
 import { useProgress } from './ProgressProvider';
 import { busyFetch } from '@/lib/client/busy';
-import { byStepPosition } from '@/lib/core/photo-order';
+import { byStepPosition, REF_LABEL, REF_STEP } from '@/lib/core/photo-order';
 import { AddRow, btnGhost, btnPrimary, inputCls, textBtn, TrashButton, useBusy, useDirty } from './bits';
 
 // 삭제 확인 창 안내(서버가 30일 보관 — lib/core/photos.ts TRASH_KEEP_MS)
@@ -13,6 +13,7 @@ const PHOTO_TRASH_NOTE = '지운 사진은 30일 동안 사진 탭 맨 아래 �
 
 // 사진: 로그인한 두 사람만 /api/photos 로 받는다(공개 화면 · 저장소 코드에는 사진도 설명도 없다).
 // 타임라인 단계별로 묶고(단계 순서, 사진이 없는 단계는 숨김), 단계 안은 찍은 날짜 순.
+// 참고 사진(stepId 0, 다른 집 현장 등 우리 집이 아닌 사진)은 단계와 따로 맨 끝 칸에 모으고, 단계 창 사진 줄에는 나오지 않는다.
 // 「집 정보 · 기록」 창의 「사진」 탭과 단계 창의 사진 줄이 같은 목록 · 크게 보기 · 올리기 창을 같이 쓴다(PhotosProvider).
 
 export interface StepName { id: number; title: string }
@@ -179,7 +180,11 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
   );
 }
 
-const stepLabel = (steps: StepName[], id: number) => { const s = steps.find((x) => x.id === id); return s ? `${s.id}. ${s.title}` : `${id}단계`; };
+const stepLabel = (steps: StepName[], id: number) => {
+  if (id === REF_STEP) return REF_LABEL;
+  const s = steps.find((x) => x.id === id);
+  return s ? `${s.id}. ${s.title}` : `${id}단계`;
+};
 
 // 썸네일 한 칸(정사각형, 화면에 가까워질 때 불러온다)
 // 썸네일 그림. 못 불러오면 깨진 그림 대신 짧은 글
@@ -211,6 +216,7 @@ function Thumb({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
 }
 
 // ── 「집 정보 · 기록」 창의 「사진」 탭 ──
+const NO_GROUP = -1;   // 최신순 · 오래된순의 「단계 묶음 없음」 표시(제목 줄 없음)
 export function PhotosPanel({ active }: { active: boolean }) {
   const { steps, data, state, shown, sort, setSort, kind, setKind, query, setQuery, ensure, reload, view, upload, patch } = usePhotos();
   const [trashOpen, setTrashOpen] = useState(false);
@@ -224,11 +230,12 @@ export function PhotosPanel({ active }: { active: boolean }) {
   const filtering = query !== '' || kind !== 'all';
   useEffect(() => { if (active) ensure(); }, [active, ensure]);
 
-  // 기본 순서: 단계 → 날짜 → 사진(사진이 없는 단계는 빠진다). 최신순 · 오래된순: 단계 묶음 없이 날짜로만 묶는다(stepId 0).
+  // 기본 순서: 단계 → 날짜 → 사진(사진이 없는 단계는 빠진다, 참고 사진 칸은 맨 끝).
+  // 최신순 · 오래된순: 단계 묶음 없이 날짜로만 묶는다(NO_GROUP. 0 은 참고 사진 칸이라 -1 을 쓴다).
   const sections = useMemo(() => {
     const out: { stepId: number; days: { day: string; items: PhotoView[] }[]; n: number }[] = [];
     for (const p of shown) {
-      const sid = sort === 'default' ? p.stepId : 0;
+      const sid = sort === 'default' ? p.stepId : NO_GROUP;
       let s = out[out.length - 1];
       if (!s || s.stepId !== sid) { s = { stepId: sid, days: [], n: 0 }; out.push(s); }
       let d = s.days[s.days.length - 1];
@@ -315,7 +322,7 @@ export function PhotosPanel({ active }: { active: boolean }) {
 
       {sections.map((s) => (
         <div key={s.stepId} className="mt-5 first:mt-0">
-          {s.stepId > 0 && <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-bold text-slate-900">{stepLabel(steps, s.stepId)}<span className="text-[13px] font-semibold text-slate-500">{s.n}</span></h3>}
+          {s.stepId !== NO_GROUP && <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-bold text-slate-900">{stepLabel(steps, s.stepId)}<span className="text-[13px] font-semibold text-slate-500">{s.n}</span></h3>}
           {s.days.map((d) => (
             <div key={d.day} className="mt-2">
               <p className="mb-1 text-[13px] font-semibold text-slate-500">{dayLabel(d.day)}</p>
@@ -428,6 +435,7 @@ function StepSelect({ steps, value, onChange, id }: { steps: StepName[]; value: 
   return (
     <select id={id} aria-label={id ? undefined : '단계'} className={inputCls} value={value} onChange={(e) => onChange(Number(e.target.value))}>
       {steps.map((s) => <option key={s.id} value={s.id}>{s.id}. {s.title}</option>)}
+      <option value={REF_STEP}>{REF_LABEL}</option>
     </select>
   );
 }
