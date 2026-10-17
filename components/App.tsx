@@ -140,11 +140,11 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
             )}
             {status === 'anon' && (loginReady ? (
               <button type="button" onClick={() => void signIn('google', { callbackUrl: '/' })} className="inline-flex min-h-9 items-center text-[13px] font-bold text-blue-700 dark:text-blue-300 underline underline-offset-4">
-                <i className="fab fa-google mr-1.5" aria-hidden />우리 현황 보기 (로그인)
+                로그인
               </button>
             ) : (
               <button type="button" disabled aria-disabled="true" className="inline-flex min-h-9 cursor-not-allowed items-center text-[13px] font-semibold text-slate-400">
-                <i className="fab fa-google mr-1.5" aria-hidden />로그인 준비 중
+                로그인 준비 중
               </button>
             ))}
             {status === 'forbidden' && (
