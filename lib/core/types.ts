@@ -2,9 +2,12 @@
 export interface OfficialItem { text: string; source: string; url: string; checked: string; region: string }
 export interface TipItem { text: string; from: string }
 export interface CommunityItem { text: string; date: string; kind: string }
+// 참고 자료: 이 단계에 도움 되는 기사·영상·공지. 고정(steps.json)과 자동 수집(lib/refs.ts)이 같은 모양이다.
+export type RefKind = '기사' | '영상' | '공지';
+export interface RefItem { title: string; summary: string; source: string; date: string; url: string; kind: RefKind; auto?: boolean }
 export interface Step {
   id: number; day: number; title: string; summary: string;
-  official: OfficialItem[]; tips: TipItem[]; community: CommunityItem[];
+  official: OfficialItem[]; tips: TipItem[]; community: CommunityItem[]; refs: RefItem[];
   checklist: string[]; warnings: string[];
 }
 export interface ScriptItem { who: string; situation: string; lines: string[]; tips: string[] }

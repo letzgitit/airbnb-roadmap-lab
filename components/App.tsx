@@ -93,7 +93,7 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
       if (head) stepHits.push({ kind: 'step', i, section: null, label: base, text: head });
       // 네 갈래 목록에 걸리면 그 탭까지 연다(갈래마다 첫 번째 걸린 글 하나). 라벨은 탭 이름 그대로.
       const pool: Record<StepSection, string[]> = {
-        warnings: s.warnings, official: s.official.map((o) => o.text), tips: s.tips.map((t) => t.text), community: s.community.map((c) => c.text),
+        warnings: s.warnings, official: s.official.map((o) => o.text), tips: [...s.tips.map((t) => t.text), ...s.community.map((c) => c.text)], refs: s.refs.flatMap((r) => [r.title, r.summary]),
       };
       SECTION_ORDER.forEach((k) => {
         const hit = pool[k].find(has);

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
-import type { Step } from '@/lib/core/types';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { RefItem, Step } from '@/lib/core/types';
 import { dayLabel } from '@/lib/client/format';
 import { SECTION_ORDER, TAB_LABEL, sectionCount, type StepSection, type StepTab } from '@/lib/client/step-sections';
 import { Sheet } from './Sheet';
@@ -15,8 +15,10 @@ import { leadCls, rowCls } from './progress/bits';
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
 const sectionTitle = 'mb-1 text-[15px] font-bold text-slate-700';
 const row = 'border-b border-slate-200 py-4 last:border-b-0';
+// YYYY-MM-DD → YYYY.MM.DD, YYYY-MM → YYYY.MM. 다른 꼴의 글자는 그대로 둔다.
+const fmtDate = (d: string) => (/^\d{4}-\d{2}(-\d{2})?$/.test(d) ? d.replace(/-/g, '.') : d);
 
-// 단계 창: 탭 5개(할 일 · 주의사항 · 규정 · 노하우 · 경험담). 한 열로만 보이고, 항목마다 따로 여는 상세 화면은 없다.
+// 단계 창: 탭 5개(할 일 · 주의사항 · 규정 · 노하우 · 참고 자료). 한 열로만 보이고, 항목마다 따로 여는 상세 화면은 없다.
 export function StepModal({ steps, index, section, open, shown, loggedIn, onClose, beforeClose, onGo }: {
   steps: Step[]; index: number; section: StepSection | null; open: boolean; shown: boolean; loggedIn: boolean;
   onClose: () => void; beforeClose: () => Promise<boolean>; onGo: (i: number) => void;
@@ -34,12 +36,12 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
     setTab(open && step && section && sectionCount(step, section) > 0 ? section : 'todo');
   }
 
-  // 개수가 0 인 탭은 숨긴다
+  // 개수가 0 인 탭은 숨긴다(「참고 자료」만 0 개여도 늘 보이고, 0 개일 땐 숫자 배지를 달지 않는다)
   const items: TabItem[] = [{ id: 'todo', label: TAB_LABEL.todo }];
   if (step) {
     SECTION_ORDER.forEach((k) => {
       const n = sectionCount(step, k);
-      if (n > 0) items.push({ id: k, label: TAB_LABEL[k], count: n, tone: k === 'warnings' ? 'danger' : undefined });
+      if (n > 0 || k === 'refs') items.push({ id: k, label: TAB_LABEL[k], count: n > 0 ? n : undefined, tone: k === 'warnings' ? 'danger' : undefined });
     });
   }
   const cur: StepTab = items.some((t) => t.id === tab) ? tab : 'todo';
@@ -112,7 +114,7 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
               <p className="text-[15px] font-semibold leading-relaxed text-slate-900">{o.text}</p>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] font-semibold text-slate-600">
                 {o.region && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">{o.region}</span>}
-                {o.checked && <span>확인일 {o.checked}</span>}
+                {o.checked && <span>확인일 {fmtDate(o.checked)}</span>}
                 {url
                   ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] font-bold text-blue-700 dark:text-blue-300 underline underline-offset-2">{o.source || o.url}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
                   : o.source && <span>출처 {o.source}</span>}
@@ -124,37 +126,90 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
     );
   }
   if (k === 'tips') {
+    // 노하우(tips) 먼저, 이어서 「실제 사례」(community) 묶음.
+    const hasTips = step.tips.length > 0;
+    const hasCases = step.community.length > 0;
     return (
       <>
-        <p className="pt-3 text-[13px] text-slate-500">대부분 현장 경험에서 나온 노하우예요.</p>
-        <ul>
-          {step.tips.map((t, i) => (
-            <li key={i} className={row}>
-              <p className="text-[15px] font-normal leading-relaxed text-slate-800">{t.text}</p>
-              {t.from && t.from !== '현장 경험' && <p className="mt-1.5 text-[13px] font-semibold text-slate-500">출처: {t.from}</p>}
-            </li>
-          ))}
-        </ul>
+        {hasTips && (
+          <ul>
+            {step.tips.map((t, i) => (
+              <li key={`t${i}`} className={row}>
+                <p className="text-[15px] font-normal leading-relaxed text-slate-800">{t.text}</p>
+                {t.from && t.from !== '현장 경험' && <p className="mt-1.5 text-[13px] font-semibold text-slate-500">출처: {t.from}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {hasCases && (
+          <div className={hasTips ? 'mt-6' : 'pt-3'}>
+            <h3 className={sectionTitle}>실제 사례</h3>
+            <ul>
+              {step.community.map((c, i) => {
+                const kind = (c.kind || '').trim();
+                const chip = kind && kind !== '사례' ? kind : null;
+                return (
+                  <li key={`c${i}`} className={row}>
+                    <p className="text-[15px] font-normal leading-relaxed text-slate-800">{c.text}</p>
+                    {(chip || c.date) && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] font-semibold text-slate-500">
+                        {chip && <span className={`rounded-md px-2 py-0.5 text-[12px] font-bold ${chip === '주의' ? 'bg-red-50 text-red-700 dark:text-red-300' : 'bg-slate-100 text-slate-700'}`}>{chip}</span>}
+                        {c.date && <span>{fmtDate(c.date)}</span>}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </>
     );
   }
+  return <RefList step={step} />;
+}
+
+const REF_FIRST = 10;
+
+// 참고 자료: 최신순, 처음 10개만 보이고 나머지는 「더 보기」. 단계를 옮기면 접힌 상태로(key={step.id} 로 새로 시작).
+function RefList({ step }: { step: Step }) {
+  return <RefListInner key={step.id} refs={step.refs} />;
+}
+function RefListInner({ refs }: { refs: RefItem[] }) {
+  const [all, setAll] = useState(false);
+  // date 내림차순 안정 정렬(같은 날짜는 들어온 순서 유지)
+  const sorted = useMemo(() => refs.map((r, i) => ({ r, i })).sort((a, b) => (a.r.date === b.r.date ? a.i - b.i : a.r.date < b.r.date ? 1 : -1)).map((x) => x.r), [refs]);
+  if (sorted.length === 0) return <p className="pt-3 text-[15px] text-slate-600">아직 이 단계에 맞는 참고 자료가 없어요.</p>;
+  const shown = all ? sorted : sorted.slice(0, REF_FIRST);
+  const rest = sorted.length - shown.length;
   return (
-    <ul>
-      {step.community.map((c, i) => {
-        const chip = c.kind && c.kind !== '사례' ? c.kind : '';
-        return (
-          <li key={i} className={row}>
-            {(chip || c.date) && (
-              <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-500">
-                {chip && <span className={`rounded-md px-2 py-0.5 text-[12px] font-bold ${chip === '주의' ? 'bg-red-50 text-red-700 dark:text-red-300' : 'bg-slate-100 text-slate-700'}`}>{chip}</span>}
-                {c.date && <span>{c.date}</span>}
+    <>
+      {sorted.some((r) => r.auto) && <p className="pt-3 text-[13px] text-slate-500">자동으로 모은 자료는 틀릴 수 있어요. 원문을 확인하세요.</p>}
+      <ul>
+        {shown.map((r, i) => {
+          const url = safeUrl(r.url);
+          return (
+            <li key={`${r.url}|${i}`} className={row}>
+              <p className="text-[15px] font-semibold leading-relaxed text-slate-900">
+                {url
+                  ? <a href={url} target="_blank" rel="noopener noreferrer" className="block py-2.5 -my-2.5 [overflow-wrap:anywhere]">{r.title}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px] text-slate-500" aria-hidden /></a>
+                  : r.title}
+              </p>
+              <p className="mt-1 text-[15px] font-normal leading-relaxed text-slate-800">{r.summary}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] font-semibold text-slate-500">
+                <span>{r.source}</span>
+                <span>{fmtDate(r.date)}</span>
+                {r.auto && <span>자동 수집</span>}
               </div>
-            )}
-            <p className="text-[15px] font-normal leading-relaxed text-slate-800">{c.text}</p>
-          </li>
-        );
-      })}
-    </ul>
+            </li>
+          );
+        })}
+      </ul>
+      {rest > 0 && (
+        <button type="button" onClick={() => setAll(true)}
+          className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-100 px-4 text-[15px] font-bold text-slate-700 transition-colors hover:bg-slate-200">더 보기 ({rest}개)</button>
+      )}
+    </>
   );
 }
 

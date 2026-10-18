@@ -648,13 +648,6 @@
         "url": "https://stay.visitseoul.net/cms/registration1",
         "checked": "2026-10-15",
         "region": "서울시"
-      },
-      {
-        "text": "디지털노마드(워케이션, F-1-D) 비자는 2026년 6월 30일부터 정식 제도가 되어 최대 3년까지 머물 수 있다(시범 운영 때는 최대 2년). 해외 기업에 다니며 원격 근무하는 외국인과 그 가족이 대상이다.",
-        "source": "법무부 보도자료 「디지털노마드 비자 정식 운영」(2026.7.7)",
-        "url": "https://www.immigration.go.kr/bbs/immigration/214/608294/artclView.do",
-        "checked": "2026-10-19",
-        "region": "전국"
       }
     ],
     "tips": [
@@ -748,6 +741,16 @@
     ],
     "warnings": [
       "방을 나누거나 구조를 바꾸면 도면과 달라져 반려될 수 있다."
+    ],
+    "refs": [
+      {
+        "title": "디지털노마드(F-1-D) 비자 정식 운영, 최대 3년 체류",
+        "summary": "해외 회사에 다니며 원격 근무하는 외국인이 2026년 6월 30일부터 한국에 최대 3년까지 머물 수 있게 됐어요. 한 달 이상 머무는 손님을 노릴 때 참고할 배경 정보예요.",
+        "source": "법무부 보도자료",
+        "date": "2026-07-07",
+        "url": "https://www.immigration.go.kr/bbs/immigration/214/608294/artclView.do",
+        "kind": "공지"
+      }
     ]
   },
   {

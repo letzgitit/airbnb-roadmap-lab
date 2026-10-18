@@ -16,7 +16,7 @@ export function readContent(): Content {
   return {
     steps: steps.map((s) => ({
       ...s,
-      official: s.official ?? [], tips: s.tips ?? [], community: s.community ?? [],
+      official: s.official ?? [], tips: s.tips ?? [], community: s.community ?? [], refs: s.refs ?? [],
       checklist: s.checklist ?? [], warnings: s.warnings ?? [],
     })),
     scripts: load<ScriptItem[]>('scripts.json'),
