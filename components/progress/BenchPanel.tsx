@@ -79,11 +79,11 @@ export function BenchPanel({ active }: { active: boolean }) {
       {state === 'loading' && !data && (
         <div role="status" aria-busy="true">
           <span className="sr-only">불러오는 중…</span>
-          <div aria-hidden className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {[0, 1].map((k) => (
-              <div key={k} className="overflow-hidden rounded-2xl border border-slate-200">
-                <span className="skeleton block aspect-[16/9] w-full bg-slate-100" />
-                <div className="p-4"><span className="skeleton block h-5 w-3/4 rounded bg-slate-100" /><span className="skeleton mt-2 block h-4 w-1/2 rounded bg-slate-100" /></div>
+          <div aria-hidden className="divide-y divide-slate-200 border-y border-slate-200">
+            {[0, 1, 2].map((k) => (
+              <div key={k} className="flex gap-3 py-3.5">
+                <span className="skeleton block h-[72px] w-[72px] shrink-0 rounded-md bg-slate-100" />
+                <div className="min-w-0 flex-1"><span className="skeleton block h-4 w-3/4 rounded bg-slate-100" /><span className="skeleton mt-2 block h-4 w-full rounded bg-slate-100" /><span className="skeleton mt-2 block h-3 w-1/3 rounded bg-slate-100" /></div>
               </div>
             ))}
           </div>
@@ -160,8 +160,8 @@ function Batch({ b, items, reactions, onSave }: { b: BatchView; items: BenchItem
       {items.length === 0
         ? <p className="py-2 text-[15px] font-semibold text-slate-500">이 공간 자료는 이 모음에 없어요.</p>
         : (
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {items.map((it) => <li key={it.id} className="min-w-0"><Card it={it} reactions={reactions[it.id] ?? []} onSave={onSave} /></li>)}
+          <ul className="divide-y divide-slate-200 border-y border-slate-200">
+            {items.map((it) => <li key={it.id} className="min-w-0"><Row it={it} reactions={reactions[it.id] ?? []} onSave={onSave} /></li>)}
           </ul>
         )}
     </div>
@@ -173,18 +173,18 @@ function Thumb({ src, source }: { src: string | null; source: string }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className="relative aspect-[16/9] w-full overflow-hidden bg-slate-100">
+    <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100" aria-hidden>
       {src && !failed ? (
         <>
-          {!loaded && <span className="skeleton absolute inset-0" aria-hidden />}
+          {!loaded && <span className="skeleton absolute inset-0" />}
           {/* 외부 주소라 next/image 도메인 목록 대신 일반 img. 출처 사이트가 막지 않게 referrer 를 보내지 않는다 */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} className="h-full w-full object-cover" />
         </>
       ) : (
-        <span className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-slate-500">
-          <i className="far fa-image text-[22px]" aria-hidden />
-          <span className="text-[13px] font-bold">{source}</span>
+        <span className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-slate-500">
+          <i className="far fa-image text-[16px]" aria-hidden />
+          <span className="break-keep text-[12px] font-bold leading-tight">{source}</span>
         </span>
       )}
     </div>
@@ -193,41 +193,73 @@ function Thumb({ src, source }: { src: string | null; source: string }) {
 
 const Label = ({ children }: { children: React.ReactNode }) => <p className="text-[13px] font-bold text-slate-500">{children}</p>;
 
-function Card({ it, reactions, onSave }: { it: BenchItem; reactions: ReactionView[]; onSave: SaveFn }) {
+// 줄 안에서 작게 보이는 반응 요약(누가 좋아요 · 별로 · 메모를 남겼는지). 누르는 곳은 펼친 뒤의 Reactions
+function ReactionBrief({ list }: { list: ReactionView[] }) {
+  const shown = list.filter((r) => r.vote || r.memo);
+  if (shown.length === 0) return null;
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <a href={it.url} target="_blank" rel="noopener noreferrer" tabIndex={-1} aria-hidden="true"><Thumb src={it.image} source={it.source} /></a>
-      <div className="flex flex-1 flex-col gap-3 px-4 pb-3 pt-3">
-        <div>
-          <div className="flex flex-wrap gap-1.5 text-[12px] font-bold">
-            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-700">{it.source}</span>
-            <span className="rounded-md border border-slate-200 px-2 py-0.5 text-slate-600">{it.space === '전체' ? '집 전체' : it.space}</span>
+    <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] leading-snug text-slate-600">
+      {shown.map((r, i) => (
+        <span key={i} className="inline-flex items-center gap-1 font-semibold">
+          {r.vote && <i className={`fas ${r.vote === 'up' ? 'fa-thumbs-up text-blue-700 dark:text-blue-300' : 'fa-thumbs-down text-slate-500'} text-[12px]`} aria-hidden />}
+          {displayName(r.name)}
+          {r.vote && <span className="sr-only">{VOTE_LABEL[r.vote]}</span>}
+          {r.memo && <i className="far fa-comment text-[12px] text-slate-500" aria-hidden title="메모 있음" />}
+          {r.memo && <span className="sr-only">메모 있음</span>}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+// 한 줄 = 자료 하나: 작은 사진 + 제목 · 출처 · 맞는 이유 · 비용 · 반응. 누르면 그 자리에서 펼쳐 따라 할 점 · 주의 · 원문 · 내 반응이 나온다.
+function Row({ it, reactions, onSave }: { it: BenchItem; reactions: ReactionView[]; onSave: SaveFn }) {
+  const [open, setOpen] = useState(false);
+  const panelId = `bench-${it.id}`;
+  const clamp = (n: number) => (open ? 'block' : n === 1 ? 'line-clamp-1' : 'line-clamp-2');
+  return (
+    <article>
+      <button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}
+        className="flex min-h-[88px] w-full items-start gap-3 py-3.5 text-left hover:bg-slate-50/60">
+        <Thumb src={it.image} source={it.source} />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap gap-1.5 text-[12px] font-bold">
+            <span className="rounded-md bg-slate-100 px-1.5 py-px text-slate-700">{it.source}</span>
+            <span className="rounded-md border border-slate-200 px-1.5 py-px text-slate-600">{it.space === '전체' ? '집 전체' : it.space}</span>
+          </span>
+          <span className={`mt-1 break-words text-[16px] font-bold leading-snug text-slate-900 ${clamp(2)}`}>{it.title}</span>
+          {it.fit && <span className={`mt-0.5 break-words text-[14px] leading-snug text-slate-600 ${clamp(2)}`}><span className="sr-only">101호에 맞는 이유: </span>{it.fit}</span>}
+          {it.cost && <span className={`mt-1 break-words text-[13px] leading-snug text-slate-500 ${clamp(1)}`}><span className="font-bold">비용</span> {it.cost}</span>}
+          {!open && <ReactionBrief list={reactions} />}
+        </span>
+        <i className={`fas ${open ? 'fa-chevron-up' : 'fa-chevron-down'} mt-1 shrink-0 text-[12px] text-slate-500`} aria-hidden />
+      </button>
+      {open && (
+        <div id={panelId} className="pb-3 pt-0.5">
+          <div className="flex flex-col gap-3">
+            {it.takeaways.length > 0 && (
+              <div>
+                <Label>따라 할 점</Label>
+                <ul className="mt-0.5 space-y-1">
+                  {it.takeaways.map((t, i) => (
+                    <li key={i} className="flex gap-2 text-[15px] leading-snug text-slate-700"><span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-slate-400" aria-hidden />{t}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {it.caution && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+                <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-700 dark:text-red-300"><i className="fas fa-triangle-exclamation text-[12px]" aria-hidden />주의</p>
+                <p className="mt-0.5 text-[14px] leading-relaxed text-slate-800">{it.caution}</p>
+              </div>
+            )}
+            <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${textBtn} self-start`}>
+              원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-[11px]" aria-hidden /><span className="sr-only">(새 탭)</span>
+            </a>
           </div>
-          <h4 className="mt-1.5 text-[16px] font-bold leading-snug text-slate-900">{it.title}</h4>
+          <div className="mt-2 rounded-xl border border-slate-100"><Reactions itemId={it.id} title={it.title} list={reactions} onSave={onSave} /></div>
         </div>
-        {it.fit && <div><Label>101호에 맞는 이유</Label><p className="mt-0.5 text-[15px] leading-relaxed text-slate-700">{it.fit}</p></div>}
-        {it.takeaways.length > 0 && (
-          <div>
-            <Label>따라 할 점</Label>
-            <ul className="mt-0.5 space-y-1">
-              {it.takeaways.map((t, i) => (
-                <li key={i} className="flex gap-2 text-[15px] leading-snug text-slate-700"><span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-slate-400" aria-hidden />{t}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {it.cost && <p className="flex flex-wrap gap-x-2 text-[15px] text-slate-700"><span className="font-bold text-slate-500">비용</span>{it.cost}</p>}
-        {it.caution && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
-            <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-700 dark:text-red-300"><i className="fas fa-triangle-exclamation text-[12px]" aria-hidden />주의</p>
-            <p className="mt-0.5 text-[14px] leading-relaxed text-slate-800">{it.caution}</p>
-          </div>
-        )}
-        <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${textBtn} mt-auto self-start`}>
-          원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-[11px]" aria-hidden /><span className="sr-only">(새 탭)</span>
-        </a>
-      </div>
-      <Reactions itemId={it.id} title={it.title} list={reactions} onSave={onSave} />
+      )}
     </article>
   );
 }
