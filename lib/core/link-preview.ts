@@ -192,15 +192,16 @@ const clean = (s: string | undefined, max: number) => {
 };
 
 export function parseMeta(html: string, base: URL): { title: string | null; image: string | null } {
-  const head = html.slice(0, MAX_BYTES);
+  // og 태그는 <head> 앞쪽에 있다. 256KB로 자르고 태그 길이에 상한을 둬 정규식이 길이의 제곱으로 느려지지 않게 한다.
+  const head = html.slice(0, Math.min(MAX_BYTES, 256 * 1024));
   const meta = new Map<string, string>();
-  for (const tag of head.match(/<meta\b[^>]*>/gi) ?? []) {
+  for (const tag of head.match(/<meta\b[^>]{0,2000}>/gi) ?? []) {
     const attrs: Record<string, string> = {};
     for (const m of tag.matchAll(/([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) attrs[m[1].toLowerCase()] = m[2] ?? m[3] ?? m[4] ?? '';
     const key = (attrs.property || attrs.name || '').toLowerCase();
     if (key && attrs.content !== undefined && !meta.has(key)) meta.set(key, attrs.content);
   }
-  const pageTitle = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1];
+  const pageTitle = /<title[^>]{0,200}>([\s\S]{0,1000}?)<\/title>/i.exec(head)?.[1];
   const title = clean(meta.get('og:title') ?? meta.get('twitter:title') ?? pageTitle, 150);
   let image: string | null = null;
   for (const k of ['og:image', 'og:image:secure_url', 'og:image:url', 'twitter:image', 'twitter:image:src']) {
