@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import type { BatchView, BenchItem, ReactionView, Vote } from '@/lib/core/bench';
+import type { BatchView, BenchItem, LinkView, ReactionView, Vote } from '@/lib/core/bench';
 import { busyFetch } from '@/lib/client/busy';
-import { displayName } from '@/lib/client/format';
+import { displayName, shortDate, withGa } from '@/lib/client/format';
 import { devHeaders, useProgress } from './ProgressProvider';
 import { AutoTextarea, btnGhost, btnPrimary, enterSubmit, inputCls, oneLine, textBtn, useDirty, useFormEsc } from './bits';
 
@@ -13,14 +13,22 @@ import { AutoTextarea, btnGhost, btnPrimary, enterSubmit, inputCls, oneLine, tex
 // 사진을 누르면 같은 패널 안에서 상세로 넘어가고(「목록으로」로 돌아오면 보던 자리), 거기서 두 사람이 각자 좋아요 · 별로와 짧은 메모를 남긴다(누가 남겼는지 보인다).
 
 const MEMO_MAX = 200;   // lib/core/bench.ts MEMO_MAX 와 같게
-interface Data { batches: BatchView[]; reactions: Record<string, ReactionView[]> }
+interface Data { batches: BatchView[]; links: LinkView[]; reactions: Record<string, ReactionView[]> }
+// 격자의 한 장: 수집 자료(BenchItem) 또는 두 사람이 올린 링크(link 가 있고, 공간은 비어 있을 수 있다)
+type Card = Omit<BenchItem, 'space'> & { space: BenchItem['space'] | null; link?: LinkView };
+const linkCard = (l: LinkView): Card => ({
+  id: l.id, title: l.title, source: l.source, url: l.url, image: l.image, space: l.space,
+  fit: l.fit ?? '', takeaways: l.takeaways ?? [], cost: l.cost ?? '', caution: l.caution ?? null, link: l,
+});
+const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url.slice(0, 30); } };
+const NOTE_MAX = 200;   // lib/core/bench.ts NOTE_MAX 와 같게
 const ALL = '__all';
 const SPACE_KEY = 'bench.space';
 // 「2026-10-22」 → 「10월 22일」
 // 공간 「전체」(한 곳이 아니라 집 여러 곳에 해당)는 화면에서 「여러 공간」으로 보인다. 자료의 값은 그대로 둔다.
 const spaceLabel = (s: string) => (s === '전체' ? '여러 공간' : s);
 // 비용 줄: 값이 이미 「비용 · 가격」으로 시작하면 라벨을 빼고, 에어비앤비는 「숙박 요금」. 「언급 없음 · 확인 못함 · 비공개」면 닫힌 줄에서는 감춘다.
-const costView = (it: BenchItem) => {
+const costView = (it: Card) => {
   const v = it.cost?.trim();
   if (!v) return null;
   const label = it.source === '에어비앤비' ? '숙박 요금' : /^(비용|가격)/.test(v) ? '' : '비용';
@@ -60,7 +68,8 @@ export function BenchPanel({ active }: { active: boolean }) {
       const res = await busyFetch('/api/bench', { headers: devHeaders(), cache: 'no-store' });
       if (res.status === 401 || res.status === 403) { setData(null); setState('anon'); return; }
       if (!res.ok) { setState('error'); return; }
-      setData(await res.json());
+      const j = await res.json();
+      setData({ ...j, links: j.links ?? [] });
       setState('idle');
     } catch { setState('error'); }
   }, []);
@@ -108,22 +117,54 @@ export function BenchPanel({ active }: { active: boolean }) {
     if (!ok) setMine(itemId, before);
   }, [me, save, setMine]);
 
+  // 올린 링크 넣기 · 지우기 · 되돌리기(화면에 바로 반영)
+  const addLinkLocal = useCallback((l: LinkView) => setData((d) => (d ? { ...d, links: [l, ...d.links.filter((x) => x.id !== l.id)] } : d)), []);
+  const removeLinkLocal = useCallback((id: string) => setData((d) => (d ? { ...d, links: d.links.filter((x) => x.id !== id) } : d)), []);
+  const removeLink = useCallback(async (l: LinkView) => {
+    try {
+      const res = await busyFetch('/api/bench/links', { method: 'DELETE', headers: { 'content-type': 'application/json', ...devHeaders() }, body: JSON.stringify({ id: l.id }) });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) { toast(typeof j?.message === 'string' ? j.message : '지우지 못했어요.', { kind: 'error' }); return false; }
+    } catch { toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.', { kind: 'error' }); return false; }
+    removeLinkLocal(l.id);
+    toast('링크를 지웠어요.', {
+      ms: 8000,
+      action: {
+        label: '되돌리기',
+        run: () => {
+          void (async () => {
+            try {
+              const res = await busyFetch('/api/bench/links', { method: 'PATCH', headers: { 'content-type': 'application/json', ...devHeaders() }, body: JSON.stringify({ id: l.id }) });
+              const j = await res.json().catch(() => null);
+              if (res.ok && j?.link) addLinkLocal({ ...l, ...j.link });
+              else toast('되돌리지 못했어요.', { kind: 'error' });
+            } catch { toast('되돌리지 못했어요. 인터넷 연결을 확인해 주세요.', { kind: 'error' }); }
+          })();
+        },
+      },
+    });
+    return true;
+  }, [addLinkLocal, removeLinkLocal, toast]);
+
   // 거르기 칸: 자료에 실제로 있는 공간만(정해진 순서대로)
   const spaces = useMemo(() => {
     const order = ['전체', '거실주방', '손님방', '호스트방', '욕실', '현관', '조명·소품'];
-    const have = new Set((data?.batches ?? []).flatMap((b) => b.items.map((it) => it.space)));
-    return order.filter((s) => have.has(s as BenchItem['space']));
+    const have = new Set<string | null>([...(data?.batches ?? []).flatMap((b) => b.items.map((it) => it.space)), ...(data?.links ?? []).map((l) => l.space)]);
+    return order.filter((s) => have.has(s));
   }, [data]);
   const cur = space !== ALL && !spaces.includes(space) ? ALL : space;
-  const pick = (items: BenchItem[]) => (cur === ALL ? items : items.filter((it) => it.space === cur));
+  const pick = <T extends { space: string | null }>(items: T[]) => (cur === ALL ? items : items.filter((it) => it.space === cur));
 
   if (state === 'anon') return <p className="py-6 text-[15px] font-semibold text-slate-500">로그인한 뒤에 볼 수 있어요.</p>;
 
-  const [latest, ...older] = data?.batches ?? [];
-  const detail = openId ? (data?.batches ?? []).flatMap((b) => b.items).find((it) => it.id === openId) ?? null : null;
+  const linkCards = (data?.links ?? []).map(linkCard);
+  const [firstBatch, ...older] = data?.batches ?? [];
+  // 수집 묶음이 아직 없어도 올린 링크가 있으면 격자를 보인다
+  const latest: BatchView | undefined = firstBatch ?? (linkCards.length > 0 ? { collectedAt: '', insights: [], items: [] } : undefined);
+  const detail: Card | null = openId ? [...linkCards, ...(data?.batches ?? []).flatMap((b) => b.items)].find((it) => it.id === openId) ?? null : null;
   return (
     <section ref={rootRef} className="min-w-0" aria-label="꾸미기 참고">
-      {detail && <Detail it={detail} reactions={data!.reactions[detail.id] ?? []} onSave={save} onBack={closeItem} />}
+      {detail && <Detail it={detail} reactions={data!.reactions[detail.id] ?? []} onSave={save} onBack={closeItem} onDeleteLink={detail.link ? async () => { if (await removeLink(detail.link!)) closeItem(); } : undefined} />}
       <div hidden={!!detail}>
       {state === 'loading' && !data && (
         <div role="status" aria-busy="true">
@@ -140,6 +181,7 @@ export function BenchPanel({ active }: { active: boolean }) {
           불러오지 못했어요. <button type="button" className={textBtn} onClick={() => void reload()}>다시 불러오기</button>
         </p>
       )}
+      {data && <LinkAdder onAdded={addLinkLocal} />}
       {data && !latest && (
         <p className="py-4 text-[15px] font-semibold text-slate-500">아직 모은 자료가 없어요. 자료가 모이면 여기에 공간별로 보여요.</p>
       )}
@@ -158,7 +200,7 @@ export function BenchPanel({ active }: { active: boolean }) {
         </div>
       )}
 
-      {latest && <Batch b={latest} items={pick(latest.items)} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} />}
+      {latest && <Batch b={latest} items={[...pick(linkCards), ...pick(latest.items)]} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} />}
 
       {older.length > 0 && (
         <div className="mt-8 border-t border-slate-200 pt-1">
@@ -185,7 +227,7 @@ export function BenchPanel({ active }: { active: boolean }) {
 type SaveFn = (itemId: string, vote: Vote | null, memo: string) => Promise<boolean>;
 
 // 묶음 하나: 공통 패턴 → 사진 벽돌 격자
-function Batch({ b, items, reactions, onOpen, onVote }: { b: BatchView; items: BenchItem[]; reactions: Data['reactions']; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
+function Batch({ b, items, reactions, onOpen, onVote }: { b: BatchView; items: Card[]; reactions: Data['reactions']; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
   const [showInsights, setShowInsights] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const hidden = items.filter((it) => bothDown(reactions[it.id] ?? []));
@@ -265,7 +307,7 @@ const Label = ({ children }: { children: React.ReactNode }) => <p className="tex
 
 // 타일 = 사진 + 제목 한두 줄 + (왼쪽 출처 · 오른쪽 좋아요/별로 단추). 사진 · 제목을 누르면 상세로, 단추는 상세를 열지 않고 바로 저장한다.
 // 단추가 채워져 있으면 내 반응. 상대가 남긴 반응은 단추 아래 작은 글자(「아내 👍」)로, 메모가 있으면 말풍선.
-function Tile({ it, reactions, onOpen, onVote }: { it: BenchItem; reactions: ReactionView[]; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
+function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: ReactionView[]; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
   const mine = reactions.find((r) => r.mine) ?? null;
   const shown = reactions.filter((r) => r.vote || r.memo);
   const others = shown.filter((r) => !r.mine);
@@ -273,8 +315,9 @@ function Tile({ it, reactions, onOpen, onVote }: { it: BenchItem; reactions: Rea
   return (
     <div>
       <button type="button" onClick={() => onOpen(it.id)} className="block w-full text-left">
-        <span className="block overflow-hidden rounded-xl border border-slate-200"><Photo src={it.image} source={it.source} /></span>
+        <span className="block overflow-hidden rounded-xl border border-slate-200"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} /></span>
         <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-[13px] font-bold leading-snug text-slate-900">{it.title}</span>
+        {it.link && <span className="block truncate px-0.5 text-[12px] font-semibold leading-snug text-blue-700 dark:text-blue-300">{withGa(it.link.addedBy)} 올림</span>}
       </button>
       <div className="flex items-center gap-1 px-0.5">
         <span className="min-w-0 flex-1 truncate text-[12px] leading-snug text-slate-500">{it.source}</span>
@@ -313,20 +356,29 @@ function Tile({ it, reactions, onOpen, onVote }: { it: BenchItem; reactions: Rea
 }
 
 // 상세: 같은 패널 안에서 목록을 대신해 보인다. 큰 사진 · 제목 · 맞는 이유 · 따라 할 점 · 비용 · 주의 · 원문 · 내 반응
-function Detail({ it, reactions, onSave, onBack }: { it: BenchItem; reactions: ReactionView[]; onSave: SaveFn; onBack: () => void }) {
+function Detail({ it, reactions, onSave, onBack, onDeleteLink }: { it: Card; reactions: ReactionView[]; onSave: SaveFn; onBack: () => void; onDeleteLink?: () => Promise<void> }) {
   const cost = costView(it);
   return (
     <article aria-label={it.title}>
       <button type="button" onClick={onBack} className={`${textBtn} -ml-1 mb-2 inline-flex min-h-11 items-center`}>
         <i className="fas fa-chevron-left mr-1.5 text-[12px]" aria-hidden />목록으로
       </button>
-      <div className="overflow-hidden rounded-2xl border border-slate-200"><Photo src={it.image} source={it.source} big /></div>
+      <div className="overflow-hidden rounded-2xl border border-slate-200"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} big /></div>
       <h3 className="mt-3 break-words text-[18px] font-bold leading-snug text-slate-900">{it.title}</h3>
       <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-slate-500">
         <span>{it.source}</span>
-        <span className="rounded-md border border-slate-200 px-1.5 py-px text-[12px] font-bold text-slate-600">{spaceLabel(it.space)}</span>
+        {it.space && <span className="rounded-md border border-slate-200 px-1.5 py-px text-[12px] font-bold text-slate-600">{spaceLabel(it.space)}</span>}
+        {it.link && <span>{withGa(it.link.addedBy)} 올림 · {shortDate(it.link.addedAt.slice(0, 10))}</span>}
       </p>
       <div className="mt-4 flex flex-col gap-4">
+        {it.link?.note && (
+          <div><Label>{displayName(it.link.addedBy)}의 메모</Label><p className="mt-0.5 break-words text-[15px] leading-relaxed text-slate-700">{it.link.note}</p></div>
+        )}
+        {it.link && it.link.status !== 'done' && !it.fit && (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] leading-relaxed text-slate-600">
+            <i className="far fa-clock mr-1.5 text-[12px]" aria-hidden />Claude가 곧 설명을 채워요. 101호에 맞는 이유와 따라 할 점이 여기에 들어와요.
+          </p>
+        )}
         {it.fit && (
           <div><Label>101호에 맞는 이유</Label><p className="mt-0.5 break-words text-[15px] leading-relaxed text-slate-700">{it.fit}</p></div>
         )}
@@ -354,6 +406,7 @@ function Detail({ it, reactions, onSave, onBack }: { it: BenchItem; reactions: R
         </a>
       </div>
       <div className="mt-3 rounded-xl border border-slate-100"><Reactions itemId={it.id} title={it.title} list={reactions} onSave={onSave} /></div>
+      {it.link?.mine && onDeleteLink && <DeleteLink title={it.title} onDelete={onDeleteLink} />}
     </article>
   );
 }
@@ -430,5 +483,91 @@ function Reactions({ itemId, title, list, onSave }: { itemId: string; title: str
         </div>
       )}
     </div>
+  );
+}
+
+// 내가 올린 링크 지우기: 확인 창 → 지움(+ 8초 되돌리기 알림)
+function DeleteLink({ title, onDelete }: { title: string; onDelete: () => Promise<void> }) {
+  const { confirm } = useProgress();
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (busy) return;
+    const ok = await confirm({ title: '이 링크를 지울까요?', body: title, note: '지운 직후 8초 동안은 「되돌리기」를 누를 수 있어요.', confirmLabel: '삭제', cancelLabel: '취소', danger: true });
+    if (!ok) return;
+    setBusy(true);
+    await onDelete();
+    setBusy(false);
+  };
+  return (
+    <button type="button" disabled={busy} onClick={() => void go()}
+      className="mt-3 inline-flex min-h-11 items-center gap-1.5 px-1 text-[13px] font-bold text-red-700 hover:underline disabled:opacity-50 dark:text-red-300">
+      <i className="fas fa-trash-can text-[12px]" aria-hidden />내가 올린 링크 지우기
+    </button>
+  );
+}
+
+// 탭 맨 위 「링크 올리기」: 처음엔 접힌 단추. 누르면 링크 · 왜 골랐는지(선택) · 공간(선택). 올리면 서버가 제목 · 사진을 가져오고 격자 맨 앞에 바로 생긴다.
+function LinkAdder({ onAdded }: { onAdded: (l: LinkView) => void }) {
+  const { toast } = useProgress();
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [note, setNote] = useState('');
+  const [space, setSpace] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const dirty = open && (url.trim() !== '' || note.trim() !== '');
+  useDirty('bench:link-add', dirty);
+  const close = () => { setOpen(false); setErr(''); };
+  const onEsc = useFormEsc(dirty, close);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    let u = url.trim();
+    if (!u) { setErr('링크를 붙여 넣어 주세요.'); return; }
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = `https://${u}`;   // 휴대폰에서 https:// 없이 붙여 넣은 경우
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await busyFetch('/api/bench/links', { method: 'POST', headers: { 'content-type': 'application/json', ...devHeaders() }, body: JSON.stringify({ url: u, note: note.trim(), space: space || null }) }, { slow: true });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) { setErr(typeof j?.message === 'string' ? j.message : res.status === 401 || res.status === 403 ? '로그인이 필요해요.' : '올리지 못했어요. 잠시 뒤에 다시 해 주세요.'); return; }
+      onAdded(j.link);
+      toast(j.fetched ? '링크를 올렸어요.' : '링크를 올렸어요. 사진은 가져오지 못해 회색 칸으로 뒀어요.');
+      setUrl(''); setNote(''); setSpace(''); setOpen(false);
+    } catch {
+      setErr('올리지 못했어요. 인터넷 연결을 확인해 주세요.');
+    } finally { setBusy(false); }
+  };
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)}
+        className="mb-2 mt-1 flex min-h-11 w-full items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 text-left text-[14px] font-bold text-blue-700 hover:bg-slate-50 dark:text-blue-300">
+        <i className="fas fa-link text-[13px]" aria-hidden />링크 올리기
+        <span className="ml-auto text-[12px] font-semibold text-slate-500">보다가 마음에 든 집</span>
+      </button>
+    );
+  }
+  return (
+    <form onSubmit={submit} onKeyDown={onEsc} className="mb-3 mt-1 rounded-xl border border-slate-200 p-3">
+      <label className="block text-[13px] font-bold text-slate-600" htmlFor="bench-link-url">링크</label>
+      <input id="bench-link-url" type="url" inputMode="url" autoComplete="off" autoCapitalize="none" autoFocus value={url} onChange={(e) => { setUrl(e.target.value); setErr(''); }}
+        placeholder="인스타 · 오늘의집 · 블로그 주소를 붙여 넣기" className={`${inputCls} mt-1`} />
+      <label className="mt-3 block text-[13px] font-bold text-slate-600" htmlFor="bench-link-note">왜 골랐는지 <span className="font-semibold text-slate-500">(선택)</span></label>
+      <AutoTextarea id="bench-link-note" value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(oneLine(e.target.value))} onKeyDown={enterSubmit}
+        placeholder="예: 조명이 좋아서" className={`${inputCls} mt-1`} />
+      <label className="mt-3 block text-[13px] font-bold text-slate-600" htmlFor="bench-link-space">공간 <span className="font-semibold text-slate-500">(선택)</span></label>
+      <select id="bench-link-space" value={space} onChange={(e) => setSpace(e.target.value)} className={`${inputCls} mt-1`}>
+        <option value="">고르지 않음</option>
+        {['거실주방', '손님방', '호스트방', '욕실', '현관', '조명·소품', '전체'].map((k) => <option key={k} value={k}>{spaceLabel(k)}</option>)}
+      </select>
+      {err && <p role="alert" className="mt-2 text-[14px] font-bold text-red-700 dark:text-red-300">{err}</p>}
+      <div className="mt-3 flex items-center justify-end gap-2">
+        {busy && <span role="status" className="mr-auto text-[13px] font-semibold text-slate-500">사진을 가져오는 중…</span>}
+        <button type="button" className={btnGhost} onClick={close}>취소</button>
+        <button type="submit" className={btnPrimary} disabled={busy || !url.trim()}>올리기</button>
+      </div>
+    </form>
   );
 }

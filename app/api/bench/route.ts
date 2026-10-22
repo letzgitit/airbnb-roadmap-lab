@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getActor } from '@/lib/session';
-import { BenchError, listBatches, listReactions, setReaction, toBatchView, toReactionView, type ReactionView } from '@/lib/core/bench';
+import { BenchError, listBatches, listLinks, listReactions, setReaction, toBatchView, toLinkView, toReactionView, type ReactionView } from '@/lib/core/bench';
 import { checkWriteRequest, NO_STORE } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
@@ -8,16 +8,16 @@ export const dynamic = 'force-dynamic';
 const deny = (status: 401 | 403) => NextResponse.json({ error: status === 401 ? 'unauthorized' : 'forbidden' }, { status, headers: NO_STORE });
 
 // 「꾸미기 참고」 묶음(최신 수집일이 위)과 두 사람의 반응. 로그인한 두 사람만(로그인 안 했으면 401, 허용 밖이면 403).
-// 묶음은 CLI(scripts/bench.mjs)로만 넣는다. 화면에서는 반응만 남긴다.
+// 묶음은 CLI(scripts/bench.mjs)로만 넣는다. 화면에서는 반응을 남기고, 링크는 /api/bench/links 로 올린다(links 는 올린 링크, 최신이 위).
 export async function GET(req: Request) {
   const a = await getActor(req);
   if (!a.ok) return deny(a.status);
   try {
-    const [batches, reactions] = await Promise.all([listBatches(), listReactions()]);
+    const [batches, reactions, links] = await Promise.all([listBatches(), listReactions(), listLinks()]);
     const byItem: Record<string, ReactionView[]> = {};
     for (const r of reactions) (byItem[r.itemId] ??= []).push(toReactionView(r, a.actor.email));
     for (const list of Object.values(byItem)) list.sort((x, y) => Number(y.mine) - Number(x.mine) || x.updatedAt.localeCompare(y.updatedAt));
-    return NextResponse.json({ batches: batches.map(toBatchView), reactions: byItem }, { headers: NO_STORE });
+    return NextResponse.json({ batches: batches.map(toBatchView), links: links.map((l) => toLinkView(l, a.actor.email)), reactions: byItem }, { headers: NO_STORE });
   } catch (e) {
     console.error('bench list failed:', e instanceof Error ? e.message : 'unknown');
     return NextResponse.json({ error: 'server_error' }, { status: 500, headers: NO_STORE });

@@ -18,12 +18,31 @@ node scripts/bench.mjs add 묶음.json --replace --yes     # 같은 수집일 �
 node scripts/bench.mjs delete 2026-10-22 --yes           # 묶음 지우기(되살릴 수 없음, 반응은 남음)
 ```
 
+## 올린 링크 (두 사람이 화면에서 올린 참고 자료)
+
+꾸미기 참고 탭 맨 위 「링크 올리기」로 올린 링크는 처음엔 설명이 비어 있습니다(`status: pending`). Claude가 3일 작업에서 읽고 채웁니다.
+
+```bash
+node scripts/bench.mjs links --pending [--json]            # 설명이 비어 있는 올린 링크(id · 주소 · 올린 사람 · 한 줄 메모 · 그림 유무)
+node scripts/bench.mjs links-fill 채우기.json --dry-run     # 형식 · 대상 검사만
+node scripts/bench.mjs links-fill 채우기.json --yes         # 채우고 status 를 done 으로(운영은 --yes 필요)
+```
+
+```json
+[ { "id": "b_link_1a2b3c4d5e", "fit": "101호에 맞는 이유", "takeaways": ["따라 할 점"], "cost": "", "caution": null,
+    "space": "거실주방", "title": "(선택) 제목 바로잡기", "image": "(선택) https://… 또는 null" } ]
+```
+
+- `fit`은 꼭 필요. 한도는 묶음 항목과 같습니다. 없거나 지워진 링크는 건너뛰고 결과에 적습니다.
+- 올린 링크의 id는 `b_link_` + 주소 해시 10자리라 같은 주소면 늘 같습니다. 반응(좋아요 · 별로 · 메모)은 이 id에 붙습니다.
+- 화면에서 지운 링크는 흔적(`deletedAt`)만 남기고 감춥니다(되돌리기 가능). `links`에는 안 나옵니다.
+
 ## 묶음 모양
 
 ```json
 { "collectedAt": "2026-10-22",
   "insights": [ { "title": "공통 패턴 한 줄", "detail": "설명" } ],
-  "items": [ { "id": "b_…", "title": "", "source": "오늘의집|에어비앤비|블로그|브런치|유튜브|인스타|스레드|기타",
+  "items": [ { "id": "b_…", "title": "", "source": "오늘의집|에어비앤비|블로그|브런치|유튜브|인스타|스레드|핀터레스트|기타",
     "url": "https://…", "image": "https://… 또는 null", "space": "전체|거실주방|손님방|호스트방|욕실|현관|조명·소품",
     "fit": "101호에 맞는 이유", "takeaways": ["따라 할 점"], "cost": "", "caution": "또는 null" } ] }
 ```
@@ -39,7 +58,9 @@ node scripts/bench.mjs delete 2026-10-22 --yes           # 묶음 지우기(되�
 | 키 | 종류 | 필드 → 값 |
 |---|---|---|
 | `oedomin:bench:batches` | 해시 | 수집일 → 묶음 JSON(+ `addedAt` · `addedBy`) |
+| `oedomin:bench:links` | 해시 | 링크 id → `{ id, url, title, image, space\|null, note, addedBy, addedByEmail, addedAt, status: pending\|done, fit?, takeaways?, cost?, caution?, source, deletedAt? }` |
 | `oedomin:bench:reactions` | 해시 | `<항목 id>\|<이메일>` → `{ itemId, email, name, vote: up\|down\|null, memo, updatedAt }` |
 
-현황 문서(`oedomin:progress:v1`)와 따로라 현황 version · 병합 규칙과 상관없습니다. 로컬 연습은 `.data/bench/batches.json` · `reactions.json`.
+현황 문서(`oedomin:progress:v1`)와 따로라 현황 version · 병합 규칙과 상관없습니다. 로컬 연습은 `.data/bench/batches.json` · `links.json` · `reactions.json`.
+링크 올리기 · 지우기는 `POST` · `DELETE` · `PATCH /api/bench/links`(로그인 · 같은 사이트 요청만). 서버가 주소를 읽는 안전 검사(사설 IP 거절 · 리다이렉트 3번 · 5초 · 1MB)는 `lib/core/link-preview.ts`.
 반응은 사이트에서만 남깁니다(`PUT /api/bench`, 로그인한 두 사람, 같은 사이트 요청만). 화면에는 이메일 대신 이름과 「내 것인지」만 보냅니다.

@@ -20,8 +20,11 @@ function usage(msg) {
   node scripts/bench.mjs get [--json]
   node scripts/bench.mjs add <묶음.json> [--replace] [--by <이름>] [--dry-run] [--yes]
   node scripts/bench.mjs delete <YYYY-MM-DD> [--yes]
+  node scripts/bench.mjs links [--pending] [--json]
+  node scripts/bench.mjs links-fill <파일.json> [--dry-run] [--yes]
   --dry-run  형식만 검사하고 쓰지 않음
   --replace  같은 수집일(collectedAt) 묶음이 이미 있으면 바꿔 넣기(없으면 멈춤)
+  --pending  (links) 설명이 아직 비어 있는 올린 링크만
   --yes      원격(운영) 저장소에 실제로 쓸 때 필요
 자세한 내용: scripts/README-bench.md`);
   process.exit(2);
@@ -30,7 +33,7 @@ function usage(msg) {
 // ── 인자 ──
 const [cmd, ...rest] = process.argv.slice(2);
 const VALUE_FLAGS = new Set(['--by']);
-const KNOWN = new Set(['--json', '--yes', '--dry-run', '--replace', ...VALUE_FLAGS]);
+const KNOWN = new Set(['--json', '--yes', '--dry-run', '--replace', '--pending', ...VALUE_FLAGS]);
 const opts = {};
 const pos = [];
 for (let i = 0; i < rest.length; i++) {
@@ -71,7 +74,7 @@ try {
       console.log(JSON.stringify(batches.map((b) => ({ ...b, items: b.items.map((it) => ({ ...it, reactions: byItem.get(it.id) ?? [] })) })), null, 2));
       process.exit(0);
     }
-    console.log(`묶음 ${batches.length}개 · 항목 ${batches.reduce((n, b) => n + b.items.length, 0)}건 · 반응 ${reactions.length}건`);
+    console.log(`묶음 ${batches.length}개 · 항목 ${batches.reduce((n, b) => n + b.items.length, 0)}건 · 반응 ${reactions.length}건 · 올린 링크 ${(await B.listLinks()).length}건(자세히: links)`);
     for (const b of batches) {
       console.log(`\n[${b.collectedAt}] 항목 ${b.items.length}건 · 공통 패턴 ${b.insights.length}개  (넣은 사람 ${b.addedBy}, ${b.addedAt.slice(0, 16)})`);
       for (const ins of b.insights) console.log(`  * ${ins.title}`);
@@ -104,6 +107,33 @@ try {
     if (!cur) throw new Error(`묶음을 찾지 못했습니다: ${day}`);
     if (!needYes([`묶음 지우기(되살릴 수 없음): ${day} 항목 ${cur.items.length}건. 반응은 남습니다.`])) process.exit(0);
     console.log(JSON.stringify({ ok: await B.deleteBatch(day), collectedAt: day }));
+  } else if (cmd === 'links') {
+    let links = await B.listLinks();
+    if (opts['--pending']) links = links.filter((l) => l.status === 'pending');
+    if (opts['--json']) {
+      const rx = await B.listReactions();
+      // 이메일 포함 — 터미널 전용
+      console.log(JSON.stringify(links.map((l) => ({ ...l, reactions: rx.filter((r) => r.itemId === l.id) })), null, 2));
+      process.exit(0);
+    }
+    console.log(`올린 링크 ${links.length}건${opts['--pending'] ? ' (설명 비어 있는 것만)' : ''}`);
+    for (const l of links) {
+      console.log(`  - ${l.id}  [${l.status === 'done' ? '채움' : '비어 있음'} · ${l.space ?? '공간 미정'} · ${l.source}] ${l.title}`);
+      console.log(`      ${l.url}`);
+      console.log(`      ${l.addedBy}${l.note ? ` — ${l.note}` : ''}  (${l.addedAt.slice(0, 16)})  그림 ${l.image ? '있음' : '없음'}`);
+    }
+  } else if (cmd === 'links-fill') {
+    if (!pos[0]) usage('채울 내용 JSON 파일 경로가 필요합니다.');
+    const fills = B.parseLinkFills(JSON.parse(fs.readFileSync(path.resolve(userCwd, pos[0]), 'utf8')));   // 형식이 틀리면 여기서 멈춘다
+    const plan = await B.planLinkFills(fills);
+    const lines = [
+      `올린 링크 설명 채우기: ${plan.ok.length}건 채움 · ${plan.skipped.length}건 건너뜀`,
+      ...plan.ok.map(({ fill, link }) => `채움  ${fill.id}  ${fill.title ?? link.title}`),
+      ...plan.skipped.map((x) => `건너뜀  ${x.id} (${x.reason})`),
+    ];
+    if (!needYes(lines)) { console.log(JSON.stringify({ store: store.kind, written: false, dryRun: true, fill: plan.ok.map((o) => o.fill.id), skipped: plan.skipped })); process.exit(0); }
+    const r = await B.applyLinkFills(fills);
+    console.log(JSON.stringify({ store: store.kind, written: true, filled: r.filled, skipped: r.skipped }));
   } else usage(cmd ? `모르는 명령 ${cmd}` : undefined);
 } catch (e) {
   console.error(e instanceof Error ? e.message : e);
