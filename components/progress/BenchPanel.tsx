@@ -34,7 +34,7 @@ const bothDown = (list: ReactionView[]) => {
 const dateLabel = (d: string) => { const [, m, day] = d.split('-'); return m && day ? `${Number(m)}월 ${Number(day)}일` : d; };
 
 export function BenchPanel({ active }: { active: boolean }) {
-  const { toast } = useProgress();
+  const { toast, me } = useProgress();
   const [data, setData] = useState<Data | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'error' | 'anon'>('idle');
   const started = useRef(false);
@@ -84,6 +84,29 @@ export function BenchPanel({ active }: { active: boolean }) {
       return false;
     }
   }, [toast]);
+
+  // 타일에서 바로 누르기: 화면에 먼저 반영하고 저장한다. 실패하면 누르기 전으로 되돌리고 안내한다. 메모는 그대로 둔다.
+  const dataRef = useRef<Data | null>(null);
+  useEffect(() => { dataRef.current = data; }, [data]);
+  const pending = useRef(new Set<string>());
+  const setMine = useCallback((itemId: string, mine: ReactionView | null) => {
+    setData((d) => {
+      if (!d) return d;
+      const others = (d.reactions[itemId] ?? []).filter((r) => !r.mine);
+      return { ...d, reactions: { ...d.reactions, [itemId]: mine ? [mine, ...others] : others } };
+    });
+  }, []);
+  const quickVote = useCallback(async (itemId: string, v: Vote) => {
+    if (pending.current.has(itemId)) return;
+    const before = (dataRef.current?.reactions[itemId] ?? []).find((r) => r.mine) ?? null;
+    const next: Vote | null = before?.vote === v ? null : v;
+    const memo = before?.memo ?? '';
+    pending.current.add(itemId);
+    setMine(itemId, next || memo ? { name: before?.name ?? me?.name ?? '', vote: next, memo, updatedAt: new Date().toISOString(), mine: true } : null);
+    const ok = await save(itemId, next, memo);
+    pending.current.delete(itemId);
+    if (!ok) setMine(itemId, before);
+  }, [me, save, setMine]);
 
   // 거르기 칸: 자료에 실제로 있는 공간만(정해진 순서대로)
   const spaces = useMemo(() => {
@@ -135,7 +158,7 @@ export function BenchPanel({ active }: { active: boolean }) {
         </div>
       )}
 
-      {latest && <Batch b={latest} items={pick(latest.items)} reactions={data!.reactions} onOpen={openItem} />}
+      {latest && <Batch b={latest} items={pick(latest.items)} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} />}
 
       {older.length > 0 && (
         <div className="mt-8 border-t border-slate-200 pt-1">
@@ -148,7 +171,7 @@ export function BenchPanel({ active }: { active: boolean }) {
                   <span className="min-w-0 flex-1 text-[15px] font-bold text-slate-800">{dateLabel(b.collectedAt)} 모음 <span className="ml-1 text-[13px] font-semibold text-slate-500">{b.items.length}건</span></span>
                   <i className={`fas ${on ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
                 </button>
-                {on && <div className="pb-6"><Batch b={b} items={pick(b.items)} reactions={data!.reactions} onOpen={openItem} /></div>}
+                {on && <div className="pb-6"><Batch b={b} items={pick(b.items)} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} /></div>}
               </div>
             );
           })}
@@ -162,7 +185,7 @@ export function BenchPanel({ active }: { active: boolean }) {
 type SaveFn = (itemId: string, vote: Vote | null, memo: string) => Promise<boolean>;
 
 // 묶음 하나: 공통 패턴 → 사진 벽돌 격자
-function Batch({ b, items, reactions, onOpen }: { b: BatchView; items: BenchItem[]; reactions: Data['reactions']; onOpen: (id: string) => void }) {
+function Batch({ b, items, reactions, onOpen, onVote }: { b: BatchView; items: BenchItem[]; reactions: Data['reactions']; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
   const [showInsights, setShowInsights] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const hidden = items.filter((it) => bothDown(reactions[it.id] ?? []));
@@ -195,7 +218,7 @@ function Batch({ b, items, reactions, onOpen }: { b: BatchView; items: BenchItem
         ? <p className="py-2 text-[15px] font-semibold text-slate-500">이 공간 자료는 이 모음에 없어요.</p>
         : shownItems.length > 0 && (
           <ul className="columns-2 gap-3 min-[560px]:columns-3">
-            {shownItems.map((it) => <li key={it.id} className="mb-4 min-w-0 break-inside-avoid"><Tile it={it} reactions={reactions[it.id] ?? []} onOpen={onOpen} /></li>)}
+            {shownItems.map((it) => <li key={it.id} className="mb-4 min-w-0 break-inside-avoid"><Tile it={it} reactions={reactions[it.id] ?? []} onOpen={onOpen} onVote={onVote} /></li>)}
           </ul>
         )}
       {hidden.length > 0 && (
@@ -206,7 +229,7 @@ function Batch({ b, items, reactions, onOpen }: { b: BatchView; items: BenchItem
           </button>
           {showHidden && (
             <ul className="columns-2 gap-3 pt-1 opacity-70 min-[560px]:columns-3">
-              {hidden.map((it) => <li key={it.id} className="mb-4 min-w-0 break-inside-avoid"><Tile it={it} reactions={reactions[it.id] ?? []} onOpen={onOpen} /></li>)}
+              {hidden.map((it) => <li key={it.id} className="mb-4 min-w-0 break-inside-avoid"><Tile it={it} reactions={reactions[it.id] ?? []} onOpen={onOpen} onVote={onVote} /></li>)}
             </ul>
           )}
         </div>
@@ -240,34 +263,52 @@ function Photo({ src, source, big }: { src: string | null; source: string; big?:
 
 const Label = ({ children }: { children: React.ReactNode }) => <p className="text-[13px] font-bold text-slate-500">{children}</p>;
 
-// 타일 아래 아주 작은 반응 표시: 좋아요 · 별로 · 메모 있음을 아이콘으로만(누가 남겼는지는 상세에서)
-function ReactionBrief({ list }: { list: ReactionView[] }) {
-  const shown = list.filter((r) => r.vote || r.memo);
-  if (shown.length === 0) return null;
+// 타일 = 사진 + 제목 한두 줄 + (왼쪽 출처 · 오른쪽 좋아요/별로 단추). 사진 · 제목을 누르면 상세로, 단추는 상세를 열지 않고 바로 저장한다.
+// 단추가 채워져 있으면 내 반응. 상대가 남긴 반응은 단추 아래 작은 글자(「아내 👍」)로, 메모가 있으면 말풍선.
+function Tile({ it, reactions, onOpen, onVote }: { it: BenchItem; reactions: ReactionView[]; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
+  const mine = reactions.find((r) => r.mine) ?? null;
+  const shown = reactions.filter((r) => r.vote || r.memo);
+  const others = shown.filter((r) => !r.mine);
+  const myMemo = !!mine?.memo;
   return (
-    <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-[12px] text-slate-500">
-      {shown.map((r, i) => (
-        <span key={i} className="inline-flex items-center gap-0.5">
-          {r.vote && <i className={`fas ${r.vote === 'up' ? 'fa-thumbs-up text-blue-700 dark:text-blue-300' : 'fa-thumbs-down text-slate-500'}`} aria-hidden />}
-          {r.memo && <i className="far fa-comment" aria-hidden />}
-          <span className="sr-only">{displayName(r.name)} {r.vote ? VOTE_LABEL[r.vote] : ''}{r.memo ? ' 메모 있음' : ''}</span>
+    <div>
+      <button type="button" onClick={() => onOpen(it.id)} className="block w-full text-left">
+        <span className="block overflow-hidden rounded-xl border border-slate-200"><Photo src={it.image} source={it.source} /></span>
+        <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-[13px] font-bold leading-snug text-slate-900">{it.title}</span>
+      </button>
+      <div className="flex items-center gap-1 px-0.5">
+        <span className="min-w-0 flex-1 truncate text-[12px] leading-snug text-slate-500">{it.source}</span>
+        <span role="group" aria-label="내 반응" className="-mr-1 flex shrink-0 items-center">
+          {(['up', 'down'] as const).map((v) => {
+            const on = mine?.vote === v;
+            return (
+              <button key={v} type="button" aria-pressed={on} aria-label={`${VOTE_LABEL[v]}${on ? ' (누르면 취소)' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onVote(it.id, v); }}
+                className="flex size-10 items-center justify-center rounded-full">
+                <span className={`flex size-8 items-center justify-center rounded-full border text-[14px] ${on
+                  ? (v === 'up' ? 'border-blue-600 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-400 dark:text-slate-900' : 'border-slate-500 bg-slate-500 text-white dark:border-slate-400 dark:bg-slate-400 dark:text-slate-900')
+                  : 'border-slate-200 text-slate-500'}`}>
+                  <i className={`${on ? 'fas' : 'far'} ${v === 'up' ? 'fa-thumbs-up' : 'fa-thumbs-down'}`} aria-hidden />
+                </span>
+              </button>
+            );
+          })}
         </span>
-      ))}
-    </span>
-  );
-}
-
-// 타일 = 사진 + 제목 한두 줄 + 작은 출처 · 반응. 누르면 상세로 넘어간다.
-function Tile({ it, reactions, onOpen }: { it: BenchItem; reactions: ReactionView[]; onOpen: (id: string) => void }) {
-  return (
-    <button type="button" onClick={() => onOpen(it.id)} className="block w-full text-left">
-      <span className="block overflow-hidden rounded-xl border border-slate-200"><Photo src={it.image} source={it.source} /></span>
-      <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-[13px] font-bold leading-snug text-slate-900">{it.title}</span>
-      <span className="mt-0.5 flex items-center gap-2 px-0.5 text-[12px] leading-snug text-slate-500">
-        <span className="min-w-0 truncate">{it.source}</span>
-        <ReactionBrief list={reactions} />
-      </span>
-    </button>
+      </div>
+      {(others.length > 0 || myMemo) && (
+        <p className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 px-0.5 text-[12px] font-semibold leading-snug text-slate-600">
+          {others.map((r, i) => (
+            <span key={i} className="inline-flex items-center gap-1">
+              {displayName(r.name)}
+              {r.vote && <i className={`fas ${r.vote === 'up' ? 'fa-thumbs-up text-blue-700 dark:text-blue-300' : 'fa-thumbs-down text-slate-500'}`} aria-hidden />}
+              {r.memo && <i className="far fa-comment text-slate-500" aria-hidden />}
+              <span className="sr-only">{r.vote ? VOTE_LABEL[r.vote] : ''}{r.memo ? ' 메모 있음' : ''}</span>
+            </span>
+          ))}
+          {myMemo && <span className="inline-flex items-center gap-1 text-slate-500"><i className="far fa-comment" aria-hidden />내 메모<span className="sr-only"> 있음</span></span>}
+        </p>
+      )}
+    </div>
   );
 }
 
