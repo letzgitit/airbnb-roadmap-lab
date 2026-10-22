@@ -17,6 +17,15 @@ interface Data { batches: BatchView[]; reactions: Record<string, ReactionView[]>
 const ALL = '__all';
 const SPACE_KEY = 'bench.space';
 // 「2026-10-22」 → 「10월 22일」
+// 공간 「전체」(한 곳이 아니라 집 여러 곳에 해당)는 화면에서 「여러 공간」으로 보인다. 자료의 값은 그대로 둔다.
+const spaceLabel = (s: string) => (s === '전체' ? '여러 공간' : s);
+// 비용 줄: 값이 이미 「비용 · 가격」으로 시작하면 라벨을 빼고, 에어비앤비는 「숙박 요금」. 「언급 없음 · 확인 못함 · 비공개」면 닫힌 줄에서는 감춘다.
+const costView = (it: BenchItem) => {
+  const v = it.cost?.trim();
+  if (!v) return null;
+  const label = it.source === '에어비앤비' ? '숙박 요금' : /^(비용|가격)/.test(v) ? '' : '비용';
+  return { label, text: v, weak: /언급 없음|확인 못함|비공개/.test(v) };
+};
 const dateLabel = (d: string) => { const [, m, day] = d.split('-'); return m && day ? `${Number(m)}월 ${Number(day)}일` : d; };
 
 export function BenchPanel({ active }: { active: boolean }) {
@@ -74,16 +83,14 @@ export function BenchPanel({ active }: { active: boolean }) {
   const [latest, ...older] = data?.batches ?? [];
   return (
     <section className="min-w-0" aria-label="꾸미기 참고">
-      <p className="pb-3 pt-1 text-[13px] font-semibold leading-snug text-slate-500">다른 집은 이렇게 꾸몄어요. 마음에 드는지 각자 남겨 두면 같이 볼 수 있어요.</p>
-
       {state === 'loading' && !data && (
         <div role="status" aria-busy="true">
           <span className="sr-only">불러오는 중…</span>
           <div aria-hidden className="divide-y divide-slate-200 border-y border-slate-200">
             {[0, 1, 2].map((k) => (
               <div key={k} className="flex gap-3 py-3.5">
-                <span className="skeleton block h-[72px] w-[72px] shrink-0 rounded-md bg-slate-100" />
                 <div className="min-w-0 flex-1"><span className="skeleton block h-4 w-3/4 rounded bg-slate-100" /><span className="skeleton mt-2 block h-4 w-full rounded bg-slate-100" /><span className="skeleton mt-2 block h-3 w-1/3 rounded bg-slate-100" /></div>
+                <span className="skeleton block h-[72px] w-[72px] shrink-0 rounded-lg bg-slate-100" />
               </div>
             ))}
           </div>
@@ -99,13 +106,13 @@ export function BenchPanel({ active }: { active: boolean }) {
       )}
 
       {latest && spaces.length > 1 && (
-        <div role="group" aria-label="공간 거르기" className="-mx-1 mb-4 flex flex-wrap gap-1.5 px-1">
+        <div role="group" aria-label="공간 거르기" className="-mx-5 mb-2 mt-1 flex gap-1.5 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[ALL, ...spaces].map((s) => {
             const on = cur === s;
             return (
               <button key={s} type="button" aria-pressed={on} onClick={() => setSpace(s)}
-                className={`min-h-11 rounded-xl border px-3 text-[14px] ${on ? 'border-slate-300 bg-slate-200 font-bold text-slate-900' : 'border-slate-200 bg-white font-semibold text-slate-600 hover:bg-slate-50'}`}>
-                {s === ALL ? '모두' : s === '전체' ? '집 전체' : s}
+                className={`min-h-11 shrink-0 whitespace-nowrap rounded-xl border px-3 text-[14px] ${on ? 'border-slate-300 bg-slate-200 font-bold text-slate-900' : 'border-slate-200 bg-white font-semibold text-slate-600 hover:bg-slate-50'}`}>
+                {s === ALL ? '모두' : spaceLabel(s)}
               </button>
             );
           })}
@@ -139,22 +146,29 @@ type SaveFn = (itemId: string, vote: Vote | null, memo: string) => Promise<boole
 
 // 묶음 하나: 공통 패턴 → 카드
 function Batch({ b, items, reactions, onSave }: { b: BatchView; items: BenchItem[]; reactions: Data['reactions']; onSave: SaveFn }) {
+  const [showInsights, setShowInsights] = useState(false);
   return (
     <div>
       {b.insights.length > 0 && (
-        <div className="mb-5">
-          <h3 className="flex items-baseline gap-2 text-[17px] font-bold text-slate-900">공통 패턴<span className="text-[13px] font-semibold text-slate-500">{dateLabel(b.collectedAt)} 모음</span></h3>
-          <ol className="mt-2 space-y-2.5">
-            {b.insights.map((ins, i) => (
-              <li key={i} className="flex gap-2.5">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-bold text-slate-600">{i + 1}</span>
-                <div className="min-w-0">
-                  <p className="text-[15px] font-bold leading-snug text-slate-800">{ins.title}</p>
-                  {ins.detail && <p className="mt-0.5 text-[14px] leading-relaxed text-slate-600">{ins.detail}</p>}
-                </div>
-              </li>
-            ))}
-          </ol>
+        <div className="mb-3 border-b border-slate-200">
+          <button type="button" aria-expanded={showInsights} onClick={() => setShowInsights((v) => !v)}
+            className="flex min-h-11 w-full items-center gap-3 py-2 text-left">
+            <span className="min-w-0 flex-1 text-[15px] font-bold text-slate-800">여러 집 공통점 {b.insights.length}개<span className="ml-2 text-[13px] font-semibold text-slate-500">{dateLabel(b.collectedAt)} 모음</span></span>
+            <i className={`fas ${showInsights ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
+          </button>
+          {showInsights && (
+            <ul className="space-y-2.5 pb-4 pt-1">
+              {b.insights.map((ins, i) => (
+                <li key={i} className="flex gap-2.5">
+                  <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-slate-400" aria-hidden />
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold leading-snug text-slate-800">{ins.title}</p>
+                    {ins.detail && <p className="mt-0.5 text-[14px] leading-relaxed text-slate-600">{ins.detail}</p>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {items.length === 0
@@ -173,7 +187,7 @@ function Thumb({ src, source }: { src: string | null; source: string }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100" aria-hidden>
+    <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100" aria-hidden>
       {src && !failed ? (
         <>
           {!loaded && <span className="skeleton absolute inset-0" />}
@@ -198,7 +212,7 @@ function ReactionBrief({ list }: { list: ReactionView[] }) {
   const shown = list.filter((r) => r.vote || r.memo);
   if (shown.length === 0) return null;
   return (
-    <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] leading-snug text-slate-600">
+    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] leading-snug text-slate-600">
       {shown.map((r, i) => (
         <span key={i} className="inline-flex items-center gap-1 font-semibold">
           {r.vote && <i className={`fas ${r.vote === 'up' ? 'fa-thumbs-up text-blue-700 dark:text-blue-300' : 'fa-thumbs-down text-slate-500'} text-[12px]`} aria-hidden />}
@@ -208,30 +222,31 @@ function ReactionBrief({ list }: { list: ReactionView[] }) {
           {r.memo && <span className="sr-only">메모 있음</span>}
         </span>
       ))}
-    </p>
+    </span>
   );
 }
 
-// 한 줄 = 자료 하나: 작은 사진 + 제목 · 출처 · 맞는 이유 · 비용 · 반응. 누르면 그 자리에서 펼쳐 따라 할 점 · 주의 · 원문 · 내 반응이 나온다.
+// 한 줄 = 자료 하나: 제목 · 맞는 이유 · 비용 · (출처 · 공간 · 반응) + 오른쪽 작은 사진. 누르면 그 자리에서 펼쳐 따라 할 점 · 주의 · 원문 · 내 반응이 나온다.
 function Row({ it, reactions, onSave }: { it: BenchItem; reactions: ReactionView[]; onSave: SaveFn }) {
   const [open, setOpen] = useState(false);
   const panelId = `bench-${it.id}`;
+  const cost = costView(it);
   const clamp = (n: number) => (open ? 'block' : n === 1 ? 'line-clamp-1' : 'line-clamp-2');
   return (
     <article>
       <button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}
         className="flex min-h-[88px] w-full items-start gap-3 py-3.5 text-left hover:bg-slate-50/60">
-        <Thumb src={it.image} source={it.source} />
         <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap gap-1.5 text-[12px] font-bold">
-            <span className="rounded-md bg-slate-100 px-1.5 py-px text-slate-700">{it.source}</span>
-            <span className="rounded-md border border-slate-200 px-1.5 py-px text-slate-600">{it.space === '전체' ? '집 전체' : it.space}</span>
+          <span className={`break-words text-[16px] font-bold leading-snug text-slate-900 ${clamp(2)}`}>{it.title}</span>
+          {it.fit && <span className={`mt-0.5 break-words text-[15px] leading-normal text-slate-600 ${clamp(2)}`}><span className="sr-only">101호에 맞는 이유: </span>{it.fit}</span>}
+          {cost && (open || !cost.weak) && <span className={`mt-1 break-words text-[13px] leading-snug text-slate-500 ${clamp(1)}`}>{cost.label && <span className="font-bold">{cost.label} </span>}{cost.text}</span>}
+          <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-slate-500">
+            <span>{it.source}</span>
+            <span className="rounded-md border border-slate-200 px-1.5 py-px text-[12px] font-bold text-slate-600">{spaceLabel(it.space)}</span>
+            {!open && <ReactionBrief list={reactions} />}
           </span>
-          <span className={`mt-1 break-words text-[16px] font-bold leading-snug text-slate-900 ${clamp(2)}`}>{it.title}</span>
-          {it.fit && <span className={`mt-0.5 break-words text-[14px] leading-snug text-slate-600 ${clamp(2)}`}><span className="sr-only">101호에 맞는 이유: </span>{it.fit}</span>}
-          {it.cost && <span className={`mt-1 break-words text-[13px] leading-snug text-slate-500 ${clamp(1)}`}><span className="font-bold">비용</span> {it.cost}</span>}
-          {!open && <ReactionBrief list={reactions} />}
         </span>
+        <Thumb src={it.image} source={it.source} />
         <i className={`fas ${open ? 'fa-chevron-up' : 'fa-chevron-down'} mt-1 shrink-0 text-[12px] text-slate-500`} aria-hidden />
       </button>
       {open && (
@@ -294,7 +309,7 @@ function Reactions({ itemId, title, list, onSave }: { itemId: string; title: str
   const startMemo = () => { setMemo(mine?.memo ?? ''); setEditing(true); };
 
   return (
-    <div className="border-t border-slate-100 px-4 pb-2 pt-2">
+    <div className="px-4 pb-2 pt-2">
       {list.length > 0 && (
         <ul className="mb-1" aria-label="남긴 반응">
           {list.map((r, i) => (
