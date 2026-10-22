@@ -50,7 +50,7 @@ export function useProgress(): Ctx {
 const POLL_MS = 10_000;
 const PRESENCE_MS = 12_000;
 
-function devHeaders(): Record<string, string> {
+export function devHeaders(): Record<string, string> {
   // 개발 서버에서만 의미가 있다(서버가 production 에선 무시한다). 두 사람 흉내용: ?as=<이메일>
   // 프로덕션 빌드에선 이 줄에서 끝나 헤더 이름조차 번들에 남지 않는다.
   if (process.env.NODE_ENV !== 'development' || typeof window === 'undefined') return {};

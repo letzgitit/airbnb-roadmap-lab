@@ -1,0 +1,111 @@
+#!/usr/bin/env node
+// 「꾸미기 참고」(인테리어 벤치마킹 모음) 묶음을 터미널에서 넣고 · 보는 CLI. 사이트 API 와 같은 처리(lib/core/bench.ts)를 쓴다.
+// 저장소: 환경변수에 Upstash(KV_REST_API_* 또는 UPSTASH_REDIS_REST_*)가 있으면 원격(운영), 없으면 .data/bench/ (로컬 연습용)
+// 어느 저장소에 붙었는지는 매번 stderr 첫 줄에 찍힌다. 원격(운영)에 쓰려면 --yes 가 필요하다.
+// 🔴 수집 결과(우리 집 이야기 포함)는 공개 저장소에 두지 않는다. 묶음 JSON 은 저장소 밖(예: 스크래치패드)에 둔다.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const userCwd = process.cwd();
+process.chdir(root);
+for (const f of ['.env.local', '.env']) { try { process.loadEnvFile(path.join(root, f)); } catch { /* 없으면 건너뜀 */ } }
+
+const B = await import('../lib/core/bench.ts');
+
+function usage(msg) {
+  if (msg) console.error(`오류: ${msg}\n`);
+  console.error(`사용법:
+  node scripts/bench.mjs get [--json]
+  node scripts/bench.mjs add <묶음.json> [--replace] [--by <이름>] [--dry-run] [--yes]
+  node scripts/bench.mjs delete <YYYY-MM-DD> [--yes]
+  --dry-run  형식만 검사하고 쓰지 않음
+  --replace  같은 수집일(collectedAt) 묶음이 이미 있으면 바꿔 넣기(없으면 멈춤)
+  --yes      원격(운영) 저장소에 실제로 쓸 때 필요
+자세한 내용: scripts/README-bench.md`);
+  process.exit(2);
+}
+
+// ── 인자 ──
+const [cmd, ...rest] = process.argv.slice(2);
+const VALUE_FLAGS = new Set(['--by']);
+const KNOWN = new Set(['--json', '--yes', '--dry-run', '--replace', ...VALUE_FLAGS]);
+const opts = {};
+const pos = [];
+for (let i = 0; i < rest.length; i++) {
+  const a = rest[i];
+  if (!a.startsWith('--')) { pos.push(a); continue; }
+  if (!KNOWN.has(a)) usage(`모르는 옵션 ${a}`);       // 오타(--dryrun 등)로 실제 쓰기가 되는 일을 막는다
+  if (VALUE_FLAGS.has(a)) {
+    const v = rest[++i];
+    if (v === undefined || v.startsWith('--')) usage(`${a} 뒤에 값이 필요합니다.`);
+    opts[a] = v;
+  } else opts[a] = true;
+}
+
+const store = B.benchStoreInfo();
+const remote = store.kind === 'redis';
+// 결과 JSON 은 stdout, 안내는 stderr
+console.error(`[저장소] ${store.label}${remote ? '  ← 원격(운영) 데이터' : '  (로컬 연습용)'}`);
+
+function needYes(summary) {
+  for (const l of summary) console.error(`  ${l}`);
+  if (opts['--dry-run']) { console.error('dry-run: 쓰지 않았습니다.'); return false; }
+  if (remote && !opts['--yes']) {
+    console.error('원격(운영) 저장소입니다. 위 내용이 맞으면 --yes 를 붙여 다시 실행하세요(미리 보기는 --dry-run).');
+    process.exit(3);
+  }
+  return true;
+}
+
+const VOTE = { up: '좋아요', down: '별로' };
+
+try {
+  if (cmd === 'get') {
+    const [batches, reactions] = await Promise.all([B.listBatches(), B.listReactions()]);
+    const byItem = new Map();
+    for (const r of reactions) byItem.set(r.itemId, [...(byItem.get(r.itemId) ?? []), r]);
+    if (opts['--json']) {
+      // 반응을 항목 안에 붙여 낸다(이메일 포함 — 터미널 전용)
+      console.log(JSON.stringify(batches.map((b) => ({ ...b, items: b.items.map((it) => ({ ...it, reactions: byItem.get(it.id) ?? [] })) })), null, 2));
+      process.exit(0);
+    }
+    console.log(`묶음 ${batches.length}개 · 항목 ${batches.reduce((n, b) => n + b.items.length, 0)}건 · 반응 ${reactions.length}건`);
+    for (const b of batches) {
+      console.log(`\n[${b.collectedAt}] 항목 ${b.items.length}건 · 공통 패턴 ${b.insights.length}개  (넣은 사람 ${b.addedBy}, ${b.addedAt.slice(0, 16)})`);
+      for (const ins of b.insights) console.log(`  * ${ins.title}`);
+      for (const it of b.items) {
+        console.log(`  - ${it.id}  [${it.space} · ${it.source}] ${it.title}`);
+        for (const r of byItem.get(it.id) ?? []) console.log(`      ${r.name}: ${r.vote ? VOTE[r.vote] : '-'}${r.memo ? ` — ${r.memo}` : ''}  (${r.updatedAt.slice(0, 16)})`);
+      }
+    }
+    const orphan = reactions.filter((r) => !batches.some((b) => b.items.some((it) => it.id === r.itemId)));
+    if (orphan.length) console.log(`\n(지금 묶음에 없는 항목의 반응 ${orphan.length}건: ${[...new Set(orphan.map((r) => r.itemId))].join(', ')})`);
+  } else if (cmd === 'add') {
+    if (!pos[0]) usage('묶음 JSON 파일 경로가 필요합니다.');
+    const raw = JSON.parse(fs.readFileSync(path.resolve(userCwd, pos[0]), 'utf8'));
+    const b = B.parseBatch(raw);                     // 형식이 틀리면 여기서 멈춘다(아무것도 쓰지 않음)
+    const cur = await B.getBatch(b.collectedAt);
+    if (cur && !opts['--replace']) throw new B.BenchError(409, 'exists', `${b.collectedAt} 묶음이 이미 있습니다(${cur.items.length}건). 바꾸려면 --replace 를 붙이세요.`);
+    const count = (k) => b.items.filter((it) => it.space === k).length;
+    const lines = [
+      `${cur ? '바꿔 넣기' : '새 묶음'} ${b.collectedAt}: 항목 ${b.items.length}건 · 공통 패턴 ${b.insights.length}개${cur ? ` (지금 ${cur.items.length}건 → ${b.items.length}건)` : ''}`,
+      `공간별: ${B.BENCH_SPACES.map((k) => [k, count(k)]).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(' · ') || '-'}`,
+      `그림 있음 ${b.items.filter((it) => it.image).length}건 · 주의점 있음 ${b.items.filter((it) => it.caution).length}건`,
+    ];
+    if (!needYes(lines)) { console.log(JSON.stringify({ store: store.kind, written: false, dryRun: true, collectedAt: b.collectedAt, items: b.items.length, insights: b.insights.length, exists: !!cur })); process.exit(0); }
+    const { batch, replaced } = await B.addBatch(raw, opts['--by'] || 'claude', { replace: !!opts['--replace'] });
+    console.log(JSON.stringify({ store: store.kind, written: true, replaced, collectedAt: batch.collectedAt, items: batch.items.length, insights: batch.insights.length }));
+  } else if (cmd === 'delete') {
+    const day = pos[0];
+    if (!day) usage('지울 묶음의 수집일(YYYY-MM-DD)이 필요합니다.');
+    const cur = await B.getBatch(day);
+    if (!cur) throw new Error(`묶음을 찾지 못했습니다: ${day}`);
+    if (!needYes([`묶음 지우기(되살릴 수 없음): ${day} 항목 ${cur.items.length}건. 반응은 남습니다.`])) process.exit(0);
+    console.log(JSON.stringify({ ok: await B.deleteBatch(day), collectedAt: day }));
+  } else usage(cmd ? `모르는 명령 ${cmd}` : undefined);
+} catch (e) {
+  console.error(e instanceof Error ? e.message : e);
+  process.exit(1);
+}

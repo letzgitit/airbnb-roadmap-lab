@@ -21,7 +21,7 @@ export function HomeEntries({ ruleCount, warnCount, loggedIn, onOpenNotice, onOp
       )}
       {loggedIn && (
         <Tile tone="plain" title="집 정보 · 기록" onOpen={onOpenRecords} full={!hasNotice}>
-          주소 · 조건 · 통화 기록 · 사진
+          주소 · 조건 · 통화 기록 · 사진 · 꾸미기 참고
         </Tile>
       )}
     </div>
