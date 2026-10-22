@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { BatchView, BenchItem, ReactionView, Vote } from '@/lib/core/bench';
 import { busyFetch } from '@/lib/client/busy';
 import { displayName } from '@/lib/client/format';
@@ -9,8 +9,8 @@ import { AutoTextarea, btnGhost, btnPrimary, enterSubmit, inputCls, oneLine, tex
 
 // 「집 정보 · 기록」 창의 「꾸미기 참고」 탭: 다른 사람들이 꾸민 집(인테리어 벤치마킹) 모음.
 // 로그인한 두 사람만 /api/bench 로 받는다(우리 집 평수 · 구조 이야기가 들어 있어 공개 화면 · 저장소 코드에는 없다).
-// 묶음(수집한 날)마다 맨 위에 공통 패턴, 아래에 카드. 가장 최근 묶음만 펼치고 지난 묶음은 접어 둔다.
-// 카드마다 두 사람이 각자 좋아요 · 별로와 짧은 메모를 남긴다(누가 남겼는지 보인다).
+// 묶음(수집한 날)마다 맨 위에 공통 패턴, 아래에 사진 벽돌 격자(핀터레스트처럼 사진 위주, 글은 제목 한두 줄뿐). 가장 최근 묶음만 펼치고 지난 묶음은 접어 둔다.
+// 사진을 누르면 같은 패널 안에서 상세로 넘어가고(「목록으로」로 돌아오면 보던 자리), 거기서 두 사람이 각자 좋아요 · 별로와 짧은 메모를 남긴다(누가 남겼는지 보인다).
 
 const MEMO_MAX = 200;   // lib/core/bench.ts MEMO_MAX 와 같게
 interface Data { batches: BatchView[]; reactions: Record<string, ReactionView[]> }
@@ -26,6 +26,11 @@ const costView = (it: BenchItem) => {
   const label = it.source === '에어비앤비' ? '숙박 요금' : /^(비용|가격)/.test(v) ? '' : '비용';
   return { label, text: v, weak: /언급 없음|확인 못함|비공개/.test(v) };
 };
+// 둘 다 별로: 반응을 남긴 사람이 2명 이상이고 모두 별로를 누른 자료. 화면에서만 격자 밖으로 빼고(데이터는 그대로), 반응을 바꾸면 저절로 돌아온다.
+const bothDown = (list: ReactionView[]) => {
+  const who = list.filter((r) => r.vote || r.memo);
+  return who.length >= 2 && who.every((r) => r.vote === 'down');
+};
 const dateLabel = (d: string) => { const [, m, day] = d.split('-'); return m && day ? `${Number(m)}월 ${Number(day)}일` : d; };
 
 export function BenchPanel({ active }: { active: boolean }) {
@@ -36,6 +41,17 @@ export function BenchPanel({ active }: { active: boolean }) {
   const [space, setSpaceState] = useState<string>(() => { try { return localStorage.getItem(SPACE_KEY) || ALL; } catch { return ALL; } });
   const setSpace = (s: string) => { setSpaceState(s); try { localStorage.setItem(SPACE_KEY, s); } catch { /* 저장이 막혀도 이번 화면에는 적용 */ } };
   const [openOld, setOpenOld] = useState<Record<string, boolean>>({});
+  // 상세: 목록은 그대로 그려 둔 채 숨기고(사진을 다시 받지 않게) 같은 패널 안에 상세를 보인다. 목록 스크롤 자리를 기억해 돌아올 때 되돌린다.
+  const [openId, setOpenId] = useState<string | null>(null);
+  const rootRef = useRef<HTMLElement>(null);
+  const scrollAt = useRef(0);
+  const scroller = () => rootRef.current?.closest<HTMLElement>('.overflow-y-auto') ?? null;
+  const openItem = (id: string) => { scrollAt.current = scroller()?.scrollTop ?? 0; setOpenId(id); };
+  const closeItem = () => setOpenId(null);
+  useLayoutEffect(() => {
+    const el = scroller();
+    if (el) el.scrollTop = openId ? 0 : scrollAt.current;
+  }, [openId]);
 
   const reload = useCallback(async () => {
     if (!started.current) setState('loading');
@@ -81,17 +97,17 @@ export function BenchPanel({ active }: { active: boolean }) {
   if (state === 'anon') return <p className="py-6 text-[15px] font-semibold text-slate-500">로그인한 뒤에 볼 수 있어요.</p>;
 
   const [latest, ...older] = data?.batches ?? [];
+  const detail = openId ? (data?.batches ?? []).flatMap((b) => b.items).find((it) => it.id === openId) ?? null : null;
   return (
-    <section className="min-w-0" aria-label="꾸미기 참고">
+    <section ref={rootRef} className="min-w-0" aria-label="꾸미기 참고">
+      {detail && <Detail it={detail} reactions={data!.reactions[detail.id] ?? []} onSave={save} onBack={closeItem} />}
+      <div hidden={!!detail}>
       {state === 'loading' && !data && (
         <div role="status" aria-busy="true">
           <span className="sr-only">불러오는 중…</span>
-          <div aria-hidden className="divide-y divide-slate-200 border-y border-slate-200">
-            {[0, 1, 2].map((k) => (
-              <div key={k} className="flex gap-3 py-3.5">
-                <div className="min-w-0 flex-1"><span className="skeleton block h-4 w-3/4 rounded bg-slate-100" /><span className="skeleton mt-2 block h-4 w-full rounded bg-slate-100" /><span className="skeleton mt-2 block h-3 w-1/3 rounded bg-slate-100" /></div>
-                <span className="skeleton block h-[72px] w-[72px] shrink-0 rounded-lg bg-slate-100" />
-              </div>
+          <div aria-hidden className="columns-2 gap-3 min-[560px]:columns-3">
+            {[150, 110, 130, 170, 120, 140].map((h, k) => (
+              <span key={k} style={{ height: h }} className="skeleton mb-3 block break-inside-avoid rounded-xl bg-slate-100" />
             ))}
           </div>
         </div>
@@ -119,7 +135,7 @@ export function BenchPanel({ active }: { active: boolean }) {
         </div>
       )}
 
-      {latest && <Batch b={latest} items={pick(latest.items)} reactions={data!.reactions} onSave={save} />}
+      {latest && <Batch b={latest} items={pick(latest.items)} reactions={data!.reactions} onOpen={openItem} />}
 
       {older.length > 0 && (
         <div className="mt-8 border-t border-slate-200 pt-1">
@@ -132,21 +148,25 @@ export function BenchPanel({ active }: { active: boolean }) {
                   <span className="min-w-0 flex-1 text-[15px] font-bold text-slate-800">{dateLabel(b.collectedAt)} 모음 <span className="ml-1 text-[13px] font-semibold text-slate-500">{b.items.length}건</span></span>
                   <i className={`fas ${on ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
                 </button>
-                {on && <div className="pb-6"><Batch b={b} items={pick(b.items)} reactions={data!.reactions} onSave={save} /></div>}
+                {on && <div className="pb-6"><Batch b={b} items={pick(b.items)} reactions={data!.reactions} onOpen={openItem} /></div>}
               </div>
             );
           })}
         </div>
       )}
+      </div>
     </section>
   );
 }
 
 type SaveFn = (itemId: string, vote: Vote | null, memo: string) => Promise<boolean>;
 
-// 묶음 하나: 공통 패턴 → 카드
-function Batch({ b, items, reactions, onSave }: { b: BatchView; items: BenchItem[]; reactions: Data['reactions']; onSave: SaveFn }) {
+// 묶음 하나: 공통 패턴 → 사진 벽돌 격자
+function Batch({ b, items, reactions, onOpen }: { b: BatchView; items: BenchItem[]; reactions: Data['reactions']; onOpen: (id: string) => void }) {
   const [showInsights, setShowInsights] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const hidden = items.filter((it) => bothDown(reactions[it.id] ?? []));
+  const shownItems = items.filter((it) => !bothDown(reactions[it.id] ?? []));
   return (
     <div>
       {b.insights.length > 0 && (
@@ -173,108 +193,126 @@ function Batch({ b, items, reactions, onSave }: { b: BatchView; items: BenchItem
       )}
       {items.length === 0
         ? <p className="py-2 text-[15px] font-semibold text-slate-500">이 공간 자료는 이 모음에 없어요.</p>
-        : (
-          <ul className="divide-y divide-slate-200 border-y border-slate-200">
-            {items.map((it) => <li key={it.id} className="min-w-0"><Row it={it} reactions={reactions[it.id] ?? []} onSave={onSave} /></li>)}
+        : shownItems.length > 0 && (
+          <ul className="columns-2 gap-3 min-[560px]:columns-3">
+            {shownItems.map((it) => <li key={it.id} className="mb-4 min-w-0 break-inside-avoid"><Tile it={it} reactions={reactions[it.id] ?? []} onOpen={onOpen} /></li>)}
           </ul>
         )}
-    </div>
-  );
-}
-
-// 외부 그림(출처 사이트). 못 불러오면 출처 이름이 든 회색 칸
-function Thumb({ src, source }: { src: string | null; source: string }) {
-  const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  return (
-    <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100" aria-hidden>
-      {src && !failed ? (
-        <>
-          {!loaded && <span className="skeleton absolute inset-0" />}
-          {/* 외부 주소라 next/image 도메인 목록 대신 일반 img. 출처 사이트가 막지 않게 referrer 를 보내지 않는다 */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} className="h-full w-full object-cover" />
-        </>
-      ) : (
-        <span className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-slate-500">
-          <i className="far fa-image text-[16px]" aria-hidden />
-          <span className="break-keep text-[12px] font-bold leading-tight">{source}</span>
-        </span>
+      {hidden.length > 0 && (
+        <div className="mt-1">
+          <button type="button" aria-expanded={showHidden} onClick={() => setShowHidden((v) => !v)}
+            className="flex min-h-11 w-full items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-500">
+            둘 다 별로라 숨긴 자료 {hidden.length}개<i className={`fas ${showHidden ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]`} aria-hidden />
+          </button>
+          {showHidden && (
+            <ul className="columns-2 gap-3 pt-1 opacity-70 min-[560px]:columns-3">
+              {hidden.map((it) => <li key={it.id} className="mb-4 min-w-0 break-inside-avoid"><Tile it={it} reactions={reactions[it.id] ?? []} onOpen={onOpen} /></li>)}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
+// 외부 그림(출처 사이트). 못 불러오면 출처 이름이 든 회색 칸. 사진은 원래 비율 그대로(높이가 제각각)
+function Photo({ src, source, big }: { src: string | null; source: string; big?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  if (!src || failed) {
+    return (
+      <span className={`flex w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500 ${big ? 'aspect-[4/3]' : 'aspect-square'}`}>
+        <i className="far fa-image text-[18px]" aria-hidden />
+        <span className="break-keep text-[12px] font-bold leading-tight">{source}</span>
+      </span>
+    );
+  }
+  return (
+    <span className={`relative block w-full bg-slate-100 ${loaded ? '' : 'aspect-[4/5]'}`}>
+      {!loaded && <span className="skeleton absolute inset-0" />}
+      {/* 외부 주소라 next/image 도메인 목록 대신 일반 img. 출처 사이트가 막지 않게 referrer 를 보내지 않는다 */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" loading={big ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer" onLoad={() => setLoaded(true)} onError={() => setFailed(true)}
+        className={loaded ? 'block h-auto w-full' : 'absolute inset-0 h-full w-full object-cover opacity-0'} />
+    </span>
+  );
+}
+
 const Label = ({ children }: { children: React.ReactNode }) => <p className="text-[13px] font-bold text-slate-500">{children}</p>;
 
-// 줄 안에서 작게 보이는 반응 요약(누가 좋아요 · 별로 · 메모를 남겼는지). 누르는 곳은 펼친 뒤의 Reactions
+// 타일 아래 아주 작은 반응 표시: 좋아요 · 별로 · 메모 있음을 아이콘으로만(누가 남겼는지는 상세에서)
 function ReactionBrief({ list }: { list: ReactionView[] }) {
   const shown = list.filter((r) => r.vote || r.memo);
   if (shown.length === 0) return null;
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] leading-snug text-slate-600">
+    <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-[12px] text-slate-500">
       {shown.map((r, i) => (
-        <span key={i} className="inline-flex items-center gap-1 font-semibold">
-          {r.vote && <i className={`fas ${r.vote === 'up' ? 'fa-thumbs-up text-blue-700 dark:text-blue-300' : 'fa-thumbs-down text-slate-500'} text-[12px]`} aria-hidden />}
-          {displayName(r.name)}
-          {r.vote && <span className="sr-only">{VOTE_LABEL[r.vote]}</span>}
-          {r.memo && <i className="far fa-comment text-[12px] text-slate-500" aria-hidden title="메모 있음" />}
-          {r.memo && <span className="sr-only">메모 있음</span>}
+        <span key={i} className="inline-flex items-center gap-0.5">
+          {r.vote && <i className={`fas ${r.vote === 'up' ? 'fa-thumbs-up text-blue-700 dark:text-blue-300' : 'fa-thumbs-down text-slate-500'}`} aria-hidden />}
+          {r.memo && <i className="far fa-comment" aria-hidden />}
+          <span className="sr-only">{displayName(r.name)} {r.vote ? VOTE_LABEL[r.vote] : ''}{r.memo ? ' 메모 있음' : ''}</span>
         </span>
       ))}
     </span>
   );
 }
 
-// 한 줄 = 자료 하나: 제목 · 맞는 이유 · 비용 · (출처 · 공간 · 반응) + 오른쪽 작은 사진. 누르면 그 자리에서 펼쳐 따라 할 점 · 주의 · 원문 · 내 반응이 나온다.
-function Row({ it, reactions, onSave }: { it: BenchItem; reactions: ReactionView[]; onSave: SaveFn }) {
-  const [open, setOpen] = useState(false);
-  const panelId = `bench-${it.id}`;
-  const cost = costView(it);
-  const clamp = (n: number) => (open ? 'block' : n === 1 ? 'line-clamp-1' : 'line-clamp-2');
+// 타일 = 사진 + 제목 한두 줄 + 작은 출처 · 반응. 누르면 상세로 넘어간다.
+function Tile({ it, reactions, onOpen }: { it: BenchItem; reactions: ReactionView[]; onOpen: (id: string) => void }) {
   return (
-    <article>
-      <button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}
-        className="flex min-h-[88px] w-full items-start gap-3 py-3.5 text-left hover:bg-slate-50/60">
-        <span className="min-w-0 flex-1">
-          <span className={`break-words text-[16px] font-bold leading-snug text-slate-900 ${clamp(2)}`}>{it.title}</span>
-          {it.fit && <span className={`mt-0.5 break-words text-[15px] leading-normal text-slate-600 ${clamp(2)}`}><span className="sr-only">101호에 맞는 이유: </span>{it.fit}</span>}
-          {cost && (open || !cost.weak) && <span className={`mt-1 break-words text-[13px] leading-snug text-slate-500 ${clamp(1)}`}>{cost.label && <span className="font-bold">{cost.label} </span>}{cost.text}</span>}
-          <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-slate-500">
-            <span>{it.source}</span>
-            <span className="rounded-md border border-slate-200 px-1.5 py-px text-[12px] font-bold text-slate-600">{spaceLabel(it.space)}</span>
-            {!open && <ReactionBrief list={reactions} />}
-          </span>
-        </span>
-        <Thumb src={it.image} source={it.source} />
-        <i className={`fas ${open ? 'fa-chevron-up' : 'fa-chevron-down'} mt-1 shrink-0 text-[12px] text-slate-500`} aria-hidden />
+    <button type="button" onClick={() => onOpen(it.id)} className="block w-full text-left">
+      <span className="block overflow-hidden rounded-xl border border-slate-200"><Photo src={it.image} source={it.source} /></span>
+      <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-[13px] font-bold leading-snug text-slate-900">{it.title}</span>
+      <span className="mt-0.5 flex items-center gap-2 px-0.5 text-[12px] leading-snug text-slate-500">
+        <span className="min-w-0 truncate">{it.source}</span>
+        <ReactionBrief list={reactions} />
+      </span>
+    </button>
+  );
+}
+
+// 상세: 같은 패널 안에서 목록을 대신해 보인다. 큰 사진 · 제목 · 맞는 이유 · 따라 할 점 · 비용 · 주의 · 원문 · 내 반응
+function Detail({ it, reactions, onSave, onBack }: { it: BenchItem; reactions: ReactionView[]; onSave: SaveFn; onBack: () => void }) {
+  const cost = costView(it);
+  return (
+    <article aria-label={it.title}>
+      <button type="button" onClick={onBack} className={`${textBtn} -ml-1 mb-2 inline-flex min-h-11 items-center`}>
+        <i className="fas fa-chevron-left mr-1.5 text-[12px]" aria-hidden />목록으로
       </button>
-      {open && (
-        <div id={panelId} className="pb-3 pt-0.5">
-          <div className="flex flex-col gap-3">
-            {it.takeaways.length > 0 && (
-              <div>
-                <Label>따라 할 점</Label>
-                <ul className="mt-0.5 space-y-1">
-                  {it.takeaways.map((t, i) => (
-                    <li key={i} className="flex gap-2 text-[15px] leading-snug text-slate-700"><span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-slate-400" aria-hidden />{t}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {it.caution && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
-                <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-700 dark:text-red-300"><i className="fas fa-triangle-exclamation text-[12px]" aria-hidden />주의</p>
-                <p className="mt-0.5 text-[14px] leading-relaxed text-slate-800">{it.caution}</p>
-              </div>
-            )}
-            <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${textBtn} self-start`}>
-              원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-[11px]" aria-hidden /><span className="sr-only">(새 탭)</span>
-            </a>
+      <div className="overflow-hidden rounded-2xl border border-slate-200"><Photo src={it.image} source={it.source} big /></div>
+      <h3 className="mt-3 break-words text-[18px] font-bold leading-snug text-slate-900">{it.title}</h3>
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-slate-500">
+        <span>{it.source}</span>
+        <span className="rounded-md border border-slate-200 px-1.5 py-px text-[12px] font-bold text-slate-600">{spaceLabel(it.space)}</span>
+      </p>
+      <div className="mt-4 flex flex-col gap-4">
+        {it.fit && (
+          <div><Label>101호에 맞는 이유</Label><p className="mt-0.5 break-words text-[15px] leading-relaxed text-slate-700">{it.fit}</p></div>
+        )}
+        {it.takeaways.length > 0 && (
+          <div>
+            <Label>따라 할 점</Label>
+            <ul className="mt-0.5 space-y-1">
+              {it.takeaways.map((t, i) => (
+                <li key={i} className="flex gap-2 text-[15px] leading-snug text-slate-700"><span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-slate-400" aria-hidden />{t}</li>
+              ))}
+            </ul>
           </div>
-          <div className="mt-2 rounded-xl border border-slate-100"><Reactions itemId={it.id} title={it.title} list={reactions} onSave={onSave} /></div>
-        </div>
-      )}
+        )}
+        {cost && !cost.weak && (
+          <div><Label>{cost.label || '비용'}</Label><p className="mt-0.5 break-words text-[15px] leading-snug text-slate-700">{cost.text}</p></div>
+        )}
+        {it.caution && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+            <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-700 dark:text-red-300"><i className="fas fa-triangle-exclamation text-[12px]" aria-hidden />주의</p>
+            <p className="mt-0.5 text-[14px] leading-relaxed text-slate-800">{it.caution}</p>
+          </div>
+        )}
+        <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${textBtn} self-start`}>
+          원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-[11px]" aria-hidden /><span className="sr-only">(새 탭)</span>
+        </a>
+      </div>
+      <div className="mt-3 rounded-xl border border-slate-100"><Reactions itemId={it.id} title={it.title} list={reactions} onSave={onSave} /></div>
     </article>
   );
 }
