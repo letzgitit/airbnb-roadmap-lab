@@ -102,3 +102,18 @@ export function getStore(): Store {
   cached = env ? redisStore(env.url, env.token) : fileStore();
   return cached;
 }
+
+// 지산 사이트(jisan-loan-briefing)의 현황 문서. 같은 Upstash 를 쓰므로 키만 다르다.
+// 여기선 읽기만 한다(쓰기는 지산 사이트의 API 로만). 로컬은 .data/jisan.json(있으면).
+export const JISAN_KEY = 'jisan:progress:v1';
+export async function readJisanRaw(): Promise<string | null> {
+  const env = redisEnv();
+  if (!env) {
+    try { return await fs.readFile(path.join(DATA_DIR, 'jisan.json'), 'utf8'); } catch { return null; }
+  }
+  try {
+    const redis = new Redis({ url: env.url, token: env.token, automaticDeserialization: false });
+    const v = await redis.get<string>(JISAN_KEY);
+    return v === null || v === undefined ? null : String(v);
+  } catch (e) { throw sanitize(e, '지산 읽기'); }
+}

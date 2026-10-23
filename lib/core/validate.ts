@@ -12,7 +12,7 @@ const text = z.string().trim().min(1, '내용을 입력하세요.').max(200, '20
 const stepId = z.number().int().min(1).max(STEP_COUNT);
 const version = z.number().int().min(0);
 // 서버가 만드는 id 모양(t_/l_/p_ + 영숫자)만 받는다. `constructor`·`__proto__` 같은 값이 레코드 조회에 들어가지 않게.
-const id = z.string().regex(/^[tlp]_[A-Za-z0-9]{1,60}$/, 'id 형식이 올바르지 않습니다.');
+const id = z.string().regex(/^[tlpm]_[A-Za-z0-9]{1,60}$/, 'id 형식이 올바르지 않습니다.');
 const editKey = z.string().regex(/^(step:\d{1,2}|(task|log|prop):[tlp]_[A-Za-z0-9]{1,60})$/);
 
 export const stepPatch = z.object({
@@ -40,6 +40,25 @@ export const propPatch = z.object({
   value: propValue.optional(),
 }).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
 
+// 돈 흐름: 단위 만원(정수). +들어옴 / -나감. null = 금액 미정.
+const amount = z.union([z.number().int().min(-1_000_000).max(1_000_000), z.null()]);
+const via = z.enum(['cash', 'credit']);
+const project = z.enum(['oedomin', 'jisan']);
+export const moneyPatch = z.object({
+  date: nullableDate.optional(),
+  text: text.optional(),
+  amount: amount.optional(),
+  via: via.optional(),
+  estimate: z.boolean().optional(),
+  project: project.optional(),
+}).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
+const balance = z.union([z.number().int().min(-1_000_000).max(1_000_000), z.null()]);
+export const planPatch = z.object({
+  cash: balance.optional(),
+  credit: balance.optional(),
+  fork: z.string().max(500, '갈림길은 500자 이하로 입력하세요.').optional(),
+}).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
+
 export const opSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('step.update'), stepId, baseVersion: version, patch: stepPatch, force: z.boolean().optional() }),
   z.object({ op: z.literal('task.add'), stepId, text, due: nullableDate.optional() }),
@@ -54,6 +73,11 @@ export const opSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('property.update'), id, baseVersion: version.optional(), patch: propPatch, force: z.boolean().optional() }),
   z.object({ op: z.literal('property.delete'), id }),
   z.object({ op: z.literal('property.restore'), id }),
+  z.object({ op: z.literal('money.add'), date: nullableDate, text, amount, via, estimate: z.boolean().optional(), project }),
+  z.object({ op: z.literal('money.update'), id, baseVersion: version.optional(), patch: moneyPatch, force: z.boolean().optional() }),
+  z.object({ op: z.literal('money.delete'), id }),
+  z.object({ op: z.literal('money.restore'), id }),
+  z.object({ op: z.literal('plan.update'), baseVersion: version, patch: planPatch, force: z.boolean().optional() }),
   z.object({ op: z.literal('editing.set'), key: editKey }),
   z.object({ op: z.literal('editing.clear'), key: editKey }),
 ]);

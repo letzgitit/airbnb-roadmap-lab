@@ -77,6 +77,9 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 | `log.update` / `log.delete` / `log.restore` | `id` (+`baseVersion`, `patch`) | |
 | `property.add` | `label`(≤40자), `value`(≤300자) | 매물 기본 정보(자유 key-value) |
 | `property.update` / `property.delete` / `property.restore` | `id` (+`baseVersion`, `patch`) | |
+| `money.add` | `date`(`YYYY-MM-DD` 또는 null), `text`(1~200자), `amount`(만원 정수, 나감 −·들어옴 +, 미정 null), `via`(`cash` 현금 · `credit` 마통), `project`(`oedomin` · `jisan`) | `estimate: true` = 화면에 「추정」. 「11월~1월 일정」(/plan)의 돈 흐름 줄 |
+| `money.update` / `money.delete` / `money.restore` | `id`(`m_…`) (+`baseVersion`, `patch`) | `patch`: `date` `text` `amount` `via` `estimate` `project` |
+| `plan.update` | `baseVersion`, `patch` | `patch`: `cash`·`credit`(출발점 현금 · 마통 여유, 만원) `fork`(원주 갈림길, 한 줄 = 한 갈래, 「조건 → 할 일」, ≤500자). 처음 version은 0 |
 
 - 「사용자 체크리스트 항목」은 **할 일(task)과 같은 항목**입니다. `checklist.add/update/delete/restore`는 `task.*`의 별칭입니다.
 - `baseVersion`은 `get`에서 본 `(id … vN)`의 N입니다. 서버 version과 다르면 **그 연산만** 409로 실패하고 나머지는 적용됩니다(결과의 `failed`에 최신 내용이 들어 있음). 덮어쓰려면 연산에 `"force": true`.
@@ -96,6 +99,14 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 ## export-md
 
 `export-md <out.md>`는 진행률, 매물 정보, 단계별 상태·목표일·메모, 할 일(미완료 먼저·마감일 순, 완료는 `<details>`로 접음), 최근 기록 20건, 마지막 동기화 시각을 씁니다. 맨 위에 「자동 생성 — 직접 고치지 말 것」 경고가 붙습니다. 🔴 이 저장소는 GitHub 공개 저장소라, 출력 경로가 저장소 안이면서 git이 무시하지 않는 곳이면 거부합니다(볼트 등 저장소 밖에 쓰세요). 할 일 줄은 `- [ ]`가 아니라 `- ☐` / `- ☑`입니다(볼트 Todoist 플러그인이 체크박스를 흡수하므로).
+
+## 11월~1월 일정 (`/plan`)
+
+로그인한 사람만 보는 한 장 일정. 서버(`app/api/plan`)가 이 문서(`oedomin:progress:v1`)와 지산 사이트 문서(같은 Upstash의 `jisan:progress:v1`, **읽기만**)를 합쳐 내려준다.
+- 일정 = 두 문서의 마감일 있는 할 일. 글 끝 `(추정)` · `(제안)`은 작은 표시로 보인다.
+- 돈 흐름 = 이 문서의 `money`(위 `money.*`) + 출발점 `plan`. 금액 · 이름은 코드와 `content/`에 넣지 않는다(공개 저장소).
+- 지산 할 일을 더하거나 고치려면 지산 사이트 API로 한다(여기서는 쓰지 않는다).
+- `export-md --doc <파일>`: 운영 키 없이 사이트 `GET /api/progress` 응답을 저장한 파일로 md 를 만든다.
 
 ## 초기 데이터
 

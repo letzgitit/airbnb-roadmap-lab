@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 // 홈 맨 위의 바로 가기 두 칸. 왼쪽 = 주의사항(빨강은 「주의」를 뜻하므로 이 칸만 빨간 바탕),
@@ -23,6 +24,17 @@ export function HomeEntries({ ruleCount, warnCount, loggedIn, onOpenNotice, onOp
         <Tile tone="plain" title="집 정보 · 기록" onOpen={onOpenRecords} full={!hasNotice}>
           주소 · 조건 · 통화 기록 · 사진 · 꾸미기 참고
         </Tile>
+      )}
+      {/* 「11월~1월 일정」 한 장(/plan): 외도민 · 지산 할 일과 돈 흐름. 로그인했을 때만 */}
+      {loggedIn && (
+        <Link href="/plan" className="flex min-h-14 w-full flex-col gap-0.5 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-left hover:border-slate-400 min-[340px]:col-span-2">
+          <span className="flex items-center gap-2">
+            <i className="fas fa-calendar-days shrink-0 text-[15px] text-slate-500" aria-hidden />
+            <span className="min-w-0 flex-1 text-[15px] font-bold leading-snug text-slate-900">11월~1월 일정</span>
+            <i className="fas fa-chevron-right shrink-0 text-[13px] text-slate-500" aria-hidden />
+          </span>
+          <span className="block text-[13px] leading-snug text-slate-600">외도민 · 지산 할 일과 돈 흐름을 한 장에</span>
+        </Link>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import type { ProgressDoc, Step, StepStatus, TaskItem } from './types.ts';
+import { manwon, moneyRows, VIA_LABEL } from '../plan.ts';
 
 const STATUS_LABEL: Record<StepStatus, string> = { todo: '시작 전', doing: '진행 중', done: '완료' };
 
@@ -80,5 +81,26 @@ export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title
   if (logs.length === 0) out.push('- (없음)');
   for (const l of logs) out.push(`- ${kst(l.at)} [${l.kind}] ${l.text.replace(/\n/g, ' / ')} — ${l.by}`);
   out.push('');
+  // 「11월~1월 일정」(/plan)의 돈 흐름 · 갈림길. 없으면 절을 쓰지 않는다.
+  const rows = moneyRows(Object.values(doc.money ?? {}), doc.plan ?? null);
+  if (rows.length || doc.plan) {
+    const won = (n: number | null) => (n === null ? '-' : `${n < 0 ? '−' : ''}${manwon(n)}`);
+    out.push('## 돈 흐름 (11월~1월 일정)');
+    out.push('');
+    if (doc.plan) out.push(`- 출발점: 현금 ${won(doc.plan.cash)} · 마통 여유 ${won(doc.plan.credit)}`);
+    for (const r of rows) {
+      const m = r.item;
+      const amt = m.amount === null ? '금액 미정' : `${m.amount < 0 ? '−' : '+'}${manwon(m.amount)}`;
+      out.push(`- ${m.date ?? '날짜 미정'} ${m.text} — ${amt} (${VIA_LABEL[m.via]})${m.estimate ? ' [추정]' : ''} → 현금 ${won(r.cash)} · 마통 여유 ${won(r.credit)}`);
+    }
+    const fork = (doc.plan?.fork ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
+    if (fork.length) {
+      out.push('');
+      out.push('### 원주 갈림길');
+      out.push('');
+      for (const f of fork) out.push(`- ${f}`);
+    }
+    out.push('');
+  }
   return out.join('\n');
 }

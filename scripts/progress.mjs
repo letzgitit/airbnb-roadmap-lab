@@ -12,7 +12,7 @@ const userCwd = process.cwd();
 process.chdir(root);
 for (const f of ['.env.local', '.env']) { try { process.loadEnvFile(path.join(root, f)); } catch { /* 없으면 건너뜀 */ } }
 
-const { readDoc, mutateMany, OpError } = await import('../lib/core/engine.ts');
+const { readDoc, parseDoc, mutateMany, OpError } = await import('../lib/core/engine.ts');
 const { opSchema } = await import('../lib/core/validate.ts');
 const { readContent } = await import('../lib/core/content-read.ts');
 const { renderMarkdown, kst } = await import('../lib/core/markdown.ts');
@@ -26,6 +26,7 @@ function usage(msg) {
   node scripts/progress.mjs get [--json]
   node scripts/progress.mjs apply <patch.json> [--by <이름>] [--dry-run] [--yes]
   node scripts/progress.mjs export-md <out.md>
+  node scripts/progress.mjs export-md <out.md> --doc <progress.json>   (저장소 대신 사이트 /api/progress 응답 파일로)
   --dry-run  지금 저장된 값에 적용해 보기만 하고 쓰지 않음
   --yes      원격(운영) 저장소에 실제로 쓸 때 필요
 자세한 내용: scripts/README-progress.md`);
@@ -54,6 +55,8 @@ function describeOp(op) {
     case 'task.add': return `할 일 추가 [${op.stepId}단계] "${op.text}"${op.due ? ` 마감 ${op.due}` : ''}`;
     case 'log.add': return `기록 추가 [${op.kind}] "${op.text}"`;
     case 'property.add': return `집 정보 추가 ${op.label}: ${op.value}`;
+    case 'money.add': return `돈 흐름 추가 ${op.date ?? '날짜 미정'} "${op.text}" ${op.amount ?? '금액 미정'}만 (${op.via})${op.estimate ? ' 추정' : ''}`;
+    case 'plan.update': return `한 장 일정 출발점 수정 (v${op.baseVersion}${op.force ? ', 덮어쓰기' : ''})${p}`;
     case 'step.update': return `${op.stepId}단계 수정 (v${op.baseVersion}${op.force ? ', 덮어쓰기' : ''})${p}`;
     default: return `${op.op} ${op.id ?? op.key ?? ''}${op.baseVersion !== undefined ? ` (v${op.baseVersion})` : ''}${op.force ? ' 덮어쓰기' : ''}${p}`;
   }
@@ -79,6 +82,9 @@ function printGet(doc, steps) {
   for (const t of live.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'))) {
     console.log(`  ${t.done ? '☑' : '☐'} ${t.text}  — ${t.stepId}단계${t.due ? ` · 마감 ${t.due}` : ''}${t.done ? ` · ${t.doneBy}` : ''}  (id ${t.id} v${t.version})`);
   }
+  const money = Object.values(doc.money ?? {}).filter((m) => !m.deletedAt).sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
+  console.log(`\n[돈 흐름] 출발점 ${doc.plan ? `현금 ${doc.plan.cash ?? '-'}만 · 마통 여유 ${doc.plan.credit ?? '-'}만  (plan v${doc.plan.version})` : '(없음, plan v0)'}`);
+  for (const m of money) console.log(`  ${m.date ?? '날짜 미정'} ${m.text} ${m.amount ?? '금액 미정'}만 (${m.via})${m.estimate ? ' 추정' : ''}  (id ${m.id} v${m.version})`);
   console.log('\n[최근 기록]');
   const logs = doc.log.filter((l) => !l.deletedAt).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
   if (!logs.length) console.log('  (없음)');
@@ -98,18 +104,36 @@ function assertNotTracked(out) {
 
 // ── 인자 ──
 const [cmd, ...rest] = process.argv.slice(2);
-const KNOWN = new Set(['--json', '--dry-run', '--yes', '--by']);
+const KNOWN = new Set(['--json', '--dry-run', '--yes', '--by', '--doc']);
 const byIdx = rest.indexOf('--by');
 const byFlag = byIdx >= 0 ? rest[byIdx + 1] : undefined;
 if (byIdx >= 0 && (!byFlag || byFlag.startsWith('--'))) usage('--by 뒤에 이름이 필요합니다.');
+// --doc <progress.json>: export-md 가 저장소 대신 이 파일(사이트 GET /api/progress 응답 또는 그 doc)을 읽는다. 운영 키 없이 md 만 만들 때.
+const docIdx = rest.indexOf('--doc');
+const docFlag = docIdx >= 0 ? rest[docIdx + 1] : undefined;
+if (docIdx >= 0 && (!docFlag || docFlag.startsWith('--'))) usage('--doc 뒤에 progress.json 경로가 필요합니다.');
+if (docIdx >= 0 && cmd !== 'export-md') usage('--doc 는 export-md 에서만 쓸 수 있습니다.');
 const flags = new Set(rest.filter((a) => a.startsWith('--')));
 for (const f of flags) if (!KNOWN.has(f)) usage(`모르는 옵션 ${f}`); // 오타(--dryrun 등)로 실제 쓰기가 되는 일을 막는다
-const pos = rest.filter((a, i) => !a.startsWith('--') && !(byIdx >= 0 && i === byIdx + 1));
+const pos = rest.filter((a, i) => !a.startsWith('--') && !(byIdx >= 0 && i === byIdx + 1) && !(docIdx >= 0 && i === docIdx + 1));
 
-const store = getStore();
-const remote = store.kind === 'redis';
+// --doc 이면 저장소에 붙지 않는다(키가 없어도 되고, 실수로 운영에 붙을 일도 없다)
+const store = docFlag ? null : getStore();
+const remote = store?.kind === 'redis';
 // 결과 JSON 은 stdout, 안내는 stderr — Claude 가 stdout 만 파싱해도 되게
-console.error(`[저장소] ${store.label}${remote ? '  ← 원격(운영) 데이터' : '  (로컬 연습용)'}`);
+if (store) console.error(`[저장소] ${store.label}${remote ? '  ← 원격(운영) 데이터' : '  (로컬 연습용)'}`);
+else console.error(`[입력] 파일 ${path.resolve(userCwd, docFlag)}  (저장소 접근 안 함)`);
+
+// 사이트 GET /api/progress 응답({doc, me}) 또는 doc 자체를 읽는다. since 응답({unchanged:true})은 본문이 없어 거부.
+function readDocFile(file) {
+  const raw = JSON.parse(fs.readFileSync(path.resolve(userCwd, file), 'utf8'));
+  if (raw && raw.unchanged) throw new Error('--doc 파일이 「unchanged」 응답입니다. ?since 없이 받은 /api/progress 응답을 저장하세요.');
+  const d = raw && typeof raw === 'object' && raw.doc && typeof raw.doc === 'object' ? raw.doc : raw;
+  if (!d || typeof d !== 'object' || typeof d.version !== 'number' || typeof d.steps !== 'object') {
+    throw new Error('--doc 파일이 현황 문서 모양이 아닙니다(version·steps 가 필요). /api/progress 응답이나 그 doc 를 저장하세요.');
+  }
+  return parseDoc(JSON.stringify(d));
+}
 
 try {
   if (cmd === 'get') {
@@ -167,7 +191,7 @@ try {
     if (!pos[0]) usage('출력 파일 경로가 필요합니다.');
     const out = path.resolve(userCwd, pos[0]);
     assertNotTracked(out);
-    const doc = await readDoc();
+    const doc = docFlag ? readDocFile(docFlag) : await readDoc();
     const md = renderMarkdown(doc, readContent().steps, new Date().toISOString());
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, md, 'utf8');

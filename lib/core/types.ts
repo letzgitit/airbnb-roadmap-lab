@@ -41,6 +41,21 @@ export interface PropertyItem {
   version: number; createdAt: string; updatedAt: string; updatedBy: string;
   deletedAt: string | null; deletedBy: string | null;
 }
+// 돈 흐름 한 줄(비공개): 날짜별 나가는 돈(-)·들어오는 돈(+). 단위 만원. amount null = 금액 미정.
+// via: 어디서 나가고 어디로 들어오나(cash 현금 · credit 마이너스 통장). project: 화면의 색 점 구분.
+export type MoneyVia = 'cash' | 'credit';
+export type PlanProject = 'oedomin' | 'jisan';
+export interface MoneyItem {
+  id: string; date: string | null; text: string; amount: number | null; via: MoneyVia;
+  estimate: boolean; project: PlanProject;
+  version: number; createdAt: string; updatedAt: string; updatedBy: string;
+  deletedAt: string | null; deletedBy: string | null;
+}
+// 한 장 일정의 출발점: 지금 현금·마통 여유(만원)와 갈림길 문장(한 줄 = 한 갈래).
+export interface PlanState {
+  cash: number | null; credit: number | null; fork: string;
+  version: number; updatedAt: string; updatedBy: string;
+}
 export interface ProgressDoc {
   schema: 1; version: number; updatedAt: string | null;
   lastAction: LastAction | null;
@@ -49,6 +64,9 @@ export interface ProgressDoc {
   log: LogEntry[];
   property: Record<string, PropertyItem>;
   editing: Record<string, EditingMark>;
+  // 2026-10-23 추가(선택): 옛 문서엔 없다 → parseDoc 이 빈 값으로 채운다
+  money: Record<string, MoneyItem>;
+  plan: PlanState | null;
 }
 export interface Me { email: string; name: string }
 export const STEP_COUNT = 14;

@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { getStore } from './store.ts';
 import type { Op } from './validate.ts';
-import type { LogEntry, ProgressDoc, PropertyItem, StepState, TaskItem } from './types.ts';
+import type { LogEntry, MoneyItem, PlanState, ProgressDoc, PropertyItem, StepState, TaskItem } from './types.ts';
 
 export interface Actor { email: string; name: string }
 
@@ -11,6 +11,7 @@ const TRASH_KEEP_MS = 30 * 24 * 3600 * 1000;
 const MAX_TASKS = 500;
 const MAX_LOG = 500;
 const MAX_PROPS = 60;
+const MAX_MONEY = 200;
 // 휴지통(소프트 삭제) 항목은 30일 보관하지만 종류별로 이 개수를 넘으면 오래된 것부터 정리한다(추가·삭제 반복으로 문서가 끝없이 커지지 않게).
 const MAX_TRASH = 200;
 // 문서 하나의 상한(UTF-8 바이트). Redis CAS 요청엔 이전 값·새 값이 함께(JSON 이스케이프 포함) 실려 실제 요청은 2배 남짓 → 1MB 안쪽.
@@ -33,13 +34,20 @@ export class OpError extends Error {
 }
 
 export function emptyDoc(): ProgressDoc {
-  return { schema: 1, version: 0, updatedAt: null, lastAction: null, steps: {}, tasks: {}, log: [], property: {}, editing: {} };
+  return { schema: 1, version: 0, updatedAt: null, lastAction: null, steps: {}, tasks: {}, log: [], property: {}, editing: {}, money: {}, plan: null };
 }
 
 export function parseDoc(raw: string | null): ProgressDoc {
   if (!raw) return emptyDoc();
   const d = JSON.parse(raw) as Partial<ProgressDoc>;
-  return { ...emptyDoc(), ...d, steps: d.steps ?? {}, tasks: d.tasks ?? {}, log: d.log ?? [], property: d.property ?? {}, editing: d.editing ?? {} } as ProgressDoc;
+  return {
+    ...emptyDoc(), ...d, steps: d.steps ?? {}, tasks: d.tasks ?? {}, log: d.log ?? [], property: d.property ?? {}, editing: d.editing ?? {},
+    money: d.money ?? {}, plan: d.plan ?? null,
+  } as ProgressDoc;
+}
+
+function defaultPlan(): PlanState {
+  return { cash: null, credit: null, fork: '', version: 0, updatedAt: '', updatedBy: '' };
 }
 
 function defaultStep(): StepState {
@@ -214,6 +222,52 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       touch(doc, actor, iso, `집 정보 복원: ${clip(cur.label)}`);
       return { result: next };
     }
+    case 'money.add': {
+      if (Object.values(doc.money).filter((m) => !m.deletedAt).length >= MAX_MONEY) throw new OpError(400, { error: 'limit', message: '돈 흐름 항목이 너무 많습니다.' });
+      const m: MoneyItem = {
+        id: newId('m'), date: op.date, text: op.text, amount: op.amount, via: op.via,
+        estimate: op.estimate ?? false, project: op.project,
+        version: 1, createdAt: iso, updatedAt: iso, updatedBy: actor.name, deletedAt: null, deletedBy: null,
+      };
+      doc.money[m.id] = m;
+      touch(doc, actor, iso, `돈 흐름 추가: ${clip(m.text)}`);
+      return { result: m };
+    }
+    case 'money.update': {
+      const cur = guardUpdate(own(doc.money, op.id), 'money', op.baseVersion, op.force, false);
+      const next: MoneyItem = { ...cur, ...op.patch, ...bump(cur) };
+      doc.money[cur.id] = next;
+      touch(doc, actor, iso, `돈 흐름 수정: ${clip(next.text)}`);
+      return { result: next };
+    }
+    case 'money.delete': {
+      const cur = own(doc.money, op.id);
+      if (!cur) throw new OpError(404, { error: 'not_found' });
+      if (cur.deletedAt) return { result: cur };
+      const next: MoneyItem = { ...cur, deletedAt: iso, deletedBy: actor.name, ...bump(cur) };
+      doc.money[cur.id] = next;
+      touch(doc, actor, iso, `돈 흐름 삭제: ${clip(cur.text)}`);
+      return { result: next };
+    }
+    case 'money.restore': {
+      const cur = own(doc.money, op.id);
+      if (!cur) throw new OpError(404, { error: 'not_found' });
+      if (!cur.deletedAt) return { result: cur };
+      const next: MoneyItem = { ...cur, deletedAt: null, deletedBy: null, ...bump(cur) };
+      doc.money[cur.id] = next;
+      touch(doc, actor, iso, `돈 흐름 복원: ${clip(cur.text)}`);
+      return { result: next };
+    }
+    case 'plan.update': {
+      const cur = doc.plan ?? defaultPlan();
+      if (!op.force && cur.version !== op.baseVersion) {
+        throw new OpError(409, { error: 'conflict', kind: 'plan', current: cur, by: cur.updatedBy, at: cur.updatedAt });
+      }
+      const next: PlanState = { ...cur, ...op.patch, ...bump(cur) };
+      doc.plan = next;
+      touch(doc, actor, iso, '한 장 일정 출발점 수정');
+      return { result: next };
+    }
   }
 }
 
@@ -221,6 +275,7 @@ function purgeTrash(doc: ProgressDoc, now: number) {
   const old = (iso: string | null) => !!iso && now - new Date(iso).getTime() > TRASH_KEEP_MS;
   for (const [id, t] of Object.entries(doc.tasks)) if (old(t.deletedAt)) delete doc.tasks[id];
   for (const [id, p] of Object.entries(doc.property)) if (old(p.deletedAt)) delete doc.property[id];
+  for (const [id, m] of Object.entries(doc.money)) if (old(m.deletedAt)) delete doc.money[id];
   doc.log = doc.log.filter((l) => !old(l.deletedAt));
   // 휴지통 개수 상한: 오래 지운 것부터 정리
   const capTrash = <T extends { id: string; deletedAt: string | null }>(items: T[]): Set<string> => {
