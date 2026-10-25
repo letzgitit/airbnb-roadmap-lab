@@ -98,8 +98,9 @@ export function GuestPage({ token, view, sent, err }: { token: string; view: Gue
           <h1>{view.name}님께 드리는 질문</h1>
           <p className="lede">아는 만큼만 편하게 적어 주세요. 질문마다 아래 칸에 답을 쓰고 「답 보내기」를 누르면 바로 전해져요.</p>
           <p className="count">질문 {view.questions.length}개 · 답 기다림 {waiting}개</p>
-          {sent && <p className="notice ok" role="status">답을 보냈어요. 고마워요!</p>}
-          {err && <p className="notice bad" role="alert">{ERR_TEXT[err.code] ?? '보내지 못했어요. 잠시 뒤에 다시 보내 주세요.'}</p>}
+          {/* 어느 질문에 단 답인지 알면 그 질문 칸 안에 알린다(화면이 그 칸으로 내려가므로) */}
+          {sent === '1' && <p className="notice ok" role="status">답을 보냈어요. 고마워요!</p>}
+          {err && !err.q && <p className="notice bad" role="alert">{ERR_TEXT[err.code] ?? '보내지 못했어요. 잠시 뒤에 다시 보내 주세요.'}</p>}
         </header>
         {view.questions.length === 0 && <p className="empty">아직 받은 질문이 없어요.</p>}
         <ol>
@@ -120,6 +121,8 @@ export function GuestPage({ token, view, sent, err }: { token: string; view: Gue
                   ))}
                 </ul>
               )}
+              {sent === q.id && <p className="notice ok" role="status">답을 보냈어요. 고마워요!</p>}
+              {err && err.q === q.id && <p className="notice bad" role="alert">{ERR_TEXT[err.code] ?? '보내지 못했어요. 잠시 뒤에 다시 보내 주세요.'}</p>}
               {q.status === 'closed' ? (
                 <p className="closedmsg">닫힌 질문이에요. 더 답하지 않아도 돼요.</p>
               ) : (
