@@ -93,6 +93,7 @@ function describe(kind: unknown, cur: Record<string, unknown> | undefined): stri
   if (kind === 'task') return `"${cur.text}"${cur.due ? `, 마감 ${cur.due}` : ''}${cur.done ? ', 완료' : ''}`;
   if (kind === 'log') return `[${cur.kind}] ${cur.text}`;
   if (kind === 'property') return `${cur.label}: ${cur.value}`;
+  if (kind === 'question') return `"${cur.text}" (받는 사람 ${cur.to})`;
   if (kind === 'step') {
     const label = { todo: '시작 전', doing: '진행 중', done: '완료' }[String(cur.status)] ?? '';
     return `${label}${cur.targetDate ? `, 목표일 ${cur.targetDate}` : ''}${cur.note ? `, 메모 "${cur.note}"` : ''}`;

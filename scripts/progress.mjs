@@ -18,6 +18,8 @@ const { readContent } = await import('../lib/core/content-read.ts');
 const { renderMarkdown, kst } = await import('../lib/core/markdown.ts');
 const { getStore } = await import('../lib/core/store.ts');
 
+// 손님 링크 주소를 찍을 때 쓰는 사이트 주소(NEXT_PUBLIC_SITE_URL 이 있으면 그것)
+const SITE_URL = 'https://jumoney-oedomin.vercel.app';
 const STATUS = { todo: '시작 전', doing: '진행 중', done: '완료' };
 
 function usage(msg) {
@@ -57,6 +59,9 @@ function describeOp(op) {
     case 'property.add': return `집 정보 추가 ${op.label}: ${op.value}`;
     case 'money.add': return `돈 흐름 추가 ${op.date ?? '날짜 미정'} "${op.text}" ${op.amount ?? '금액 미정'}만 (${op.via})${op.estimate ? ' 추정' : ''}`;
     case 'plan.update': return `한 장 일정 출발점 수정 (v${op.baseVersion}${op.force ? ', 덮어쓰기' : ''})${p}`;
+    case 'question.add': return `질문 추가 → ${op.to}: "${op.text}"`;
+    case 'question.answer': return `질문 ${op.id}에 답 달기: "${op.text}"`;
+    case 'guest.add': return `손님 링크 만들기: ${op.name}`;
     case 'step.update': return `${op.stepId}단계 수정 (v${op.baseVersion}${op.force ? ', 덮어쓰기' : ''})${p}`;
     default: return `${op.op} ${op.id ?? op.key ?? ''}${op.baseVersion !== undefined ? ` (v${op.baseVersion})` : ''}${op.force ? ' 덮어쓰기' : ''}${p}`;
   }
@@ -85,6 +90,19 @@ function printGet(doc, steps) {
   const money = Object.values(doc.money ?? {}).filter((m) => !m.deletedAt).sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
   console.log(`\n[돈 흐름] 출발점 ${doc.plan ? `현금 ${doc.plan.cash ?? '-'}만 · 마통 여유 ${doc.plan.credit ?? '-'}만  (plan v${doc.plan.version})` : '(없음, plan v0)'}`);
   for (const m of money) console.log(`  ${m.date ?? '날짜 미정'} ${m.text} ${m.amount ?? '금액 미정'}만 (${m.via})${m.estimate ? ' 추정' : ''}  (id ${m.id} v${m.version})`);
+  const QS = { open: '답 기다림', answered: '답함', closed: '닫음' };
+  const qs = Object.values(doc.questions ?? {}).filter((q) => !q.deletedAt).sort((a, b) => (a.seq || 0) - (b.seq || 0));
+  console.log(`\n[질문] ${qs.length}개 · 답 기다림 ${qs.filter((q) => q.status === 'open').length} · 새 답 ${qs.filter((q) => q.unread).length}`);
+  for (const q of qs) {
+    const ans = q.answers.filter((a) => !a.deletedAt);
+    console.log(`  ${q.seq}. [${QS[q.status]}${q.unread ? ' · 새 답' : ''}] → ${q.to}: ${q.text}  (id ${q.id} v${q.version})`);
+    for (const a of ans) console.log(`      ↳ ${a.by}${a.guestId ? '(링크)' : ''} ${kst(a.at)}: ${a.text}  (답 id ${a.id})`);
+  }
+  const guests = Object.values(doc.guests ?? {}).filter((g) => !g.revokedAt);
+  const site = (process.env.NEXT_PUBLIC_SITE_URL || SITE_URL).replace(/\/$/, '');
+  console.log('\n[손님 링크]');
+  if (!guests.length) console.log('  (없음)');
+  for (const g of guests) console.log(`  ${g.name}: ${site}/q/${g.token}  (id ${g.id})`);
   console.log('\n[최근 기록]');
   const logs = doc.log.filter((l) => !l.deletedAt).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
   if (!logs.length) console.log('  (없음)');

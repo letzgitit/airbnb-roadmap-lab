@@ -80,6 +80,14 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 | `money.add` | `date`(`YYYY-MM-DD` 또는 null), `text`(1~200자), `amount`(만원 정수, 나감 −·들어옴 +, 미정 null), `via`(`cash` 현금 · `credit` 마통), `project`(`oedomin` · `jisan`) | `estimate: true` = 화면에 「추정」. 「11월~1월 일정」(/plan)의 돈 흐름 줄 |
 | `money.update` / `money.delete` / `money.restore` | `id`(`m_…`) (+`baseVersion`, `patch`) | `patch`: `date` `text` `amount` `via` `estimate` `project` |
 | `plan.update` | `baseVersion`, `patch` | `patch`: `cash`·`credit`(출발점 현금 · 마통 여유, 만원) `fork`(원주 갈림길, 한 줄 = 한 갈래, 「조건 → 할 일」, ≤500자). 처음 version은 0 |
+| `question.add` | `to`(받는 사람 이름, ≤20자), `text`(≤1000자) | 「질문」 화면(/questions). 처음 상태는 `open`(답 기다림) |
+| `question.update` | `id`(`q_…`), `patch` | `patch`: `text` `to` `status`(`open` 답 기다림 · `answered` 답함 · `closed` 닫음). **`status`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
+| `question.answer` | `id`, `text`(≤2000자) | 우리 쪽 답 · 덧붙이는 말(기록자 = `--by`). 상태는 그대로 |
+| `question.answer.delete` | `id`, `answerId`(`a_…`) | 답 하나 지우기(30일 뒤 정리). 손님 답이 하나도 안 남으면 `answered` → `open` |
+| `question.delete` / `question.restore` | `id` | |
+| `question.seen` | `id` | 「새 답」 표시 끄기 |
+| `guest.add` | `name`(≤20자) | 손님 링크 만들기. 결과의 `token`으로 주소 `/q/<token>`. `get`의 [손님 링크]에 전체 주소가 나온다 |
+| `guest.revoke` | `id`(`g_…`) | 링크 끊기(그 주소는 바로 안 열린다) |
 
 - 「사용자 체크리스트 항목」은 **할 일(task)과 같은 항목**입니다. `checklist.add/update/delete/restore`는 `task.*`의 별칭입니다.
 - `baseVersion`은 `get`에서 본 `(id … vN)`의 N입니다. 서버 version과 다르면 **그 연산만** 409로 실패하고 나머지는 적용됩니다(결과의 `failed`에 최신 내용이 들어 있음). 덮어쓰려면 연산에 `"force": true`.
@@ -111,3 +119,22 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 ## 초기 데이터
 
 `node scripts/seed-progress.mjs scripts/seed-example.json [--force] [--yes]` — 가짜 예시 데이터를 저장소에 넣습니다(저장소가 비어 있을 때만, `--force`는 지우고 다시, 원격(운영)이면 `--yes`도 필요). 실제 개인 정보는 이 파일에 넣지 마세요.
+
+## 질문 · 손님 링크 (`/questions` · `/q/<token>`)
+
+- 질문은 이 현황 문서의 `questions`, 손님 링크는 `guests`에 들어 있다(같은 병합 · version 규칙).
+- 손님 링크 화면 `/q/<token>`은 로그인 없이 열린다. 링크에 적은 이름과 받는 사람(`to`)이 같은(대소문자 · 앞뒤 공백 무시) 질문과 답만 보이고, 다른 현황은 나가지 않는다(`lib/core/questions.ts` `guestView`). 끊은 링크 · 틀린 토큰은 「열 수 없는 링크」.
+- 손님 답은 보통 HTML 폼으로 `POST /q/<token>/answer` → 엔진 연산 `question.guestAnswer`(서버 안에서만 만든다, CLI · API로는 못 보낸다). 답이 달리면 `answered` + 「새 답」 표시. 막는 것: 2000자 넘는 답, 같은 링크로 5초 안에 또 보내기, 한 시간 30개 넘게, 닫힌 질문, 다른 출처에서 보낸 폼.
+- 손님 화면은 자바스크립트 없이 돌고 스타일도 파일 안에 있다(`components/questions/GuestPage.tsx`). `noindex` · `no-store`.
+- 질문 내용 · 받는 사람 이름은 운영 데이터에만 둔다(이 저장소는 공개).
+
+```bash
+cat > "$OUT/q.json" <<'JSON'
+{ "by": "claude", "ops": [
+  { "op": "question.add", "to": "받는사람", "text": "물어볼 것" },
+  { "op": "guest.add", "name": "받는사람" }
+] }
+JSON
+node scripts/progress.mjs apply "$OUT/q.json" --dry-run && node scripts/progress.mjs apply "$OUT/q.json" --yes
+node scripts/progress.mjs get    # [질문] · [손님 링크]에 id · 주소가 나온다
+```

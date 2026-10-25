@@ -1,3 +1,4 @@
+import { questionsMarkdown } from './questions.ts';
 import type { ProgressDoc, Step, StepStatus, TaskItem } from './types.ts';
 import { manwon, moneyRows, VIA_LABEL } from '../plan.ts';
 
@@ -81,6 +82,7 @@ export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title
   if (logs.length === 0) out.push('- (없음)');
   for (const l of logs) out.push(`- ${kst(l.at)} [${l.kind}] ${l.text.replace(/\n/g, ' / ')} — ${l.by}`);
   out.push('');
+  out.push(...questionsMarkdown(doc, kst));
   // 「11월~1월 일정」(/plan)의 돈 흐름 · 갈림길. 없으면 절을 쓰지 않는다.
   const rows = moneyRows(Object.values(doc.money ?? {}), doc.plan ?? null);
   if (rows.length || doc.plan) {

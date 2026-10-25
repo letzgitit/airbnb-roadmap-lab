@@ -59,7 +59,32 @@ export const planPatch = z.object({
   fork: z.string().max(500, '갈림길은 500자 이하로 입력하세요.').optional(),
 }).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
 
+// 질문 · 손님 링크. id 는 q_(질문) · a_(답) · g_(손님 링크).
+const qid = z.string().regex(/^q_[A-Za-z0-9]{1,60}$/, 'id 형식이 올바르지 않습니다.');
+const aid = z.string().regex(/^a_[A-Za-z0-9]{1,60}$/, 'id 형식이 올바르지 않습니다.');
+const gid = z.string().regex(/^g_[A-Za-z0-9]{1,60}$/, 'id 형식이 올바르지 않습니다.');
+export const QUESTION_MAX = 1000;
+export const ANSWER_MAX = 2000;
+const personName = z.string().trim().min(1, '받는 사람 이름을 입력하세요.').max(20, '이름은 20자 이하로 입력하세요.');
+const questionText = z.string().trim().min(1, '질문을 입력하세요.').max(QUESTION_MAX, `질문은 ${QUESTION_MAX}자 이하로 입력하세요.`);
+export const answerText = z.string().trim().min(1, '답을 입력하세요.').max(ANSWER_MAX, `답은 ${ANSWER_MAX}자 이하로 입력하세요.`);
+const questionStatus = z.enum(['open', 'answered', 'closed']);
+export const questionPatch = z.object({
+  text: questionText.optional(),
+  to: personName.optional(),
+  status: questionStatus.optional(),
+}).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
+
 export const opSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('question.add'), to: personName, text: questionText }),
+  z.object({ op: z.literal('question.update'), id: qid, baseVersion: version.optional(), patch: questionPatch, force: z.boolean().optional() }),
+  z.object({ op: z.literal('question.delete'), id: qid }),
+  z.object({ op: z.literal('question.restore'), id: qid }),
+  z.object({ op: z.literal('question.answer'), id: qid, text: answerText }),
+  z.object({ op: z.literal('question.answer.delete'), id: qid, answerId: aid }),
+  z.object({ op: z.literal('question.seen'), id: qid }),
+  z.object({ op: z.literal('guest.add'), name: personName }),
+  z.object({ op: z.literal('guest.revoke'), id: gid }),
   z.object({ op: z.literal('step.update'), stepId, baseVersion: version, patch: stepPatch, force: z.boolean().optional() }),
   z.object({ op: z.literal('task.add'), stepId, text, due: nullableDate.optional() }),
   z.object({ op: z.literal('task.update'), id, baseVersion: version.optional(), patch: taskPatch, force: z.boolean().optional() }),

@@ -6,8 +6,10 @@ import type { ReactNode } from 'react';
 // 홈 맨 위의 바로 가기 두 칸. 왼쪽 = 주의사항(빨강은 「주의」를 뜻하므로 이 칸만 빨간 바탕),
 // 오른쪽 = 집 정보 · 기록(로그인했을 때만, 중립). 목록은 홈에 펼치지 않고 눌러서 창(시트)으로 본다.
 // 두 칸은 같은 폭 · 같은 높이이고, 아주 좁은 화면(340px 미만)에서만 위아래로 쌓인다. 익명은 주의사항 한 칸만, 가로 가득.
-export function HomeEntries({ ruleCount, warnCount, loggedIn, onOpenNotice, onOpenRecords }: {
-  ruleCount: number; warnCount: number; loggedIn: boolean; onOpenNotice: () => void; onOpenRecords: () => void;
+export interface QuestionCounts { total: number; waiting: number; unread: number }
+
+export function HomeEntries({ ruleCount, warnCount, loggedIn, onOpenNotice, onOpenRecords, questions }: {
+  ruleCount: number; warnCount: number; loggedIn: boolean; onOpenNotice: () => void; onOpenRecords: () => void; questions?: QuestionCounts | null;
 }) {
   const hasNotice = ruleCount + warnCount > 0;
   if (!hasNotice && !loggedIn) return null;
@@ -36,7 +38,25 @@ export function HomeEntries({ ruleCount, warnCount, loggedIn, onOpenNotice, onOp
           <span className="block text-[13px] leading-snug text-slate-600">외도민 · 지산 할 일과 돈 흐름을 한 장에</span>
         </Link>
       )}
+      {/* 「질문」(/questions): 지인에게 묻고 손님 링크로 답을 받는다. 새 답이 오면 파란 테두리 + 개수 */}
+      {loggedIn && <QuestionsLink q={questions ?? null} />}
     </div>
+  );
+}
+
+function QuestionsLink({ q }: { q: QuestionCounts | null }) {
+  const unread = q?.unread ?? 0;
+  const sub = !q || q.total === 0 ? '지인에게 묻고 링크로 답 받기' : `질문 ${q.total}개 · 답 기다림 ${q.waiting}개`;
+  return (
+    <Link href="/questions" className={`flex min-h-14 w-full flex-col gap-0.5 rounded-2xl border bg-white px-3.5 py-2.5 text-left min-[340px]:col-span-2 ${unread ? 'border-blue-400 ring-2 ring-blue-200 dark:ring-blue-900' : 'border-slate-200 hover:border-slate-400'}`}>
+      <span className="flex items-center gap-2">
+        <i className="fas fa-circle-question shrink-0 text-[15px] text-slate-500" aria-hidden />
+        <span className="min-w-0 flex-1 text-[15px] font-bold leading-snug text-slate-900">질문</span>
+        {unread > 0 && <span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[12px] font-bold text-snow">새 답 {unread}</span>}
+        <i className="fas fa-chevron-right shrink-0 text-[13px] text-slate-500" aria-hidden />
+      </span>
+      <span className="block text-[13px] leading-snug text-slate-600">{sub}</span>
+    </Link>
   );
 }
 

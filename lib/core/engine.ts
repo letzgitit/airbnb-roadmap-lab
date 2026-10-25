@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { getStore } from './store.ts';
 import type { Op } from './validate.ts';
+import { applyQuestionOp, purgeQuestions, type GuestAnswerOp } from './questions.ts';
 import type { LogEntry, MoneyItem, PlanState, ProgressDoc, PropertyItem, StepState, TaskItem } from './types.ts';
 
 export interface Actor { email: string; name: string }
@@ -34,7 +35,7 @@ export class OpError extends Error {
 }
 
 export function emptyDoc(): ProgressDoc {
-  return { schema: 1, version: 0, updatedAt: null, lastAction: null, steps: {}, tasks: {}, log: [], property: {}, editing: {}, money: {}, plan: null };
+  return { schema: 1, version: 0, updatedAt: null, lastAction: null, steps: {}, tasks: {}, log: [], property: {}, editing: {}, money: {}, plan: null, questions: {}, guests: {} };
 }
 
 export function parseDoc(raw: string | null): ProgressDoc {
@@ -42,7 +43,7 @@ export function parseDoc(raw: string | null): ProgressDoc {
   const d = JSON.parse(raw) as Partial<ProgressDoc>;
   return {
     ...emptyDoc(), ...d, steps: d.steps ?? {}, tasks: d.tasks ?? {}, log: d.log ?? [], property: d.property ?? {}, editing: d.editing ?? {},
-    money: d.money ?? {}, plan: d.plan ?? null,
+    money: d.money ?? {}, plan: d.plan ?? null, questions: d.questions ?? {}, guests: d.guests ?? {},
   } as ProgressDoc;
 }
 
@@ -82,10 +83,22 @@ function guardUpdate<T extends { id: string; version: number; updatedBy: string;
   return cur;
 }
 
-function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?: unknown } {
+// 엔진이 받는 연산: API · CLI 가 보내는 Op + 서버 안에서만 만드는 손님 답
+export type EngineOp = Op | GuestAnswerOp;
+
+function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { result?: unknown } {
   const iso = new Date(now).toISOString();
   pruneEditing(doc, now);
   const bump = (cur: { version: number }) => ({ version: cur.version + 1, updatedAt: iso, updatedBy: actor.name });
+
+  // 질문 · 손님 링크(lib/core/questions.ts)
+  const q = applyQuestionOp(doc, op, actor, iso, now, {
+    newId, bump, clip,
+    touch: (text) => touch(doc, actor, iso, text),
+    fail: (status, body) => { throw new OpError(status, body); },
+  });
+  if (q) return q;
+  if (op.op === 'question.guestAnswer') throw new OpError(400, { error: 'invalid' });
 
   switch (op.op) {
     case 'editing.set': {
@@ -269,6 +282,7 @@ function applyOp(doc: ProgressDoc, op: Op, actor: Actor, now: number): { result?
       return { result: next };
     }
   }
+  throw new OpError(400, { error: 'invalid', message: '모르는 연산입니다.' });
 }
 
 function purgeTrash(doc: ProgressDoc, now: number) {
@@ -277,6 +291,7 @@ function purgeTrash(doc: ProgressDoc, now: number) {
   for (const [id, p] of Object.entries(doc.property)) if (old(p.deletedAt)) delete doc.property[id];
   for (const [id, m] of Object.entries(doc.money)) if (old(m.deletedAt)) delete doc.money[id];
   doc.log = doc.log.filter((l) => !old(l.deletedAt));
+  purgeQuestions(doc, old);
   // 휴지통 개수 상한: 오래 지운 것부터 정리
   const capTrash = <T extends { id: string; deletedAt: string | null }>(items: T[]): Set<string> => {
     const trash = items.filter((x) => x.deletedAt).sort((a, b) => (a.deletedAt ?? '').localeCompare(b.deletedAt ?? ''));
@@ -302,7 +317,7 @@ export interface OpOutcome { index: number; ok: boolean; result?: unknown; statu
 // 여러 연산을 한 번에: 읽은 값이 그대로일 때만 쓰고, 그 사이 누가 썼으면 다시 읽어 항목 단위로 재적용한다.
 // 연산 하나가 실패(충돌·삭제됨 등)해도 그 연산만 건너뛰고 나머지는 적용한다.
 // dryRun: 지금 저장된 값에 적용해 본 결과만 돌려주고 쓰지 않는다(CLI --dry-run).
-export async function mutateMany(ops: Op[], actor: Actor, opts: { dryRun?: boolean } = {}): Promise<{ doc: ProgressDoc; outcomes: OpOutcome[] }> {
+export async function mutateMany(ops: EngineOp[], actor: Actor, opts: { dryRun?: boolean } = {}): Promise<{ doc: ProgressDoc; outcomes: OpOutcome[] }> {
   const store = getStore();
   for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
     // 동시에 쓰다 밀렸으면 조금씩 늦춰 다시(같은 순간에 또 부딪치지 않게 무작위로)
@@ -335,7 +350,7 @@ export async function mutateMany(ops: Op[], actor: Actor, opts: { dryRun?: boole
   throw new OpError(503, { error: 'busy', message: '잠시 후 다시 시도하세요.' });
 }
 
-export async function mutate(op: Op, actor: Actor): Promise<{ doc: ProgressDoc; result?: unknown }> {
+export async function mutate(op: EngineOp, actor: Actor): Promise<{ doc: ProgressDoc; result?: unknown }> {
   const { doc, outcomes } = await mutateMany([op], actor);
   const o = outcomes[0];
   if (!o.ok) throw new OpError(o.status ?? 500, o.error ?? { error: 'error' });

@@ -56,6 +56,27 @@ export interface PlanState {
   cash: number | null; credit: number | null; fork: string;
   version: number; updatedAt: string; updatedBy: string;
 }
+// 질문(비공개): 우리가 묻고 받는 사람(손님 링크로 들어오는 지인)이 답을 단다.
+// status: open 답 기다림 · answered 답함 · closed 닫음. unread = 손님이 단 새 답을 우리가 아직 안 봄.
+export type QuestionStatus = 'open' | 'answered' | 'closed';
+export const QUESTION_STATUS_LABEL: Record<QuestionStatus, string> = { open: '답 기다림', answered: '답함', closed: '닫음' };
+export interface QuestionAnswer {
+  id: string; by: string; text: string; at: string;
+  /** 손님 링크로 단 답이면 그 링크 id(g_…), 우리가 단 답이면 null */
+  guestId: string | null;
+  deletedAt: string | null; deletedBy: string | null;
+}
+export interface QuestionItem {
+  id: string; seq: number; to: string; text: string; status: QuestionStatus;
+  answers: QuestionAnswer[]; unread: boolean;
+  version: number; createdAt: string; createdBy: string; updatedAt: string; updatedBy: string;
+  deletedAt: string | null; deletedBy: string | null;
+}
+// 손님 링크: /q/<token> 으로 열면 name 에게 온 질문과 답만 보인다. 끊으면(revokedAt) 바로 막힌다.
+export interface GuestLink {
+  id: string; name: string; token: string;
+  createdAt: string; createdBy: string; revokedAt: string | null; revokedBy: string | null;
+}
 export interface ProgressDoc {
   schema: 1; version: number; updatedAt: string | null;
   lastAction: LastAction | null;
@@ -67,6 +88,9 @@ export interface ProgressDoc {
   // 2026-10-23 추가(선택): 옛 문서엔 없다 → parseDoc 이 빈 값으로 채운다
   money: Record<string, MoneyItem>;
   plan: PlanState | null;
+  // 2026-10-25 추가(선택): 질문 · 손님 링크
+  questions: Record<string, QuestionItem>;
+  guests: Record<string, GuestLink>;
 }
 export interface Me { email: string; name: string }
 export const STEP_COUNT = 14;

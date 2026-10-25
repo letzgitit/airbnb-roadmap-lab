@@ -80,6 +80,11 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
   const openStep = useCallback((i: number, section: StepSection | null = null) => openSheet({ kind: 'step', index: i, section }), [openSheet]);
   const openNotice = useCallback((idx: number | null = null) => openSheet({ kind: 'notice', initialIndex: idx }), [openSheet]);
   const warnCount = useMemo(() => steps.reduce((n, s) => n + s.warnings.length, 0), [steps]);
+  const questionCounts = useMemo(() => {
+    if (!loggedIn || !doc) return null;
+    const live = Object.values(doc.questions ?? {}).filter((q) => !q.deletedAt);
+    return { total: live.length, waiting: live.filter((q) => q.status === 'open').length, unread: live.filter((q) => q.unread).length };
+  }, [loggedIn, doc]);
 
   const results = useMemo<Hit[] | null>(() => {
     const q = query.trim().toLowerCase();
@@ -175,7 +180,7 @@ function Inner({ content, loginReady }: { content: Content; loginReady: boolean 
         <div className="chart-wrapper">
           {!loggedIn && <p className="mb-4 max-w-[720px] px-1 text-[15px] leading-relaxed text-slate-600">외도민 등록부터 첫 손님까지 {steps.length}단계예요. 단계를 누르면 할 일과 주의사항이 나와요.</p>}
           <HomeEntries ruleCount={updates.length} warnCount={warnCount} loggedIn={loggedIn}
-            onOpenNotice={() => openNotice(null)} onOpenRecords={() => openSheet({ kind: 'records' })} />
+            onOpenNotice={() => openNotice(null)} onOpenRecords={() => openSheet({ kind: 'records' })} questions={questionCounts} />
           <div className="mb-3 mt-2 flex flex-col items-start gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-[17px] font-bold text-slate-900">단계별 일정 (Day 0~45)</h2>
             <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] font-semibold text-slate-700" aria-label="색 설명">

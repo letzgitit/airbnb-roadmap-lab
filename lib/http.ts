@@ -24,6 +24,13 @@ export function checkUploadRequest(req: Request): string | null {
   return checkOrigin(req);
 }
 
+// 손님 링크 화면의 보통 HTML 폼 전송(자바스크립트 없이 도는 화면). 다른 사이트에서 보낸 폼은 출처 검사에서 거른다.
+export function checkFormRequest(req: Request): string | null {
+  const ct = (req.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  if (ct !== 'application/x-www-form-urlencoded' && ct !== 'multipart/form-data') return 'bad_content_type';
+  return checkOrigin(req);
+}
+
 function checkOrigin(req: Request): string | null {
   const site = req.headers.get('sec-fetch-site');
   if (site && site !== 'same-origin' && site !== 'none') return 'bad_origin';

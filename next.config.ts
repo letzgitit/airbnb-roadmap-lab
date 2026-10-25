@@ -20,6 +20,14 @@ const nextConfig: NextConfig = {
         headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
       },
       {
+        // 손님 링크(/q/<토큰>): 질문 · 답이 실린 화면이라 캐시에 남기지 않고 검색에도 안 올린다
+        source: '/q/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive, nosnippet' },
+        ],
+      },
+      {
         // 사진 API(목록 · 바이트)도 같다: CDN · 공유 캐시에 사진이 남지 않게
         source: '/api/photos/:path*',
         headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
