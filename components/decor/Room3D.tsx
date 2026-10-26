@@ -52,9 +52,14 @@ export function Room3D() {
       const d = e.data as { type?: unknown; h?: unknown } | null;
       if (!d || d.type !== 'room3d:height' || typeof d.h !== 'number' || !Number.isFinite(d.h)) return;
       setHeight(Math.min(MAX_H, Math.max(MIN_H, Math.ceil(d.h))));
+      sendVh();
     };
+    // iframe 안의 vh 는 iframe 높이(= 문서 전체)라 장면 높이가 늘 최대로 커진다 → 이 창 높이를 알려 준다(시안 쪽은 값이 같으면 무시).
+    // 시안은 출처가 null 이라 대상 출처를 '*' 로만 보낼 수 있다(창 높이 숫자뿐이라 새어도 괜찮다).
+    const sendVh = () => { frameRef.current?.contentWindow?.postMessage({ type: 'room3d:vh', h: window.innerHeight }, '*'); };
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
+    window.addEventListener('resize', sendVh);
+    return () => { window.removeEventListener('message', onMessage); window.removeEventListener('resize', sendVh); };
   }, []);
 
   if (state === 'checking') {

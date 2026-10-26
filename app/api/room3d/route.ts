@@ -21,7 +21,9 @@ const HEADERS = {
 // 같은 출처가 아니라 부모가 iframe 안을 못 읽으니, 문서 높이를 부모에게 알린다(부모는 이 iframe 에서 온 것만 받는다).
 // <html> 의 scrollHeight 는 iframe 높이보다 작아지지 않아(한 번 늘면 줄지 않는다) 내용 높이인 <body> 를 잰다.
 // 소수점 높이를 내림하면 1px 미만이 넘쳐 iframe 안에 스크롤 막대가 생기고 폭이 줄어 높이가 또 바뀐다 → 올림 + 2px.
-const HEIGHT_SCRIPT = `<script>(function(){var b=document.body;function p(){try{parent.postMessage({type:'room3d:height',h:Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height))+2},'*')}catch(e){}}addEventListener('load',p);if(window.ResizeObserver)new ResizeObserver(p).observe(b);p();})();</script>`;
+// 반대로 iframe 안의 vh 는 「iframe 높이 = 문서 전체 높이」라 장면(#view, 64vh)이 늘 최대 740px 로 커져 그림 위 · 아래에 빈칸이 생긴다.
+// 그래서 부모가 자기 창 높이를 알려 주면(room3d:vh, 부모 창에서 온 것만) --pvh(창 높이의 1%)로 바꿔 쓴다. 새 창으로 열면 알림이 없어 원래 1vh 그대로.
+const HEIGHT_SCRIPT = `<script>(function(){var b=document.body,r=document.documentElement,last=0;function p(){try{parent.postMessage({type:'room3d:height',h:Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height))+2},'*')}catch(e){}}addEventListener('message',function(e){var d=e.data;if(e.source!==parent||parent===window||!d||d.type!=='room3d:vh'||typeof d.h!=='number'||!isFinite(d.h)||d.h<200)return;var h=Math.round(d.h);if(h===last)return;last=h;r.style.setProperty('--pvh',h/100+'px')});addEventListener('load',p);if(window.ResizeObserver)new ResizeObserver(p).observe(b);p();})();</script>`;
 
 // 시안의 크림 · 오커 · 테라코타 · 둘째 서체를 사이트 값(DESIGN.md 토큰)으로 덮는다. 시안의 :root 와 같은 선택자를 뒤에 두어 이긴다.
 // 장면 위 이름표(.lbl)는 늘 흰 바탕이라 밝은 값으로 고정한다. 제목(h1)은 하위 탭 「3D 시안」과 겹쳐 숨긴다.
@@ -36,6 +38,11 @@ const SITE_STYLE =
   `body{font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}` +
   `input[type=checkbox]{accent-color:#0b7285}` +
   `h1{display:none}` +
+  // 장면 높이: 창 높이의 64%(폰 62%)이되, 위에서 볼 땐 집 모양(가로가 세로의 약 1.4배)에 맞춰 폭의 72%를 넘지 않게 — 집이 꽉 차고 위아래 빈칸이 안 남는다.
+  // 눈높이로 걸을 땐 방 안이라 빈칸이 없으니 원래 높이 그대로. cqw = .stage 폭 기준.
+  `.stage{container-type:inline-size}` +
+  `#view{height:min(calc(var(--pvh,1vh)*64),72cqw);min-height:220px}#view.walk{height:calc(var(--pvh,1vh)*64);min-height:380px}` +
+  `@media (max-width:600px){#view{height:min(calc(var(--pvh,1vh)*62),72cqw)}#view.walk{height:calc(var(--pvh,1vh)*62);min-height:360px}}` +
   `.lbl{color:#1a1d21}.lbl small{color:#646c76}.lbl.issue{background:#fff5f5;color:#c92a2a;border-color:#c92a2a}</style>`;
 
 const note = (title: string) =>
