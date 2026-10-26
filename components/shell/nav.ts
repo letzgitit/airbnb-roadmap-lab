@@ -9,7 +9,7 @@ const under = (base: string) => (p: string) => p === base || p.startsWith(`${bas
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: '홈', icon: 'fa-house', match: (p) => p === '/', open: true },
   { href: '/house', label: '우리 집', icon: 'fa-door-open', match: under('/house') },
-  { href: '/decor', label: '꾸미기', icon: 'fa-couch', match: under('/decor'), open: true },
+  { href: '/decor/3d', label: '꾸미기', icon: 'fa-couch', match: under('/decor'), open: true },
   { href: '/money', label: '돈 · 다른 집', icon: 'fa-wallet', match: under('/money') },
 ];
 

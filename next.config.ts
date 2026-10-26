@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
     return [
       { source: '/plan', destination: '/money', permanent: false },
       { source: '/questions', destination: '/house/questions', permanent: false },
+      // 꾸미기 첫 탭은 3D 시안(참고 모음은 /decor/refs 로 옮김)
+      { source: '/decor', destination: '/decor/3d', permanent: false },
     ];
   },
   async headers() {
