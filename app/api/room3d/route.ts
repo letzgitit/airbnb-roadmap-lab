@@ -29,9 +29,10 @@ const HEIGHT_SCRIPT = `<script>(function(){var b=document.body,r=document.docume
 // 시안의 크림 · 오커 · 테라코타 · 둘째 서체를 사이트 값(DESIGN.md 토큰)으로 덮는다. 시안의 :root 와 같은 선택자를 뒤에 두어 이긴다.
 // 장면 위 이름표(.lbl)는 늘 흰 바탕이라 밝은 값으로 고정한다. 제목(h1)은 하위 탭 「3D 시안」과 겹쳐 숨긴다.
 const LIGHT_VARS =
-  '--bg:#f5f6f8;--surface:#fff;--surface-2:#eef0f3;--chip:#eef0f3;--scene-bg:#eef0f3;--line:#e2e5e9;--text:#1a1d21;--muted:#646c76;--accent:#0b7285;--accent-ink:#fff;--warn:#c92a2a;--pad-bg:rgba(255,255,255,.82);--pad-ink:#1a1d21';
+  '--bg:#f5f6f8;--surface:#fff;--surface-2:#eef0f3;--chip:#eef0f3;--scene-bg:#eef0f3;--line:#e2e5e9;--text:#1a1d21;--muted:#646c76;--accent:#0b7285;--accent-ink:#fff;--link:#0b7285;--warn:#c92a2a;--pad-bg:rgba(255,255,255,.82);--pad-ink:#1a1d21;color-scheme:light';
 const DARK_VARS =
-  '--bg:#111316;--surface:#1a1d22;--surface-2:#22262c;--chip:#22262c;--scene-bg:#22262c;--line:#343941;--text:#e6e8eb;--muted:#9aa1ab;--accent:#0b7285;--accent-ink:#fff;--warn:#ff8787;--pad-bg:rgba(26,29,34,.82);--pad-ink:#e6e8eb';
+  '--bg:#111316;--surface:#1a1d22;--surface-2:#22262c;--chip:#22262c;--scene-bg:#22262c;--line:#343941;--text:#e6e8eb;--muted:#9aa1ab;--accent:#0b7285;--accent-ink:#fff;--link:#3bc9db;--warn:#ff8787;--pad-bg:rgba(26,29,34,.82);--pad-ink:#e6e8eb;color-scheme:dark';
+// --link = 어두운 바탕 위 글자 단추(상태 줄 「저장」)도 4.5:1 넘게. color-scheme = 안 고른 체크박스 · 고르기 칸도 어두운 화면 모양으로
 const SITE_STYLE =
   `<style>:root{${LIGHT_VARS}}` +
   `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${DARK_VARS}}}` +
