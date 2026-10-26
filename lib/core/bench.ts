@@ -104,7 +104,16 @@ function redisBackend(url: string, token: string): Backend {
   return {
     kind: 'redis',
     label: `redis ${new URL(url).host}`,
-    all: (key) => wrap('꾸미기 참고 읽기', async () => ((await redis.hgetall<Record<string, string>>(key)) ?? {}) as Record<string, string>),
+    // automaticDeserialization: false 면 hgetall 이 [필드, 값, 필드, 값 …] 평평한 배열로 온다 → 객체로 바꾼다(필드 이름을 읽는 곳이 있다: listPublicIds)
+    all: (key) => wrap('꾸미기 참고 읽기', async () => {
+      const raw = (await redis.hgetall(key)) as unknown;
+      if (Array.isArray(raw)) {
+        const m: Record<string, string> = {};
+        for (let i = 0; i + 1 < raw.length; i += 2) m[String(raw[i])] = String(raw[i + 1]);
+        return m;
+      }
+      return (raw ?? {}) as Record<string, string>;
+    }),
     get: (key, field) => wrap('꾸미기 참고 읽기', async () => {
       const v = await redis.hget<string>(key, field);
       return v === null || v === undefined ? null : String(v);
