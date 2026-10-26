@@ -156,7 +156,7 @@ export function Room3D() {
   return (
     <div>
       <iframe ref={frameRef} key={src} src={src} title="3D 시안" sandbox="allow-scripts" referrerPolicy="no-referrer"
-        style={{ height }} className="block w-full rounded-panel border border-line bg-surface" />
+        style={{ height }} className="block w-full" />
       <p className="mt-2 flex justify-end">
         <a href={src} target="_blank" rel="noopener" className={textBtn}>
           새 창으로 크게 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
