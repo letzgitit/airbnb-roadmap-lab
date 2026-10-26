@@ -9,6 +9,7 @@ import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, dateCls, EditBadge, enterSubmit, inputCls, LastEdit, leadCls, oneLine, rowCls, rowText, textBtn,
   TRASH_NOTE, TrashButton, useBusy, useDirty, useEditing, useFormEsc,
 } from '@/components/progress/bits';
+import { callNumber, phonesIn, telHref } from './phone';
 import { KindSelect, NoteField, OwnerSelect, type StepRef, type TaskOwner, type TaskWithNote } from './TaskComposer';
 
 /**
@@ -26,7 +27,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
   onEditChange: (id: string, open: boolean) => void; onToggle: (t: TaskItem) => void; onGone: () => void;
 }) {
-  const t = task as TaskWithNote; // 지산판(데이터에 note · owner 가 아직 없음)과 같은 코드를 쓰려고 둔 이름
+  const t = task as TaskWithNote; // 외도민판 · 지산판 같은 코드(autoFill 은 지산판에선 늘 비어 있다)
   const { send, toast, confirm } = useProgress();
   const ed = useEditing(`task:${t.id}`);
   const [text, setText] = useState('');
@@ -104,6 +105,13 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               {!deleted && !moveOpen && <button type="button" className={`${textBtn} ml-auto`} onClick={() => setMoveOpen(true)}>다른 단계로 옮기기</button>}
             </div>
             <NoteField value={note} onChange={setNote} />
+            {/* 메모 속 전화번호는 눌러서 바로 건다(메모 글은 그대로) */}
+            {phonesIn(note).length > 0 && (
+              <p className="flex flex-wrap items-center gap-x-3 text-sm font-normal text-ink-soft">
+                <span>전화 걸기</span>
+                {[...new Set(phonesIn(note))].map((p) => <a key={p} href={telHref(p)} className={`${textBtn} mx-0 tabular-nums`}><i className="fas fa-phone mr-1.5" aria-hidden />{p}</a>)}
+              </p>
+            )}
             {!deleted && moveOpen && (
               <select className={inputCls} value={sid} onChange={(e) => setSid(Number(e.target.value))} aria-label="단계 이동">
                 {steps.slice(0, STEP_COUNT).map((s) => <option key={s.id} value={s.id}>{s.id}. {s.title}</option>)}
@@ -128,6 +136,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   }
 
   const late = !!dl?.late && !t.done;
+  const call = callNumber(t.note);
   return (
     <li className={rowCls}>
       <label className={`${leadCls} cursor-pointer`}>
@@ -153,6 +162,13 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
           <EditBadge k={`task:${t.id}`} />
         </span>
       </button>
+      {/* 메모 첫 줄이 「전화 …」면 줄을 펼치지 않아도 바로 걸 수 있게 전화 단추(그 메모의 첫 번호) */}
+      {call && (
+        <a href={telHref(call)} aria-label={`${t.text} 전화 걸기 ${call}`}
+          className="flex size-11 shrink-0 items-center justify-center rounded-full text-accent-ink transition-colors hover:bg-sunken">
+          <i className="fas fa-phone" aria-hidden />
+        </a>
+      )}
       <TrashButton label={`${t.text} 삭제`} onClick={() => void del()} />
     </li>
   );

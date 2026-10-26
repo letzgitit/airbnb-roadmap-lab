@@ -37,3 +37,16 @@ export function stepRanges(steps: TimelineStep[], doc: ProgressDoc, today: strin
     return { ...s, from: end < start ? end : start, to: end, done };
   });
 }
+
+// 고정 일정: 현황 집 정보 중 이름이 「고정 · 」으로 시작하고 값이 YYYY-MM-DD 로 시작하는 줄 + marks(예: 지산 만기). 날짜순.
+export interface Pin { date: string; label: string }
+const PIN_PREFIX = /^고정\s*·\s*/;
+export function pinsOf(doc: ProgressDoc | null, marks: Pin[] = []): Pin[] {
+  return [
+    ...marks,
+    ...(doc ? Object.values(doc.property) : [])
+      .filter((p) => !p.deletedAt && PIN_PREFIX.test(p.label))
+      .map((p) => { const m = p.value.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/); return m ? { date: m[1], label: m[2] || p.label.replace(PIN_PREFIX, '') } : null; })
+      .filter((p): p is Pin => !!p),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+}

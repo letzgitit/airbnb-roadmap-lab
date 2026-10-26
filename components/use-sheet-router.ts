@@ -5,7 +5,7 @@ import type { StepSection } from '@/lib/client/step-sections';
 import { useGuardedNav } from './shell/useGuardedNav';
 
 // 한 번에 하나만 열리는 공개 안내 시트(단계 · 주의사항 · 대화 예시)와 주소 해시를 맞춘다.
-//   #step-3 · #notice · #scripts
+//   #step-3 · #notice · #scripts · #day-2026-10-27(고른 날의 할 일, 로그인 화면)
 // - UI 로 열면 항목을 쌓는다(pushState) → 폰의 뒤로 가기가 시트를 닫는다.
 // - UI 로 닫을 때 그 항목을 우리가 쌓았으면 뒤로 가기 한 번, 아니면 해시만 지운다(replaceState).
 // - 뒤로 가기·앞으로 가기·주소 직접 수정(popstate/hashchange)도 같은 시트 상태로 이어진다.
@@ -18,9 +18,11 @@ import { useGuardedNav } from './shell/useGuardedNav';
 export type SheetState =
   | { kind: 'step'; index: number; section: StepSection | null }
   | { kind: 'notice'; initialIndex: number | null }
-  | { kind: 'scripts'; initialIndex: number | null };
+  | { kind: 'scripts'; initialIndex: number | null }
+  // 고른 날의 할 일(로그인 화면 타임라인에서 날짜를 누르면). #day-2026-10-27
+  | { kind: 'day'; date: string };
 export type SheetKind = SheetState['kind'];
-type Want = { kind: 'step'; id: number } | { kind: 'notice' | 'scripts' | 'records' } | null;
+type Want = { kind: 'step'; id: number } | { kind: 'day'; date: string } | { kind: 'notice' | 'scripts' | 'records' } | null;
 type ProgressStatus = 'loading' | 'anon' | 'forbidden' | 'ready';
 
 const SIMPLE_KINDS = ['notice', 'scripts', 'records'] as const;
@@ -29,6 +31,8 @@ function parseHash(raw: string): Want {
   const h = raw.replace(/^#/, '');
   const m = /^step-(\d{1,3})$/.exec(h);
   if (m) return { kind: 'step', id: Number(m[1]) };
+  const d = /^day-(\d{4}-\d{2}-\d{2})$/.exec(h);
+  if (d) return { kind: 'day', date: d[1] };
   const k = SIMPLE_KINDS.find((x) => x === h);
   return k ? { kind: k } : null;
 }
@@ -75,13 +79,14 @@ export function useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm }: 
     animTimer.current = setTimeout(() => setSheet(null), 300);
   }, []);
 
-  const hashFor = useCallback((s: SheetState) => (s.kind === 'step' ? `#step-${latest.current.stepIds[s.index]}` : `#${s.kind}`), []);
+  const hashFor = useCallback((s: SheetState) => (s.kind === 'step' ? `#step-${latest.current.stepIds[s.index]}` : s.kind === 'day' ? `#day-${s.date}` : `#${s.kind}`), []);
   const stateFor = useCallback((w: NonNullable<Want>): SheetState | null => {
     if (w.kind === 'step') {
       const index = latest.current.stepIds.indexOf(w.id);
       return index >= 0 ? { kind: 'step', index, section: null } : null;
     }
     if (w.kind === 'records') return null;
+    if (w.kind === 'day') return { kind: 'day', date: w.date };
     return { kind: w.kind, initialIndex: null };
   }, []);
   const clearHash = useCallback(() => {
@@ -166,6 +171,14 @@ export function useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm }: 
     setSheet(next);
   }, [hashFor]);
 
+  // ── 열린 시트를 다른 시트로 바꾸기(고른 날 → 그 단계 창): 같은 항목의 해시만 바꾼다(쌓지 않는다) ──
+  const swap = useCallback((next: SheetState) => {
+    if (!live.current) return;
+    window.history.replaceState(ownEntry() ? SHEET_MARK() : null, '', hashFor(next));
+    live.current = next;
+    setSheet(next);
+  }, [hashFor]);
+
   // ── 뒤로 가기 · 앞으로 가기 · 주소 직접 수정 ──
   useEffect(() => {
     const onNav = async () => {
@@ -185,7 +198,7 @@ export function useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm }: 
       const next = want ? stateFor(want) : null;
       // 로그인 확인을 기다리던 #records 는, 해시가 다른 곳으로 바뀌면(다른 시트 · 홈) 취소해 나중에 갑자기 옮기지 않게 한다
       if (!want || want.kind !== 'records') wantHouse.current = false;
-      if (cur && next && next.kind === cur.kind && (next.kind !== 'step' || (cur.kind === 'step' && next.index === cur.index))) return;
+      if (cur && next && hashFor(next) === hashFor(cur)) return;
       if (cur) {
         if (latest.current.isDirty(cur.kind)) {
           // 확인하는 동안 시트 항목 위에 머문다: 지워진 해시를 곧바로 되돌려 쌓아 둔다
@@ -229,5 +242,5 @@ export function useSheetRouter({ stepIds, loggedIn, status, isDirty, confirm }: 
   // ── #records 로 들어와 로그인 확인을 기다리던 중이면, 확인이 끝났을 때 마저 처리한다 ──
   useEffect(() => { resolveHouse(); }, [loggedIn, status, resolveHouse]);
 
-  return { sheet, shown, open, close, goStep };
+  return { sheet, shown, open, close, goStep, swap };
 }

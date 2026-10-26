@@ -10,12 +10,12 @@
 - `lib/core/` — 병합 엔진·검증·저장소·마크다운 내보내기(서버와 CLI 공용)
 - `content/` — 콘텐츠 JSON(다른 작업이 관리). 없으면 `fixtures/content-sample/` 사용
 - `private/` — 공개 저장소에 올리지 않는 정적 파일(3D 시안 등). `.gitignore`에 있어 GitHub에는 없고, 배포에만 실린다. 로그인 확인하는 라우트로만 내려준다
-- `scripts/` — `progress.mjs`(CLI, `README-progress.md`), `photos.mjs`(사진 CLI, `README-photos.md`), `seed-progress.mjs`, `verify-sync.mjs`
+- `scripts/` — `progress.mjs`(CLI, `README-progress.md`), `photos.mjs`(사진 CLI, `README-photos.md`), `seed-progress.mjs`, `verify-sync.mjs`, `todoist-match.mjs`(Todoist 짝 맞추기), `test-todoist.mjs`(Todoist 동기화 시험)
 
 ## 주소
 | 주소 | 화면 | 누가 |
 |---|---|---|
-| `/` | 홈: 로그인하면 「할 일」 + 단계 안내(날짜순 · 단계순, 할 일 종류로 걸러 보기), 로그인 전엔 단계 안내 | 모두 |
+| `/` | 홈: 로그인하면 단계 안내 + 실제 날짜 타임라인(날짜 띠 + 단계 막대) + 고른 날의 할 일(담당 · 종류로 걸러 보기, 일정 옮기기), 로그인 전엔 단계 안내(「n일째」 막대) | 모두 |
 | `/house` · `/house/log` · `/house/photos` · `/house/questions` | 우리 집: 집 정보 · 기록 · 사진 · 질문(+ 답 받는 링크) | 로그인 |
 | `/decor/3d` · `/decor/photos` · `/decor/refs` | 꾸미기: 3D 시안 · 사진 시안 · 참고 모음(`/decor` → `/decor/3d`) | 모두(참고 모음은 공개로 고른 항목의 사진 · 제목만, 쓰기는 로그인) |
 | `/money` | 돈 · 다른 집: 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길 | 로그인 |
@@ -23,6 +23,7 @@
 | `/api/decor/room3d-state` | 3D 시안에서 고른 상태(시안 · 켠 항목 · 문) 저장 · 불러오기, 살 것 값 표(`private/room3d-prices.json`) | 로그인 |
 | `/api/decor/room3d-layouts` | 3D 시안에서 가구를 옮긴 배치를 이름 붙여 저장 · 불러오기 · 이름 바꾸기 · 지우기(키 `oedomin:room3d:layouts`, 이름 30자 · 20개까지) | 로그인 |
 | `/q/<토큰>` | 답 받는 링크로 지인이 여는 화면(사이트 틀 밖) | 링크를 받은 사람 |
+| `/api/todoist/webhook` | Todoist 웹훅(서명 확인). 할 일 동기화는 `scripts/README-progress.md` 「Todoist 동기화」 | Todoist |
 
 - 옛 주소: `/plan` → `/money`, `/questions` → `/house/questions`(`next.config.ts` redirects).
 - 로그인하면 내비게이션(홈 · 우리 집 · 꾸미기 · 돈 · 다른 집)이 보인다. 로그인 전에는 홈 · 꾸미기 두 칸만. 폰은 화면 아래, PC는 머리글 안.
