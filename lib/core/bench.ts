@@ -14,10 +14,13 @@ import { fetchPreview, LinkBlockedError } from './link-preview.ts';
 //   oedomin:bench:batches    해시. 필드 = 수집일(collectedAt, YYYY-MM-DD), 값 = 묶음 JSON(BenchBatch). 같은 날 다시 넣으면 --replace 로 교체
 //   oedomin:bench:links      해시. 필드 = 링크 id(b_link_<주소 해시>), 값 = 두 사람이 화면에서 올린 링크 JSON(BenchLink). 설명은 Claude 가 CLI(links-fill)로 채운다
 //   oedomin:bench:reactions  해시. 필드 = 「<항목 id>|<이메일>」, 값 = 반응 JSON(BenchReaction). 사람마다 따로 써서 두 사람이 동시에 남겨도 서로 덮지 않는다
+//   oedomin:bench:public     해시. 필드 = 공개 화면(로그인 안 한 방문자)에 보일 수집 항목 id, 값 = { by, at }. 여기 없는 항목은 공개 화면에 안 실린다(기본은 숨김).
+//                            서류 · 문서 캡처 같은 것이 새 묶음에 섞여 들어와도 저절로 공개되지 않게, 두 사람이 화면(상세의 「공개 화면에 보이기」)이나 CLI 로 하나씩 고른다.
 
 export const BATCHES_KEY = 'oedomin:bench:batches';
 export const LINKS_KEY = 'oedomin:bench:links';
 export const REACTIONS_KEY = 'oedomin:bench:reactions';
+export const PUBLIC_KEY = 'oedomin:bench:public';
 
 export const BENCH_SOURCES = ['오늘의집', '에어비앤비', '블로그', '브런치', '유튜브', '인스타', '스레드', '핀터레스트', '기타'] as const;
 export const BENCH_SPACES = ['전체', '거실주방', '손님방', '호스트방', '욕실', '현관', '조명·소품'] as const;
@@ -112,7 +115,7 @@ function redisBackend(url: string, token: string): Backend {
 }
 
 const DIR = path.join(process.cwd(), '.data', 'bench');
-const fileOf = (key: string) => path.join(DIR, key === BATCHES_KEY ? 'batches.json' : key === LINKS_KEY ? 'links.json' : 'reactions.json');
+const fileOf = (key: string) => path.join(DIR, key === BATCHES_KEY ? 'batches.json' : key === LINKS_KEY ? 'links.json' : key === PUBLIC_KEY ? 'public.json' : 'reactions.json');
 let fileLock: Promise<unknown> = Promise.resolve();
 
 function fileBackend(): Backend {
@@ -219,6 +222,34 @@ export const toReactionView = (r: BenchReaction, myEmail: string): ReactionView 
 });
 export type BatchView = Pick<BenchBatch, 'collectedAt' | 'insights' | 'items'>;
 export const toBatchView = (b: BenchBatch): BatchView => ({ collectedAt: b.collectedAt, insights: b.insights, items: b.items });
+
+// ── 공개 화면(로그인 안 한 방문자) ──
+// 공개로 고른 항목 중 사진이 있는 것만, 그리고 남의 집 사진 · 제목 · 출처 · 공간 · 원문 주소만 싣는다.
+// 맞는 이유(fit) · 따라 할 점 · 비용 · 주의 · 공통점(insights)은 우리 집 이야기(호수 · 연식 · 예산)가 섞여 있어 빼고, 반응 · 메모 · 올린 링크도 싣지 않는다.
+export interface PublicMark { by: string; at: string }
+export async function listPublicIds(): Promise<Set<string>> {
+  return new Set(Object.keys(await backend().all(PUBLIC_KEY)));
+}
+export const toPublicItem = (it: BenchItem): BenchItem => ({
+  id: it.id, title: it.title, source: it.source, url: it.url, image: it.image, space: it.space,
+  fit: '', takeaways: [], cost: '', caution: null,
+});
+export function toPublicBatches(batches: BenchBatch[], publicIds: Set<string>): BatchView[] {
+  return batches
+    .map((b) => ({ collectedAt: b.collectedAt, insights: [], items: b.items.filter((it) => publicIds.has(it.id) && !!it.image).map(toPublicItem) }))
+    .filter((b) => b.items.length > 0);
+}
+/** 수집 항목 하나를 공개 화면에 보이기 / 감추기(올린 링크는 공개하지 않는다) */
+export async function setPublic(input: { itemId: unknown; on: unknown }, actor: { name: string }): Promise<boolean> {
+  const itemId = typeof input.itemId === 'string' && /^b_[A-Za-z0-9_-]{1,60}$/.test(input.itemId) && !LINK_ID_RE.test(input.itemId) ? input.itemId : null;
+  if (!itemId || typeof input.on !== 'boolean') throw new BenchError(400, 'invalid', '항목을 찾지 못했어요.');
+  if (!input.on) { await backend().drop(PUBLIC_KEY, itemId); return false; }
+  const known = (await listBatches()).some((b) => b.items.some((it) => it.id === itemId));
+  if (!known) throw new BenchError(404, 'not_found', '이 참고 자료를 찾지 못했어요. 새로고침해 주세요.');
+  const mark: PublicMark = { by: actor.name, at: new Date().toISOString() };
+  await backend().put(PUBLIC_KEY, itemId, JSON.stringify(mark));
+  return true;
+}
 
 // ── 올린 링크 ──
 // 두 사람이 「링크 올리기」로 넣은 참고 자료. 설명(fit · takeaways …)은 처음엔 비어 있고(status pending), Claude 가 CLI 로 채우면 done.

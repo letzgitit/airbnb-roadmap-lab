@@ -6,10 +6,10 @@ import { signIn } from 'next-auth/react';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { AccountMenu } from './AccountMenu';
 import { useGuardedLinkClick } from './useGuardedNav';
-import { NAV_ITEMS, hasNewAnswer } from './nav';
+import { hasNewAnswer, navItemsFor } from './nav';
 import { useSite } from './SiteShell';
 
-// 모든 페이지 공통 머리글(높이 56 + 위 안전 영역): 왼쪽 사이트 이름(홈 링크) · PC 이고 로그인했으면 내비게이션 넷 · 오른쪽 「로그인」 + 「설정」.
+// 모든 페이지 공통 머리글(높이 56 + 위 안전 영역): 왼쪽 사이트 이름(홈 링크) · PC 면 내비게이션(로그인했으면 넷, 아니면 공개 문 홈 · 꾸미기) · 오른쪽 「로그인」 + 「설정」.
 // 띠 전체가 강조색 면(DESIGN.md 2.2 (가)) — 밝은 · 어두운 화면 같은 값, 위 글자는 모두 on-accent. 글로우 · 그라데이션은 넣지 않는다.
 // on-accent 클래스: 이 안의 키보드 포커스 고리를 흰색으로(globals.css). 폰 상태 표시줄 색(theme-color)은 app/(site)/layout.tsx.
 export function SiteHeader() {
@@ -19,15 +19,16 @@ export function SiteHeader() {
   const guard = useGuardedLinkClick();
   const loggedIn = status === 'ready' && !!doc;
   const dot = hasNewAnswer(doc);
+  const items = navItemsFor(status, loggedIn);
 
   return (
     <header className="on-accent sticky top-0 z-40 bg-accent pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-14 max-w-content items-center gap-4 px-safe">
         <Link href="/" onClick={guard('/')} className="inline-flex min-h-11 shrink-0 items-center text-lg font-bold text-on-accent">외도민 타임 라인</Link>
 
-        {loggedIn && (
+        {items.length > 0 && (
           <nav aria-label="사이트" className="hidden h-full min-w-0 flex-1 items-stretch md:flex">
-            {NAV_ITEMS.map((n) => {
+            {items.map((n) => {
               const on = n.match(path);
               const showDot = n.href === '/house' && dot;
               return (

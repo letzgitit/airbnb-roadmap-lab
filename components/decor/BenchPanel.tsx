@@ -11,12 +11,13 @@ import { Card } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 
 // 꾸미기 › 참고 모음: 다른 사람들이 꾸민 집(인테리어 벤치마킹) 모음.
-// 로그인한 두 사람만 /api/bench 로 받는다(우리 집 이야기가 들어 있어 공개 화면 · 저장소 코드에는 없다).
+// /api/bench 로 받는다. 로그인한 두 사람(viewer: 'member')은 전부, 그 밖의 방문자(viewer: 'public')는 서버가 공개로 고른 항목의 사진 · 제목 · 출처만 준다
+// (우리 집 이야기 · 반응 · 메모 · 올린 링크는 공개 응답에 아예 없다). 공개 화면에서는 쓰기 단추(링크 올리기 · 좋아요/별로 · 메모 · 공개 고르기)를 그리지 않는다.
 // 묶음(수집한 날)마다 공통점(접어 둠) + 사진 벽돌 격자(사진 위주, 글은 제목 한두 줄뿐). 가장 최근 묶음만 펼치고 지난 묶음은 접어 둔다.
 // 사진을 누르면 같은 자리에서 상세로 넘어가고(「목록으로」로 돌아오면 보던 자리), 거기서 두 사람이 각자 좋아요 · 별로와 짧은 메모를 남긴다.
 
 const MEMO_MAX = 200;   // lib/core/bench.ts MEMO_MAX 와 같게
-interface Data { batches: BatchView[]; links: LinkView[]; reactions: Record<string, ReactionView[]> }
+interface Data { viewer: 'member' | 'public'; batches: BatchView[]; links: LinkView[]; reactions: Record<string, ReactionView[]>; publicIds: string[] }
 // 격자의 한 장: 수집 자료(BenchItem) 또는 두 사람이 올린 링크(link 가 있고, 공간은 비어 있을 수 있다)
 type Card = Omit<BenchItem, 'space'> & { space: BenchItem['space'] | null; link?: LinkView };
 const linkCard = (l: LinkView): Card => ({
@@ -108,7 +109,7 @@ export function BenchPanel({ active }: { active: boolean }) {
       if (res.status === 401 || res.status === 403) { setData(null); setState('anon'); return; }
       if (!res.ok) { setState('error'); return; }
       const j = await res.json();
-      setData({ ...j, links: j.links ?? [] });
+      setData({ ...j, viewer: j.viewer === 'member' ? 'member' : 'public', links: j.links ?? [], reactions: j.reactions ?? {}, publicIds: j.publicIds ?? [] });
       setState('idle');
     } catch { setState('error'); }
   }, []);
@@ -156,6 +157,17 @@ export function BenchPanel({ active }: { active: boolean }) {
     if (!ok) setMine(itemId, before);
   }, [me, save, setMine]);
 
+  // 공개 화면에 보이기 / 감추기(로그인한 두 사람만). 성공하면 화면의 공개 목록만 바꾼다.
+  const setPublic = useCallback(async (itemId: string, on: boolean) => {
+    try {
+      const res = await busyFetch('/api/bench/public', { method: 'PUT', headers: { 'content-type': 'application/json', ...devHeaders() }, body: JSON.stringify({ itemId, on }) });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) { toast(typeof j?.message === 'string' ? j.message : '저장하지 못했어요.', { kind: 'error' }); return; }
+      setData((d) => (d ? { ...d, publicIds: j?.on ? [...new Set([...d.publicIds, itemId])] : d.publicIds.filter((x) => x !== itemId) } : d));
+      toast(j?.on ? '공개 화면에도 보여요.' : '공개 화면에서 뺐어요.');
+    } catch { toast('저장하지 못했어요. 인터넷 연결을 확인해 주세요.', { kind: 'error' }); }
+  }, [toast]);
+
   // 올린 링크 넣기 · 지우기 · 되돌리기(화면에 바로 반영)
   const addLinkLocal = useCallback((l: LinkView) => setData((d) => (d ? { ...d, links: [l, ...d.links.filter((x) => x.id !== l.id)] } : d)), []);
   const removeLinkLocal = useCallback((id: string) => setData((d) => (d ? { ...d, links: d.links.filter((x) => x.id !== id) } : d)), []);
@@ -194,6 +206,8 @@ export function BenchPanel({ active }: { active: boolean }) {
   const pick = <T extends { space: string | null }>(items: T[]) => (cur === ALL ? items : items.filter((it) => it.space === cur));
 
   if (state === 'anon') return <p className="py-6 text-base text-muted">로그인한 뒤에 볼 수 있어요.</p>;
+  const member = data?.viewer === 'member';
+  const vote = member ? quickVote : undefined;
 
   const linkCards = (data?.links ?? []).map(linkCard);
   const [firstBatch, ...older] = data?.batches ?? [];
@@ -207,7 +221,8 @@ export function BenchPanel({ active }: { active: boolean }) {
   const next = at >= 0 && at < order.length - 1 ? near(order[at + 1]) : null;
   return (
     <section ref={rootRef} className="min-w-0" aria-label="참고 모음">
-      {detail && <Detail it={detail} reactions={data!.reactions[detail.id] ?? []} onSave={save} onBack={closeItem} onDeleteLink={detail.link ? async () => { if (await removeLink(detail.link!)) closeItem(); } : undefined}
+      {detail && <Detail it={detail} member={member} reactions={data!.reactions[detail.id] ?? []} onSave={save} onBack={closeItem} onDeleteLink={detail.link ? async () => { if (await removeLink(detail.link!)) closeItem(); } : undefined}
+        isPublic={data!.publicIds.includes(detail.id)} onPublic={member && !detail.link ? (on) => setPublic(detail.id, on) : undefined}
         prev={prev} next={next} onGo={goItem} pos={at >= 0 ? { i: at + 1, n: order.length } : null} />}
       <div ref={listRef} className={detail ? 'hidden' : 'flex flex-col gap-4'}>
         {state === 'loading' && !data && (
@@ -225,9 +240,9 @@ export function BenchPanel({ active }: { active: boolean }) {
             불러오지 못했어요. <button type="button" className={textBtn} onClick={() => void reload()}>다시 불러오기</button>
           </p>
         )}
-        {data && <LinkAdder onAdded={addLinkLocal} />}
+        {member && <LinkAdder onAdded={addLinkLocal} />}
         {data && !latest && (
-          <Card><p className="px-4 py-3 text-base text-muted">아직 모은 자료가 없어요. 자료가 모이면 여기에 공간별로 보여요.</p></Card>
+          <Card><p className="px-4 py-3 text-base text-muted">{member ? '아직 모은 자료가 없어요. 자료가 모이면 여기에 공간별로 보여요.' : '아직 보여 드릴 자료가 없어요.'}</p></Card>
         )}
 
         {latest && (spaces.length > 1 || latest.collectedAt) && (
@@ -245,7 +260,7 @@ export function BenchPanel({ active }: { active: boolean }) {
           </div>
         )}
 
-        {latest && <Batch b={latest} items={[...pick(linkCards), ...pick(latest.items)]} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} />}
+        {latest && <Batch b={latest} items={[...pick(linkCards), ...pick(latest.items)]} reactions={data!.reactions} onOpen={openItem} onVote={vote} />}
 
         {older.length > 0 && (
           <Card className="mt-4">
@@ -256,7 +271,7 @@ export function BenchPanel({ active }: { active: boolean }) {
                 <div key={b.collectedAt} className="border-b border-line last:border-b-0">
                   <FoldRow label={`${dateLabel(b.collectedAt)} 모음`} count={b.items.length} open={on} controls={id}
                     onToggle={() => setOpenOld((m) => ({ ...m, [b.collectedAt]: !on }))} />
-                  {on && <div id={id} className="px-4 pb-4 pt-2"><Batch b={b} items={pick(b.items)} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} /></div>}
+                  {on && <div id={id} className="px-4 pb-4 pt-2"><Batch b={b} items={pick(b.items)} reactions={data!.reactions} onOpen={openItem} onVote={vote} /></div>}
                 </div>
               );
             })}
@@ -270,7 +285,7 @@ export function BenchPanel({ active }: { active: boolean }) {
 type SaveFn = (itemId: string, vote: Vote | null, memo: string) => Promise<boolean>;
 
 // 묶음 하나: 공통점(접어 둠) → 사진 벽돌 격자 → 둘 다 별로라 숨긴 자료(접어 둠)
-function Batch({ b, items, reactions, onOpen, onVote }: { b: BatchView; items: Card[]; reactions: Data['reactions']; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
+function Batch({ b, items, reactions, onOpen, onVote }: { b: BatchView; items: Card[]; reactions: Data['reactions']; onOpen: (id: string) => void; onVote?: (id: string, v: Vote) => void }) {
   const [showInsights, setShowInsights] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const insightsId = useId();
@@ -349,7 +364,8 @@ const VOTE_ON: Record<Vote, string> = { up: 'bg-accent text-on-accent', down: 'b
 
 // 타일 = 사진 + 제목 한두 줄 + (왼쪽 출처 · 오른쪽 좋아요/별로 단추). 사진 · 제목을 누르면 상세로, 단추는 상세를 열지 않고 바로 저장한다.
 // 단추가 채워져 있으면 내 반응. 상대가 남긴 반응은 단추 아래 작은 글자(이름 + 아이콘)로, 메모가 있으면 말풍선.
-function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: ReactionView[]; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
+// 공개 화면(onVote 없음)에서는 반응 단추를 그리지 않는다.
+function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: ReactionView[]; onOpen: (id: string) => void; onVote?: (id: string, v: Vote) => void }) {
   const mine = reactions.find((r) => r.mine) ?? null;
   const shown = reactions.filter((r) => r.vote || r.memo);
   const others = shown.filter((r) => !r.mine);
@@ -361,9 +377,9 @@ function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: Reaction
         <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-sm font-semibold text-ink">{it.title}</span>
         {it.link && <span className="block truncate px-0.5 text-xs text-muted">{withGa(it.link.addedBy)} 올림</span>}
       </button>
-      <div className="flex items-center gap-1 px-0.5">
+      <div className={`flex items-center gap-1 px-0.5 ${onVote ? '' : 'pt-0.5'}`}>
         <span className="min-w-0 flex-1 truncate text-xs text-muted">{it.source}</span>
-        <span role="group" aria-label="내 반응" className="-mr-1.5 flex shrink-0 items-center">
+        {onVote && <span role="group" aria-label="내 반응" className="-mr-1.5 flex shrink-0 items-center">
           {(['up', 'down'] as const).map((v) => {
             const on = mine?.vote === v;
             return (
@@ -374,7 +390,7 @@ function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: Reaction
               </button>
             );
           })}
-        </span>
+        </span>}
       </div>
       {(others.length > 0 || myMemo) && (
         <p className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 px-0.5 text-xs text-muted">
@@ -398,8 +414,9 @@ function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: Reaction
 // 항목마다 사진이 한 장이라 사진 넘기기와 겹치지 않는다. 메모를 쓰다 넘기면 「저장 안 한 내용」 확인을 먼저 띄운다.
 type Near = { id: string; title: string } | null;
 const SWIPE = 60;   // 이만큼(px) 옆으로 밀면 넘긴다
-function Detail({ it, reactions, onSave, onBack, onDeleteLink, prev, next, onGo, pos }: {
-  it: Card; reactions: ReactionView[]; onSave: SaveFn; onBack: () => void; onDeleteLink?: () => Promise<void>;
+function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic, onPublic, prev, next, onGo, pos }: {
+  it: Card; member: boolean; reactions: ReactionView[]; onSave: SaveFn; onBack: () => void; onDeleteLink?: () => Promise<void>;
+  isPublic: boolean; onPublic?: (on: boolean) => Promise<void>;
   prev: Near; next: Near; onGo: (id: string) => void; pos: { i: number; n: number } | null;
 }) {
   const cost = costView(it);
@@ -544,7 +561,8 @@ function Detail({ it, reactions, onSave, onBack, onDeleteLink, prev, next, onGo,
           원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
         </a>
       </div>
-      <div className="mt-4 border-t border-line pt-3"><Reactions key={it.id} itemId={it.id} title={it.title} list={reactions} onSave={onSave} dirtyRef={memoDirty} /></div>
+      {member && <div className="mt-4 border-t border-line pt-3"><Reactions key={it.id} itemId={it.id} title={it.title} list={reactions} onSave={onSave} dirtyRef={memoDirty} /></div>}
+      {onPublic && <PublicToggle key={it.id} on={isPublic} hasImage={!!it.image} onChange={onPublic} />}
       {it.link?.mine && onDeleteLink && <DeleteLink title={it.title} onDelete={onDeleteLink} />}
     </article>
   );
@@ -618,6 +636,23 @@ function Reactions({ itemId, title, list, onSave, dirtyRef }: { itemId: string; 
           <button type="button" className={`${textBtn} ml-auto mr-0`} onClick={startMemo}>{mine?.memo ? '메모 고치기' : '메모 남기기'}</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// 공개 화면에 보이기(로그인한 두 사람만, 수집 자료만): 켜면 로그인 안 한 사람에게 사진 · 제목 · 출처만 보인다. 기본은 꺼짐.
+function PublicToggle({ on, hasImage, onChange }: { on: boolean; hasImage: boolean; onChange: (on: boolean) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const id = useId();
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      <label htmlFor={id} className="flex min-h-11 cursor-pointer items-center gap-3">
+        <input id={id} type="checkbox" checked={on} disabled={busy}
+          onChange={async (e) => { setBusy(true); await onChange(e.target.checked); setBusy(false); }}
+          className="size-5 shrink-0 cursor-pointer" />
+        <span className="text-base font-semibold text-ink">공개 화면에도 보이기</span>
+      </label>
+      <p className="text-sm text-muted">{hasImage ? '로그인 안 한 사람에게 사진 · 제목 · 출처만 보여요. 서류가 찍힌 사진은 켜지 마세요.' : '사진이 없어서 켜도 공개 화면에는 안 보여요.'}</p>
     </div>
   );
 }

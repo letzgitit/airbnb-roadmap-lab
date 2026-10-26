@@ -6,9 +6,10 @@ import { ProgressProvider, useProgress } from '@/components/progress/ProgressPro
 import { PhotosProvider, type StepName } from '@/components/progress/PhotosPanel';
 import { SiteHeader } from './SiteHeader';
 import { BottomTabs } from './BottomTabs';
+import { navItemsFor } from './nav';
 
 // 사이트 틀: 모든 페이지(app/(site)/)를 감싼다. 진행 현황(ProgressProvider)과 사진(PhotosProvider)도 여기서 한 번만 감싼다.
-// 구성: 머리글 → (허용 안 된 계정이면 안내 줄) → 본문(720px) → 폰 아래 탭(로그인했을 때만).
+// 구성: 머리글 → (허용 안 된 계정이면 안내 줄) → 본문(720px) → 폰 아래 탭(로그인했으면 넷, 아니면 공개 문 홈 · 꾸미기).
 interface SiteCtx { loginReady: boolean; steps: StepName[] }
 const Site = createContext<SiteCtx | null>(null);
 
@@ -35,6 +36,7 @@ export function SiteShell({ steps, loginReady, children }: { steps: StepName[]; 
 function Frame({ children }: { children: ReactNode }) {
   const { status, doc } = useProgress();
   const loggedIn = status === 'ready' && !!doc;
+  const items = navItemsFor(status, loggedIn);
   return (
     <>
       <SiteHeader />
@@ -47,11 +49,11 @@ function Frame({ children }: { children: ReactNode }) {
           </p>
         </div>
       )}
-      {/* 폰에서 로그인했으면 아래 탭(56px) + 홈 막대 안전 영역 + 16px 만큼 본문 아래를 비운다 */}
-      <main id="main" className={`mx-auto w-full max-w-content px-safe pt-4 ${loggedIn ? 'pb-[calc(56px+env(safe-area-inset-bottom)+16px)] md:pb-12' : 'pb-12'}`}>
+      {/* 폰에서 아래 탭이 보이면 탭(56px) + 홈 막대 안전 영역 + 16px 만큼 본문 아래를 비운다 */}
+      <main id="main" className={`mx-auto w-full max-w-content px-safe pt-4 ${items.length > 0 ? 'pb-[calc(56px+env(safe-area-inset-bottom)+16px)] md:pb-12' : 'pb-12'}`}>
         {children}
       </main>
-      {loggedIn && <BottomTabs />}
+      {items.length > 0 && <BottomTabs items={items} />}
     </>
   );
 }

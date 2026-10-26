@@ -1,20 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
-import { getActor } from '@/lib/session';
 import { NO_STORE } from '@/lib/http';
 import { RESTYLE_DIR, RESTYLE_FILE_RE } from '@/lib/restyle';
 
-// 꾸미기 › 사진 시안 사진 바이트: /api/restyle/<방 id>-<original|시안 id>.jpg. 로그인한 두 사람만, 어떤 캐시에도 남기지 않는다.
-// 로그인 확인을 이름 검사보다 먼저 한다 — 로그인 안 한 사람에게는 어떤 사진이 있는지도 알려 주지 않는다(늘 401/403).
+// 꾸미기 › 사진 시안 사진 바이트: /api/restyle/<방 id>-<original|시안 id>.jpg. 로그인 안 한 방문자에게도 보인다(목록 /api/restyle 과 같다).
+// 어떤 캐시에도 남기지 않는다. 이름 검사로 private/restyle/ 밖은 못 읽는다.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const json = (error: string, status: number) => NextResponse.json({ error }, { status, headers: NO_STORE });
 
-export async function GET(req: Request, ctx: RouteContext<'/api/restyle/[file]'>) {
-  const a = await getActor(req);
-  if (!a.ok) return json(a.status === 401 ? 'unauthorized' : 'forbidden', a.status);
+export async function GET(_req: Request, ctx: RouteContext<'/api/restyle/[file]'>) {
   const { file } = await ctx.params;
   if (!RESTYLE_FILE_RE.test(file)) return json('not_found', 404);
   let buf: Buffer;

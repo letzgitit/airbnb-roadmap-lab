@@ -37,6 +37,18 @@ node scripts/bench.mjs links-fill 채우기.json --yes         # 채우고 statu
 - 올린 링크의 id는 `b_link_` + 주소 해시 10자리라 같은 주소면 늘 같습니다. 반응(좋아요 · 별로 · 메모)은 이 id에 붙습니다.
 - 화면에서 지운 링크는 흔적(`deletedAt`)만 남기고 감춥니다(되돌리기 가능). `links`에는 안 나옵니다.
 
+## 공개 화면에 보일 항목 고르기
+
+꾸미기는 로그인 안 한 방문자도 봅니다. 참고 모음은 **공개로 고른 수집 항목 중 사진이 있는 것만**, 사진 · 제목 · 출처 · 공간 · 원문 주소만 보입니다(맞는 이유 · 따라 할 점 · 비용 · 주의 · 공통점 · 반응 · 메모 · 올린 링크는 공개 응답에 없음).
+고르지 않은 항목은 숨김이 기본이라, 새 묶음에 서류 · 문서 캡처가 섞여 들어와도 저절로 공개되지 않습니다. 고르는 곳은 화면(상세 맨 아래 「공개 화면에도 보이기」) 또는 이 CLI입니다. 저장 위치는 `oedomin:bench:public`(해시, 필드 = 항목 id).
+
+```bash
+node scripts/bench.mjs public [--json]                 # 항목마다 공개 · 숨김 · 사진 유무
+node scripts/bench.mjs publish b_ohou_1 b_abnb_2 --dry-run   # 미리 보기
+node scripts/bench.mjs publish b_ohou_1 b_abnb_2 --yes       # 공개로 고르기(운영은 --yes 필요)
+node scripts/bench.mjs unpublish b_ohou_1 --yes              # 공개에서 빼기
+```
+
 ## 묶음 모양
 
 ```json

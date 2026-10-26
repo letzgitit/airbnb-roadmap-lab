@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { useGuardedLinkClick } from './useGuardedNav';
-import { NAV_ITEMS, hasNewAnswer } from './nav';
+import { hasNewAnswer, type NavItem } from './nav';
 
 // 폰(768px 미만) 화면 아래 고정 탭: 로그인했을 때만(SiteShell 이 정한다). 높이 56 + 홈 막대 안전 영역.
 // 지금 있는 탭은 ink 700(강조색 아님), 나머지는 muted. 「우리 집」은 새 답이 있으면 강조색 점.
-export function BottomTabs() {
+export function BottomTabs({ items }: { items: NavItem[] }) {
   const { doc } = useProgress();
   const path = usePathname() ?? '/';
   const guard = useGuardedLinkClick();
@@ -16,8 +16,8 @@ export function BottomTabs() {
 
   return (
     <nav aria-label="사이트" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
-      <div className="mx-auto grid h-14 max-w-content grid-cols-4 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-        {NAV_ITEMS.map((n) => {
+      <div className={`mx-auto grid h-14 max-w-content ${items.length === 4 ? 'grid-cols-4' : 'grid-cols-2'} pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]`}>
+        {items.map((n) => {
           const on = n.match(path);
           const showDot = n.href === '/house' && dot;
           return (

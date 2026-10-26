@@ -1,12 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { getActor } from '@/lib/session';
 
-// 꾸미기 › 3D 시안 HTML. 로그인한 두 사람만 받는다(파일은 private/ — git 에 안 올리고 배포에만 싣는다. DESIGN.md 11장).
+// 꾸미기 › 3D 시안 HTML. 로그인 안 한 방문자에게도 보인다(2026-10-26 사이트 주인 결정 — 꾸미기는 골라서 공개).
+// 파일은 그대로 private/ 에 둔다(공개 저장소엔 안 올리고 배포에만 싣는다. DESIGN.md 11장).
 // 이 사이트 안 iframe(sandbox="allow-scripts")에 뜨고, 응답 헤더(next.config.ts)에도 CSP sandbox 가 붙어 새 창으로 열어도 출처가 null 이다
 // → 시안이 불러오는 외부 스크립트가 로그인 쿠키로 현황 API 를 부르지 못한다.
 // 시안 내용은 고치지 않고 붙이기만 한다: ?theme=light|dark 면 <html data-theme>, </head> 앞에 사이트 색 · 서체로 덮는 <style>,
-// </body> 앞에 높이 알림 스크립트(부모가 iframe 높이를 맞춘다). 문서 제목은 하위 탭과 같은 「3D 시안」으로 바꾼다(DESIGN.md 9장: 호수를 쓰지 않는다).
+// </body> 앞에 높이 알림 스크립트(부모가 iframe 높이를 맞춘다). 문서 제목 · 맨 위 제목(h1)은 하위 탭과 같은 「3D 시안」으로 바꾸고,
+// 설명 메타(description)는 뺀다 — 시안 파일의 제목 · 설명에는 호수가 들어 있다(DESIGN.md 9장: 호수를 쓰지 않는다).
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -50,12 +51,6 @@ const note = (title: string) =>
   `<body style="margin:0;font:15px/1.6 system-ui,sans-serif;padding:24px 16px;color:#1a1d21;background:#f5f6f8"><p>${title}</p></body></html>`;
 
 async function handle(req: Request, head: boolean): Promise<Response> {
-  const a = await getActor(req);
-  if (!a.ok) {
-    const msg = a.status === 401 ? '로그인한 사람만 볼 수 있어요' : '허용되지 않은 계정이에요';
-    return new Response(head ? null : note(msg), { status: a.status, headers: HEADERS });
-  }
-
   let html: string;
   try {
     html = await readFile(FILE, 'utf8');
@@ -67,6 +62,9 @@ async function handle(req: Request, head: boolean): Promise<Response> {
   const theme = new URL(req.url).searchParams.get('theme');
   if (theme === 'light' || theme === 'dark') html = html.replace(/<html\b/i, `<html data-theme="${theme}"`);
   html = html.replace(/<title>[^<]*<\/title>/i, '<title>3D 시안</title>');
+  html = html.replace(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi, '<h1>3D 시안</h1>');
+  html = html.replace(/<meta\s+[^>]*name=["']?(description|og:[a-z:]+|twitter:[a-z:]+)["']?[^>]*>/gi, '');
+  html = html.replace(/<meta\s+[^>]*property=["']?og:[a-z:]+["']?[^>]*>/gi, '');
   const headEnd = html.toLowerCase().indexOf('</head>');
   html = headEnd >= 0 ? `${html.slice(0, headEnd)}${SITE_STYLE}${html.slice(headEnd)}` : `${SITE_STYLE}${html}`;
   const end = html.toLowerCase().lastIndexOf('</body>');

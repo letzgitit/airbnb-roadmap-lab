@@ -22,6 +22,9 @@ function usage(msg) {
   node scripts/bench.mjs delete <YYYY-MM-DD> [--yes]
   node scripts/bench.mjs links [--pending] [--json]
   node scripts/bench.mjs links-fill <파일.json> [--dry-run] [--yes]
+  node scripts/bench.mjs public [--json]                  공개 화면(로그인 안 한 방문자)에 보일 항목 보기
+  node scripts/bench.mjs publish <항목 id>... [--dry-run] [--yes]     공개로 고르기
+  node scripts/bench.mjs unpublish <항목 id>... [--dry-run] [--yes]   공개에서 빼기
   --dry-run  형식만 검사하고 쓰지 않음
   --replace  같은 수집일(collectedAt) 묶음이 이미 있으면 바꿔 넣기(없으면 멈춤)
   --pending  (links) 설명이 아직 비어 있는 올린 링크만
@@ -134,6 +137,23 @@ try {
     if (!needYes(lines)) { console.log(JSON.stringify({ store: store.kind, written: false, dryRun: true, fill: plan.ok.map((o) => o.fill.id), skipped: plan.skipped })); process.exit(0); }
     const r = await B.applyLinkFills(fills);
     console.log(JSON.stringify({ store: store.kind, written: true, filled: r.filled, skipped: r.skipped }));
+  } else if (cmd === 'public') {
+    // 수집 항목마다 공개 여부 · 사진 유무. 공개 화면에는 「공개」이면서 사진이 있는 것만 실린다(사진 · 제목 · 출처 · 공간 · 원문 주소만).
+    const [batches, ids] = await Promise.all([B.listBatches(), B.listPublicIds()]);
+    const rows = batches.flatMap((b) => b.items.map((it) => ({ id: it.id, collectedAt: b.collectedAt, public: ids.has(it.id), image: !!it.image, shown: ids.has(it.id) && !!it.image, title: it.title })));
+    if (opts['--json']) { console.log(JSON.stringify(rows, null, 2)); process.exit(0); }
+    console.log(`공개 화면에 보임 ${rows.filter((r) => r.shown).length}건 / 전체 ${rows.length}건`);
+    for (const r of rows) console.log(`  ${r.shown ? '공개' : r.public ? '공개(사진 없음 — 안 보임)' : '숨김'}  ${r.id}  [${r.collectedAt}] ${r.title}`);
+  } else if (cmd === 'publish' || cmd === 'unpublish') {
+    if (!pos.length) usage('항목 id 가 필요합니다.');
+    const on = cmd === 'publish';
+    const batches = await B.listBatches();
+    const known = new Set(batches.flatMap((b) => b.items.map((it) => it.id)));
+    const missing = pos.filter((id) => on && !known.has(id));
+    if (missing.length) throw new Error(`묶음에 없는 항목: ${missing.join(', ')}`);
+    if (!needYes([`${on ? '공개로 고르기' : '공개에서 빼기'} ${pos.length}건: ${pos.join(', ')}`])) { console.log(JSON.stringify({ store: store.kind, written: false, dryRun: true, ids: pos, on })); process.exit(0); }
+    for (const id of pos) await B.setPublic({ itemId: id, on }, { name: opts['--by'] || 'claude' });
+    console.log(JSON.stringify({ store: store.kind, written: true, ids: pos, on }));
   } else usage(cmd ? `모르는 명령 ${cmd}` : undefined);
 } catch (e) {
   console.error(e instanceof Error ? e.message : e);
