@@ -77,16 +77,16 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 | `log.update` / `log.delete` / `log.restore` | `id` (+`baseVersion`, `patch`) | |
 | `property.add` | `label`(≤40자), `value`(≤300자) | 매물 기본 정보(자유 key-value) |
 | `property.update` / `property.delete` / `property.restore` | `id` (+`baseVersion`, `patch`) | |
-| `money.add` | `date`(`YYYY-MM-DD` 또는 null), `text`(1~200자), `amount`(만원 정수, 나감 −·들어옴 +, 미정 null), `via`(`cash` 현금 · `credit` 마통), `project`(`oedomin` · `jisan`) | `estimate: true` = 화면에 「추정」. 「11월~1월 일정」(/plan)의 돈 흐름 줄 |
+| `money.add` | `date`(`YYYY-MM-DD` 또는 null), `text`(1~200자), `amount`(만원 정수, 나감 −·들어옴 +, 미정 null), `via`(`cash` 현금 · `credit` 마통), `project`(`oedomin` · `jisan`) | `estimate: true` = 화면에 「추정」. 「돈 · 다른 집」(/money)의 돈 흐름 줄 |
 | `money.update` / `money.delete` / `money.restore` | `id`(`m_…`) (+`baseVersion`, `patch`) | `patch`: `date` `text` `amount` `via` `estimate` `project` |
 | `plan.update` | `baseVersion`, `patch` | `patch`: `cash`·`credit`(출발점 현금 · 마통 여유, 만원) `fork`(원주 갈림길, 한 줄 = 한 갈래, 「조건 → 할 일」, ≤500자). 처음 version은 0 |
-| `question.add` | `to`(받는 사람 이름, ≤20자), `text`(≤1000자) | 「질문」 화면(/questions). 처음 상태는 `open`(답 기다림) |
+| `question.add` | `to`(받는 사람 이름, ≤20자), `text`(≤1000자) | 「질문」 화면(/house/questions). 처음 상태는 `open`(답 기다림) |
 | `question.update` | `id`(`q_…`), `patch` | `patch`: `text` `to` `status`(`open` 답 기다림 · `answered` 답함 · `closed` 닫음). **`status`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
 | `question.answer` | `id`, `text`(≤2000자) | 우리 쪽 답 · 덧붙이는 말(기록자 = `--by`). 상태는 그대로 |
-| `question.answer.delete` | `id`, `answerId`(`a_…`) | 답 하나 지우기(30일 뒤 정리). 손님 답이 하나도 안 남으면 `answered` → `open` |
+| `question.answer.delete` | `id`, `answerId`(`a_…`) | 답 하나 지우기(30일 뒤 정리). 링크로 받은 답이 하나도 안 남으면 `answered` → `open` |
 | `question.delete` / `question.restore` | `id` | |
 | `question.seen` | `id` | 「새 답」 표시 끄기 |
-| `guest.add` | `name`(≤20자) | 손님 링크 만들기. 결과의 `token`으로 주소 `/q/<token>`. `get`의 [손님 링크]에 전체 주소가 나온다 |
+| `guest.add` | `name`(≤20자) | 답 받는 링크 만들기. 결과의 `token`으로 주소 `/q/<token>`. `get` 출력의 `[손님 링크]` 칸(CLI 출력 이름은 그대로)에 전체 주소가 나온다 |
 | `guest.revoke` | `id`(`g_…`) | 링크 끊기(그 주소는 바로 안 열린다) |
 
 - 「사용자 체크리스트 항목」은 **할 일(task)과 같은 항목**입니다. `checklist.add/update/delete/restore`는 `task.*`의 별칭입니다.
@@ -108,9 +108,9 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 
 `export-md <out.md>`는 진행률, 매물 정보, 단계별 상태·목표일·메모, 할 일(미완료 먼저·마감일 순, 완료는 `<details>`로 접음), 최근 기록 20건, 마지막 동기화 시각을 씁니다. 맨 위에 「자동 생성 — 직접 고치지 말 것」 경고가 붙습니다. 🔴 이 저장소는 GitHub 공개 저장소라, 출력 경로가 저장소 안이면서 git이 무시하지 않는 곳이면 거부합니다(볼트 등 저장소 밖에 쓰세요). 할 일 줄은 `- [ ]`가 아니라 `- ☐` / `- ☑`입니다(볼트 Todoist 플러그인이 체크박스를 흡수하므로).
 
-## 11월~1월 일정 (`/plan`)
+## 돈 · 다른 집 (`/money`, 옛 `/plan`)
 
-로그인한 사람만 보는 한 장 일정. 서버(`app/api/plan`)가 이 문서(`oedomin:progress:v1`)와 지산 사이트 문서(같은 Upstash의 `jisan:progress:v1`, **읽기만**)를 합쳐 내려준다.
+로그인한 사람만 보는 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길 화면(우리 할 일은 홈 「할 일」에 있다). 서버(`app/api/plan`)가 이 문서(`oedomin:progress:v1`)와 지산 사이트 문서(같은 Upstash의 `jisan:progress:v1`, **읽기만**)를 합쳐 내려준다.
 - 일정 = 두 문서의 마감일 있는 할 일. 글 끝 `(추정)` · `(제안)`은 작은 표시로 보인다.
 - 돈 흐름 = 이 문서의 `money`(위 `money.*`) + 출발점 `plan`. 금액 · 이름은 코드와 `content/`에 넣지 않는다(공개 저장소).
 - 지산 할 일을 더하거나 고치려면 지산 사이트 API로 한다(여기서는 쓰지 않는다).
@@ -120,12 +120,12 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 
 `node scripts/seed-progress.mjs scripts/seed-example.json [--force] [--yes]` — 가짜 예시 데이터를 저장소에 넣습니다(저장소가 비어 있을 때만, `--force`는 지우고 다시, 원격(운영)이면 `--yes`도 필요). 실제 개인 정보는 이 파일에 넣지 마세요.
 
-## 질문 · 손님 링크 (`/questions` · `/q/<token>`)
+## 질문 · 답 받는 링크 (`/house/questions` · `/q/<token>`, 옛 `/questions`)
 
-- 질문은 이 현황 문서의 `questions`, 손님 링크는 `guests`에 들어 있다(같은 병합 · version 규칙).
-- 손님 링크 화면 `/q/<token>`은 로그인 없이 열린다. 링크에 적은 이름과 받는 사람(`to`)이 같은(대소문자 · 앞뒤 공백 무시) 질문과 답만 보이고, 다른 현황은 나가지 않는다(`lib/core/questions.ts` `guestView`). 끊은 링크 · 틀린 토큰은 「열 수 없는 링크」.
-- 손님 답은 보통 HTML 폼으로 `POST /q/<token>/answer` → 엔진 연산 `question.guestAnswer`(서버 안에서만 만든다, CLI · API로는 못 보낸다). 답이 달리면 `answered` + 「새 답」 표시. 막는 것: 2000자 넘는 답, 같은 링크로 5초 안에 또 보내기, 한 시간 30개 넘게, 닫힌 질문, 다른 출처에서 보낸 폼.
-- 손님 화면은 자바스크립트 없이 돌고 스타일도 파일 안에 있다(`components/questions/GuestPage.tsx`). `noindex` · `no-store`.
+- 질문은 이 현황 문서의 `questions`, 답 받는 링크는 `guests`에 들어 있다(같은 병합 · version 규칙). 연산 이름(`guest.*`)과 CLI 출력의 「손님 링크」는 그대로다.
+- 답 받는 링크 화면 `/q/<token>`은 로그인 없이 열린다. 링크에 적은 이름과 받는 사람(`to`)이 같은(대소문자 · 앞뒤 공백 무시) 질문과 답만 보이고, 다른 현황은 나가지 않는다(`lib/core/questions.ts` `guestView`). 끊은 링크 · 틀린 토큰은 「열 수 없는 링크」.
+- 링크로 받는 답은 보통 HTML 폼으로 `POST /q/<token>/answer` → 엔진 연산 `question.guestAnswer`(서버 안에서만 만든다, CLI · API로는 못 보낸다). 답이 달리면 `answered` + 「새 답」 표시. 막는 것: 2000자 넘는 답, 같은 링크로 5초 안에 또 보내기, 한 시간 30개 넘게, 닫힌 질문, 다른 출처에서 보낸 폼.
+- 지인이 답하는 화면은 자바스크립트 없이 돌고 스타일도 파일 안에 있다(`components/questions/GuestPage.tsx`). `noindex` · `no-store`.
 - 질문 내용 · 받는 사람 이름은 운영 데이터에만 둔다(이 저장소는 공개).
 
 ```bash

@@ -2,6 +2,20 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // 3D 시안 HTML 은 git 에 안 올리고(private/ 는 .gitignore) 배포에만 싣는다. 라우트 핸들러가 fs 로 읽으니 서버 묶음에 넣어 준다.
+  outputFileTracingIncludes: {
+    '/api/room3d': ['./private/room3d.html'],
+    // 사진 시안: 목록 라우트도 어떤 사진이 있는지(readdir) 보므로 둘 다 폴더째 싣는다. 키는 라우트 경로 글롭('[file]' 은 글롭에서 글자 묶음이라 '*')
+    '/api/restyle': ['./private/restyle/**/*'],
+    '/api/restyle/*': ['./private/restyle/**/*'],
+  },
+  // 옛 주소(구조 개편 전 북마크 · 홈 화면 바로가기)
+  async redirects() {
+    return [
+      { source: '/plan', destination: '/money', permanent: false },
+      { source: '/questions', destination: '/house/questions', permanent: false },
+    ];
+  },
   async headers() {
     return [
       {
@@ -31,6 +45,22 @@ const nextConfig: NextConfig = {
         // 사진 API(목록 · 바이트)도 같다: CDN · 공유 캐시에 사진이 남지 않게
         source: '/api/photos/:path*',
         headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
+      {
+        // 사진 시안(목록 · 사진)도 같다: 집 안 사진이라 CDN · 공유 캐시에 남기지 않는다
+        source: '/api/restyle/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
+      {
+        // 3D 시안: 이 사이트 안 iframe 에만 띄운다. 맨 위 규칙의 DENY · frame-ancestors 'none' 을 덮는다(뒤 규칙이 같은 헤더를 이긴다).
+        // 외부 스크립트(three.js 등)가 로그인 쿠키로 현황 API 를 부르지 못하게 같은 출처 권한 없이(sandbox) 돌린다 — 새 창으로 열어도 같다.
+        source: '/api/room3d',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: "sandbox allow-scripts; frame-ancestors 'self'" },
+          { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
       },
     ];
   },

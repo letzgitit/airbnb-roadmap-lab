@@ -19,7 +19,7 @@ html.dark .qg{--bg:#111316;--card:#1a1d22;--ink:#f1f2f4;--sub:#adb3bc;--line:#34
 .qg header{padding:28px 2px 12px}
 .qg h1{margin:0;font-size:22px;font-weight:800;line-height:1.35}
 .qg .lede{margin:6px 0 0;color:var(--sub);font-size:15px}
-.qg .count{margin:4px 0 0;color:var(--sub);font-size:14px;font-weight:600}
+.qg .count{margin:4px 0 0;color:var(--sub);font-size:14px;font-weight:600;display:flex;flex-wrap:wrap;column-gap:12px}
 .qg .notice{margin:12px 0 0;padding:12px 14px;border-radius:12px;font-size:15px;font-weight:700}
 .qg .notice.ok{background:var(--ok-bg);color:var(--ok)}
 .qg .notice.bad{background:var(--bad-bg);color:var(--bad)}
@@ -97,7 +97,7 @@ export function GuestPage({ token, view, sent, err }: { token: string; view: Gue
         <header>
           <h1>{view.name}님께 드리는 질문</h1>
           <p className="lede">아는 만큼만 편하게 적어 주세요. 질문마다 아래 칸에 답을 쓰고 「답 보내기」를 누르면 바로 전해져요.</p>
-          <p className="count">질문 {view.questions.length}개 · 답 기다림 {waiting}개</p>
+          <p className="count"><span>질문 {view.questions.length}개</span><span>답 기다림 {waiting}개</span></p>
           {/* 어느 질문에 단 답인지 알면 그 질문 칸 안에 알린다(화면이 그 칸으로 내려가므로) */}
           {sent === '1' && <p className="notice ok" role="status">답을 보냈어요. 고마워요!</p>}
           {err && !err.q && <p className="notice bad" role="alert">{ERR_TEXT[err.code] ?? '보내지 못했어요. 잠시 뒤에 다시 보내 주세요.'}</p>}

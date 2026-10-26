@@ -45,9 +45,18 @@ export function dueState(due: string | null, today: string): 'late' | 'today' | 
   return diff < 0 ? 'late' : diff === 0 ? 'today' : null;
 }
 
-// 날짜 범위 표기는 「~」로 통일한다(데이터의 「Day 12-13」 → 「Day 12~13」)
+// 단계 안내의 일반 일정(시작한 날부터 센 날수)을 우리말로: 데이터의 「Day 12-13」 → 「12~13일째」, 「Day 5」 → 「5일째」.
+// 콘텐츠(content/steps.json)는 그대로 두고 화면에서만 바꿔 보인다. 숫자가 없는 글은 그대로 돌려준다.
 export function dayLabel(day: string | number | null | undefined): string {
-  return String(day ?? '').replace(/(\d)\s*[-–]\s*(\d)/g, '$1~$2');
+  const s = String(day ?? '').trim();
+  const nums = s.match(/\d+/g);
+  if (!nums) return s;
+  return nums.length >= 2 ? dayRangeLabel(Number(nums[0]), Number(nums[1])) : `${Number(nums[0])}일째`;
+}
+
+// 「12~13일째」(처음과 끝이 같으면 「12일째」)
+export function dayRangeLabel(start: number, end: number): string {
+  return start === end ? `${start}일째` : `${start}~${end}일째`;
 }
 
 // 화면에 보일 사람 이름: 시스템 계정 · 개발용 가짜 로그인 이름을 사람 말로 바꾼다(실제 이름은 MEMBER_NAMES 에서 온다).

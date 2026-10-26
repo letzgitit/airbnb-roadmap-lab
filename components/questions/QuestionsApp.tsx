@@ -1,35 +1,26 @@
 'use client';
 
-import { useMemo, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
-import { signIn, signOut } from 'next-auth/react';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { ProgressProvider, useProgress } from '@/components/progress/ProgressProvider';
-import { AutoTextarea, btnGhost, btnPrimary, inputCls, textBtn, TrashButton, useBusy, useDirty, useFormEsc } from '@/components/progress/bits';
+import { useId, useMemo, useRef, useState } from 'react';
+import { useProgress } from '@/components/progress/ProgressProvider';
+import { AutoTextarea, btnGhost, btnPrimary, composerCls, inputCls, textBtn, TrashButton, useBusy, useDirty, useFormEsc } from '@/components/progress/bits';
+import { AddButton } from '@/components/ui/AddButton';
+import { Badge } from '@/components/ui/Badge';
+import { Card, cardRowCls } from '@/components/ui/Card';
+import { FoldRow } from '@/components/ui/FoldRow';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { Segmented } from '@/components/ui/Segmented';
 import { displayName, relTime } from '@/lib/client/format';
 import { QUESTION_STATUS_LABEL, type GuestLink, type QuestionItem, type QuestionStatus } from '@/lib/core/types';
 
-// 「질문」 화면(로그인한 사람만). 질문을 올리고, 손님 링크로 들어온 답을 읽고, 손님 링크를 만들고 끊는다.
+// 우리 집 › 질문(로그인한 사람만 — 로그인 확인은 「우리 집」 틀의 LoginGate 가 한다).
+// 질문을 올리고, 답 받는 링크(/q/<토큰>)로 들어온 답을 읽고, 답 받는 링크를 만들고 끊는다.
 // 데이터는 현황 문서(questions · guests) 안에 있어 /api/progress 로 함께 읽고 /api/progress/mutate 로 쓴다.
-export function QuestionsApp({ loginReady, title }: { loginReady: boolean; title: string }) {
-  return (
-    <ProgressProvider>
-      <Inner loginReady={loginReady} title={title} />
-    </ProgressProvider>
-  );
-}
-
+// 코드 이름(guest.* 연산, GuestLink)은 그대로 두고 화면 글자만 「답 받는 링크」로 쓴다.
 type Filter = 'all' | 'unread' | QuestionStatus;
-const CHIP: Record<QuestionStatus, string> = {
-  open: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-  answered: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
-  closed: 'bg-slate-100 text-slate-600',
-};
 
-function Inner({ loginReady, title }: { loginReady: boolean; title: string }) {
-  const { status, doc } = useProgress();
+export function QuestionsApp() {
+  const { doc } = useProgress();
   const [filter, setFilter] = useState<Filter>('all');
-  const ready = status === 'ready' && !!doc;
 
   const live = useMemo(() => Object.values(doc?.questions ?? {}).filter((q) => !q.deletedAt), [doc]);
   const counts = useMemo(() => ({
@@ -51,78 +42,40 @@ function Inner({ loginReady, title }: { loginReady: boolean; title: string }) {
   }, [doc, live]);
   const manyPeople = new Set(live.map((q) => q.to)).size > 1;
 
-  const FILTERS: { id: Filter; label: string }[] = [
-    { id: 'all', label: '전체' }, { id: 'unread', label: '새 답' }, { id: 'open', label: '답 기다림' }, { id: 'answered', label: '답함' }, { id: 'closed', label: '닫음' },
-  ];
-
+  if (!doc) return null;
   return (
-    <div className="app-container">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="px-4 pb-3 pt-4">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="min-w-0 text-2xl font-bold leading-tight text-slate-900">질문</h1>
-            <ThemeToggle />
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3">
-            <Link href="/" className="-ml-1 inline-flex min-h-9 items-center gap-1.5 px-1 text-[13px] font-semibold text-slate-600 hover:underline">
-              <i className="fas fa-chevron-left text-[12px]" aria-hidden />{title}
-            </Link>
-            {ready && (
-              <button type="button" onClick={() => void signOut({ redirect: true, callbackUrl: '/questions' })}
-                className="-mr-2 inline-flex min-h-9 items-center px-2 text-[13px] font-semibold text-slate-600 hover:underline">로그아웃</button>
-            )}
-          </div>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-muted">링크를 받은 사람은 로그인 없이 자기에게 온 질문만 보고 답을 달아요.</p>
+
+        {/* 거르기를 목록 카드 위에 둔다. 다섯 칸 + 개수가 360px 폰에서 한 줄에 들어가게 칸 좌우 여백만 8px 로 줄인다(Segmented 기본 12px) */}
+        <div className="[&_button]:px-2">
+          <Segmented<Filter> label="질문 거르기" value={filter} onChange={setFilter} options={[
+            { value: 'all', label: '전체', count: counts.all },
+            { value: 'unread', label: '새 답', count: counts.unread },
+            { value: 'open', label: QUESTION_STATUS_LABEL.open, count: counts.open },
+            { value: 'answered', label: QUESTION_STATUS_LABEL.answered, count: counts.answered },
+            { value: 'closed', label: QUESTION_STATUS_LABEL.closed, count: counts.closed },
+          ]} />
         </div>
-      </header>
 
-      <main className="chart-wrapper mx-auto w-full max-w-[720px] gap-4">
-        {status === 'loading' && <p className="px-1 text-[15px] text-slate-500">불러오는 중…</p>}
-        {status === 'forbidden' && (
-          <Card>
-            <p className="text-[15px] font-semibold text-slate-800">허용되지 않은 계정이에요.</p>
-            <button type="button" onClick={() => void signOut({ callbackUrl: '/questions' })} className="mt-2 inline-flex min-h-11 items-center text-[15px] font-bold text-blue-700 underline underline-offset-4 dark:text-blue-300">로그아웃</button>
-          </Card>
-        )}
-        {status === 'anon' && (
-          <Card>
-            <p className="text-[15px] font-semibold text-slate-800">로그인한 사람만 볼 수 있어요.</p>
-            {loginReady
-              ? <button type="button" onClick={() => void signIn('google', { callbackUrl: '/questions' })} className="mt-2 inline-flex min-h-11 items-center text-[15px] font-bold text-blue-700 underline underline-offset-4 dark:text-blue-300">로그인</button>
-              : <p className="mt-2 text-[13px] text-slate-500">로그인 준비 중이에요.</p>}
-          </Card>
-        )}
-        {ready && (
-          <>
-            <p className="px-1 text-[15px] leading-relaxed text-slate-600">
-              질문을 올리고 받는 사람에게 손님 링크를 보내면, 그 사람은 로그인 없이 자기에게 온 질문만 보고 답을 달아요.
-            </p>
-            <Composer names={names} />
+        {/* 카드 하나: 첫 줄 「＋ 질문 추가」 → 질문 줄들(없으면 빈 문구 한 줄). 다른 목록 화면과 같은 모양 */}
+        <Card>
+          <div className={cardRowCls}><Composer names={names} /></div>
+          {shown.length === 0
+            ? <p className={`${cardRowCls} px-4 py-3 text-base text-muted`}>{live.length === 0 ? '아직 질문이 없어요.' : '여기에 해당하는 질문이 없어요.'}</p>
+            : <ol aria-label="질문 목록">{shown.map((q) => <QuestionCard key={q.id} q={q} showTo={manyPeople} names={names} />)}</ol>}
+        </Card>
+      </div>
 
-            <div className="flex flex-wrap gap-2" role="group" aria-label="질문 거르기">
-              {FILTERS.map((f) => (
-                <button key={f.id} type="button" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}
-                  className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 text-[14px] font-bold ${filter === f.id ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-200 dark:bg-slate-200 dark:text-slate-900' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'}`}>
-                  {f.label}<span className={f.id === 'unread' && counts.unread > 0 && filter !== f.id ? 'rounded-full bg-red-600 px-1.5 text-[12px] text-snow' : 'opacity-70'}>{counts[f.id]}</span>
-                </button>
-              ))}
-            </div>
-
-            {shown.length === 0
-              ? <p className="px-1 text-[15px] font-semibold text-slate-500">{live.length === 0 ? '아직 질문이 없어요.' : '여기에 해당하는 질문이 없어요.'}</p>
-              : <ol className="flex flex-col gap-3">{shown.map((q) => <QuestionCard key={q.id} q={q} showTo={manyPeople} names={names} />)}</ol>}
-
-            <GuestLinks />
-            <DeletedQuestions />
-          </>
-        )}
-      </main>
+      <GuestLinks />
+      <DeletedQuestions />
     </div>
   );
 }
 
-function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-slate-200 bg-white px-4 py-4 ${className}`}>{children}</div>;
-}
+const labelCls = 'block text-sm text-ink-soft';
+const selectCls = 'min-h-11 rounded-control border border-line-strong bg-surface px-3 text-lg font-semibold text-ink focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink';
 
 function NameInput({ value, onChange, names, id }: { value: string; onChange: (v: string) => void; names: string[]; id: string }) {
   return (
@@ -134,6 +87,7 @@ function NameInput({ value, onChange, names, id }: { value: string; onChange: (v
   );
 }
 
+// 카드 첫 줄 「＋ 질문 추가」 → 누르면 그 자리에서 폼이 펼쳐진다
 function Composer({ names }: { names: string[] }) {
   const { send } = useProgress();
   const [open, setOpen] = useState(false);
@@ -145,31 +99,29 @@ function Composer({ names }: { names: string[] }) {
   useDirty('form:add-question', dirty);
   const close = () => { setOpen(false); setText(''); window.requestAnimationFrame(() => addRef.current?.focus()); };
   const esc = useFormEsc(dirty, close);
-  if (!open) {
-    return (
-      <button ref={addRef} type="button" onClick={() => { setTo((v) => v || names[0] || ''); setOpen(true); }}
-        className="flex min-h-12 w-full items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-4 text-left text-[15px] font-bold text-blue-700 hover:border-slate-400 dark:text-blue-300">
-        <i className="fas fa-plus text-[14px]" aria-hidden />질문 추가
-      </button>
-    );
-  }
   return (
-    <Card>
-      <form className="space-y-2" onKeyDown={esc} onSubmit={(e) => {
-        e.preventDefault();
-        if (!to.trim() || !text.trim()) return;
-        void run(() => send({ op: 'question.add', to: to.trim(), text: text.trim() }, { onSuccess: close }));
-      }}>
-        <label htmlFor="q-new-to" className="block text-[13px] font-bold text-slate-600">받는 사람</label>
-        <NameInput id="q-new-to" value={to} onChange={setTo} names={names} />
-        <label htmlFor="q-new-text" className="block pt-1 text-[13px] font-bold text-slate-600">질문</label>
-        <AutoTextarea id="q-new-text" className={inputCls} rows={3} maxLength={1000} value={text} autoFocus placeholder="물어볼 것" onChange={(e) => setText(e.target.value)} />
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" className={btnGhost} onClick={close}>취소</button>
-          <button className={btnPrimary} disabled={busy || !to.trim() || !text.trim()}>추가</button>
+    <>
+      {!open ? (
+        <AddButton buttonRef={addRef} label="질문 추가" onClick={() => { setTo((v) => v || names[0] || ''); setOpen(true); }} />
+      ) : (
+        <div className="px-4">
+          <form className={composerCls} onKeyDown={esc} onSubmit={(e) => {
+            e.preventDefault();
+            if (!to.trim() || !text.trim()) return;
+            void run(() => send({ op: 'question.add', to: to.trim(), text: text.trim() }, { onSuccess: close }));
+          }}>
+            <label htmlFor="q-new-to" className={labelCls}>받는 사람</label>
+            <NameInput id="q-new-to" value={to} onChange={setTo} names={names} />
+            <label htmlFor="q-new-text" className={`${labelCls} pt-1`}>질문</label>
+            <AutoTextarea id="q-new-text" className={inputCls} rows={3} maxLength={1000} value={text} autoFocus placeholder="물어볼 것" onChange={(e) => setText(e.target.value)} />
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" className={btnGhost} onClick={close}>취소</button>
+              <button className={btnPrimary} disabled={busy || !to.trim() || !text.trim()}>추가</button>
+            </div>
+          </form>
         </div>
-      </form>
-    </Card>
+      )}
+    </>
   );
 }
 
@@ -177,6 +129,7 @@ function QuestionCard({ q, showTo, names }: { q: QuestionItem; showTo: boolean; 
   const { send, toast, confirm } = useProgress();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const bodyId = useId();
   const answers = q.answers.filter((a) => !a.deletedAt);
   const last = answers[answers.length - 1];
 
@@ -187,7 +140,7 @@ function QuestionCard({ q, showTo, names }: { q: QuestionItem; showTo: boolean; 
   };
   const setStatus = (status: QuestionStatus) => void send({ op: 'question.update', id: q.id, patch: { status } });
   const del = async () => {
-    const ok = await confirm({ title: '이 질문을 지울까요?', body: q.text, note: '지운 질문은 30일 동안 아래 「삭제한 질문」에서 되살릴 수 있어요.', confirmLabel: '삭제', danger: true });
+    const ok = await confirm({ title: '이 질문을 지울까요?', body: q.text, note: '지운 질문은 30일 동안 맨 아래 「삭제한 질문」에서 되살릴 수 있어요.', confirmLabel: '삭제', danger: true });
     if (!ok) return;
     void send({ op: 'question.delete', id: q.id }).then((r) => {
       if (r.ok) toast('질문을 지웠어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'question.restore', id: q.id }) } });
@@ -195,50 +148,48 @@ function QuestionCard({ q, showTo, names }: { q: QuestionItem; showTo: boolean; 
   };
 
   return (
-    <li className={`overflow-hidden rounded-2xl border bg-white ${q.unread ? 'border-blue-400 ring-2 ring-blue-200 dark:ring-blue-900' : 'border-slate-200'}`}>
-      <button type="button" onClick={toggle} aria-expanded={open} className="block w-full px-4 py-3.5 text-left hover:bg-slate-50">
+    // 질문 카드 안의 한 줄(1px 선으로 나눈다 — 상자 안에 상자를 넣지 않는다)
+    <li className={cardRowCls}>
+      <button type="button" onClick={toggle} aria-expanded={open} aria-controls={bodyId} className="block w-full px-4 py-3 text-left transition-colors active:bg-sunken md:hover:bg-sunken">
         <span className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-bold text-slate-500">{q.seq}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${CHIP[q.status]}`}>{QUESTION_STATUS_LABEL[q.status]}</span>
-          {q.unread && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[12px] font-bold text-snow">새 답</span>}
-          {showTo && <span className="text-[13px] font-semibold text-slate-500">{q.to}에게</span>}
-          <span className="ml-auto text-[13px] font-semibold text-slate-500">{answers.length > 0 ? `답 ${answers.length}` : ''}</span>
-          <i className={`fas fa-chevron-down text-[12px] text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+          <span className="text-sm text-muted">{q.seq}</span>
+          <Badge>{QUESTION_STATUS_LABEL[q.status]}</Badge>
+          {q.unread && <Badge tone="accent">새 답</Badge>}
+          {showTo && <span className="text-sm text-muted">{q.to}에게</span>}
+          <span className="ml-auto text-sm text-muted">{answers.length > 0 ? `답 ${answers.length}` : ''}</span>
+          <i className={`fas fa-chevron-down text-xs text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
         </span>
-        <span className={`mt-1 block whitespace-pre-wrap text-[15px] font-semibold leading-snug text-slate-900 ${open ? '' : 'line-clamp-3'}`}>{q.text}</span>
+        <span className={`mt-1 block whitespace-pre-wrap break-words text-base font-semibold text-ink ${open ? '' : 'line-clamp-3'}`}>{q.text}</span>
         {!open && last && (
-          <span className="mt-1.5 block line-clamp-2 text-[14px] leading-snug text-slate-600"><b className="font-bold text-slate-700">{displayName(last.by)}</b> {last.text}</span>
+          <span className="mt-1 block line-clamp-2 text-sm text-ink-soft"><span className="text-ink">{displayName(last.by)}</span> {last.text}</span>
         )}
       </button>
       {open && (
-        <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+        <div id={bodyId} className="border-t border-line">
           {editing
-            ? <EditQuestion q={q} names={names} onDone={() => setEditing(false)} />
+            ? <div className="px-4"><EditQuestion q={q} names={names} onDone={() => setEditing(false)} /></div>
             : (
               <>
-                {answers.length === 0 && <p className="text-[14px] font-semibold text-slate-500">아직 답이 없어요.</p>}
-                {answers.length > 0 && (
-                  <ul className="flex flex-col gap-2">
-                    {answers.map((a) => (
-                      <li key={a.id} className={`flex items-start gap-1 rounded-xl px-3 py-2 ${a.guestId ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-slate-50'}`}>
-                        <div className="min-w-0 flex-1">
-                          <p className="flex flex-wrap gap-x-2 text-[13px] font-bold text-slate-500"><span className="text-slate-700">{displayName(a.by)}</span><span>{relTime(a.at)}</span></p>
-                          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-800">{a.text}</p>
-                        </div>
-                        <TrashButton label="이 답 삭제" onClick={async () => {
-                          const ok = await confirm({ title: '이 답을 지울까요?', body: a.text, confirmLabel: '삭제', danger: true });
-                          if (ok) void send({ op: 'question.answer.delete', id: q.id, answerId: a.id });
-                        }} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <Reply q={q} />
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-2">
-                  <label className="inline-flex items-center gap-2 text-[13px] font-bold text-slate-600">
+                <ul aria-label="답">
+                  {answers.length === 0 && <li className={`${cardRowCls} px-4 py-3 text-base text-muted`}>아직 답이 없어요.</li>}
+                  {answers.map((a) => (
+                    <li key={a.id} className={`${cardRowCls} flex items-start gap-1 py-1 pl-4`}>
+                      <div className="min-w-0 flex-1 py-2">
+                        <p className="flex flex-wrap gap-x-2 text-sm text-muted"><span>{displayName(a.by)}</span><span>{relTime(a.at)}</span></p>
+                        <p className="whitespace-pre-wrap break-words text-base leading-relaxed text-ink">{a.text}</p>
+                      </div>
+                      <TrashButton label="이 답 삭제" onClick={async () => {
+                        const ok = await confirm({ title: '이 답을 지울까요?', body: a.text, confirmLabel: '삭제', danger: true });
+                        if (ok) void send({ op: 'question.answer.delete', id: q.id, answerId: a.id });
+                      }} />
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t border-line px-4 py-3"><Reply q={q} /></div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line py-1 pl-4">
+                  <label className="inline-flex items-center gap-2 text-sm text-ink-soft">
                     상태
-                    <select className="min-h-11 rounded-xl border border-slate-200 bg-white px-2 text-[14px] font-bold text-slate-800" value={q.status}
-                      onChange={(e) => setStatus(e.target.value as QuestionStatus)}>
+                    <select className={selectCls} value={q.status} onChange={(e) => setStatus(e.target.value as QuestionStatus)}>
                       {(['open', 'answered', 'closed'] as const).map((s) => <option key={s} value={s}>{QUESTION_STATUS_LABEL[s]}</option>)}
                     </select>
                   </label>
@@ -260,7 +211,7 @@ function Reply({ q }: { q: QuestionItem }) {
   const { busy, run } = useBusy();
   useDirty(`form:reply:${q.id}`, text.trim() !== '');
   return (
-    <form className="mt-3 space-y-2" onSubmit={(e) => {
+    <form className="space-y-2" onSubmit={(e) => {
       e.preventDefault();
       if (!text.trim()) return;
       void run(() => send({ op: 'question.answer', id: q.id, text: text.trim() }, { onSuccess: () => setText('') }));
@@ -283,7 +234,7 @@ function EditQuestion({ q, names, onDone }: { q: QuestionItem; names: string[]; 
   useDirty(`form:question:${q.id}`, dirty);
   const esc = useFormEsc(dirty, onDone);
   return (
-    <form className="space-y-2" onKeyDown={esc} onSubmit={(e) => {
+    <form className={composerCls} onKeyDown={esc} onSubmit={(e) => {
       e.preventDefault();
       const patch: { to?: string; text?: string } = {};
       if (to.trim() !== q.to) patch.to = to.trim();
@@ -294,9 +245,9 @@ function EditQuestion({ q, names, onDone }: { q: QuestionItem; names: string[]; 
         onTakeLatest: (cur) => { setTo(String(cur.to ?? to)); setText(String(cur.text ?? text)); setBase(Number(cur.version) || 0); },
       }));
     }}>
-      <label htmlFor={`q-to-${q.id}`} className="block text-[13px] font-bold text-slate-600">받는 사람</label>
+      <label htmlFor={`q-to-${q.id}`} className={labelCls}>받는 사람</label>
       <NameInput id={`q-to-${q.id}`} value={to} onChange={setTo} names={names} />
-      <label htmlFor={`q-text-${q.id}`} className="block pt-1 text-[13px] font-bold text-slate-600">질문</label>
+      <label htmlFor={`q-text-${q.id}`} className={`${labelCls} pt-1`}>질문</label>
       <AutoTextarea id={`q-text-${q.id}`} className={inputCls} rows={3} maxLength={1000} value={text} autoFocus onChange={(e) => setText(e.target.value)} />
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" className={btnGhost} onClick={onDone}>취소</button>
@@ -310,6 +261,7 @@ function linkOf(g: GuestLink) {
   return typeof window === 'undefined' ? `/q/${g.token}` : `${window.location.origin}/q/${g.token}`;
 }
 
+// 「답 받는 링크」: 링크 줄들 + 마지막 줄 = 새 링크 만들기
 function GuestLinks() {
   const { doc, send, toast, confirm } = useProgress();
   const [name, setName] = useState('');
@@ -324,59 +276,65 @@ function GuestLinks() {
     if (ok) void send({ op: 'guest.revoke', id: g.id });
   };
   return (
-    <section className="mt-4" aria-labelledby="guest-links-title">
-      <h2 id="guest-links-title" className="px-1 text-[17px] font-bold text-slate-900">손님 링크</h2>
-      <p className="mt-0.5 px-1 text-[13px] leading-snug text-slate-600">이 주소를 가진 사람은 로그인 없이 링크에 적은 이름과 받는 사람이 같은 질문만 보고 답을 달 수 있어요. 집 정보 · 할 일 · 기록은 보이지 않아요.</p>
-      <Card className="mt-2">
-        {links.length === 0 && <p className="text-[14px] font-semibold text-slate-500">아직 만든 링크가 없어요.</p>}
-        <ul className="flex flex-col gap-3">
+    <section aria-labelledby="guest-links-title">
+      <SectionHeader id="guest-links-title" title="답 받는 링크" />
+      <Card>
+        <ul>
+          {links.length === 0 && <li className={`${cardRowCls} px-4 py-3 text-base text-muted`}>아직 만든 링크가 없어요.</li>}
           {links.map((g) => (
-            <li key={g.id} className="flex flex-col gap-1.5 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[15px] font-bold text-slate-900">{g.name}</span>
-                <span className="text-[13px] font-semibold text-slate-500">{relTime(g.createdAt)} 만듦</span>
-              </div>
+            <li key={g.id} className={`${cardRowCls} flex flex-col gap-2 px-4 py-3`}>
+              <p className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-base font-semibold text-ink">{g.name}</span>
+                <span className="text-sm text-muted">{relTime(g.createdAt)} 만듦</span>
+              </p>
               <input readOnly value={linkOf(g)} aria-label={`${g.name}님 링크 주소`} onFocus={(e) => e.currentTarget.select()}
-                className="w-full min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-700" />
-              <div className="flex gap-2">
+                className="min-h-11 w-full rounded-control border border-line bg-sunken px-3 text-lg text-ink-soft focus:outline-none focus:ring-1 focus:ring-accent-ink" />
+              <div className="flex flex-wrap gap-2">
                 <button type="button" className={btnPrimary} onClick={() => void copy(g)}>링크 복사</button>
-                <a href={`/q/${g.token}`} target="_blank" rel="noopener" className={`${btnGhost} inline-flex items-center`}>열어 보기</a>
+                <a href={`/q/${g.token}`} target="_blank" rel="noopener" className={btnGhost}>열어 보기</a>
                 <button type="button" className={`${btnGhost} ml-auto`} onClick={() => void revoke(g)}>끊기</button>
               </div>
             </li>
           ))}
+          <li className={`${cardRowCls} px-4 py-3`}>
+            <form className="flex gap-2" onSubmit={(e) => {
+              e.preventDefault();
+              if (!name.trim()) return;
+              void run(() => send({ op: 'guest.add', name: name.trim() }, { onSuccess: () => { setName(''); toast('링크를 만들었어요. 「링크 복사」로 보내 주세요.'); } }));
+            }}>
+              <input className={`${inputCls} min-w-0 flex-1`} value={name} maxLength={20} placeholder="받는 사람 이름" aria-label="새 링크 받는 사람" onChange={(e) => setName(e.target.value)} />
+              <button className={btnPrimary} disabled={busy || !name.trim()}>링크 만들기</button>
+            </form>
+          </li>
         </ul>
-        <form className="mt-3 flex gap-2 border-t border-slate-100 pt-3" onSubmit={(e) => {
-          e.preventDefault();
-          if (!name.trim()) return;
-          void run(() => send({ op: 'guest.add', name: name.trim() }, { onSuccess: () => { setName(''); toast('링크를 만들었어요. 「링크 복사」로 보내 주세요.'); } }));
-        }}>
-          <input className={inputCls} value={name} maxLength={20} placeholder="받는 사람 이름" aria-label="새 링크 받는 사람" onChange={(e) => setName(e.target.value)} />
-          <button className={btnPrimary} disabled={busy || !name.trim()}>링크 만들기</button>
-        </form>
       </Card>
     </section>
   );
 }
 
+// 맨 아래 「삭제한 질문 n개」(기본 접힘) → 펼치면 줄마다 「되살리기」
 function DeletedQuestions() {
   const { doc, send } = useProgress();
   const [open, setOpen] = useState(false);
+  const listId = useId();
   const gone = Object.values(doc?.questions ?? {}).filter((q) => q.deletedAt).sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
   if (!gone.length) return null;
   return (
-    <section className="px-1">
-      <button type="button" className={textBtn} aria-expanded={open} onClick={() => setOpen((v) => !v)}>삭제한 질문 {gone.length}개 {open ? '접기' : '보기'}</button>
+    <Card as="section" aria-label="삭제한 질문" className="mt-2">
+      <FoldRow label="삭제한 질문" count={gone.length} open={open} onToggle={() => setOpen((v) => !v)} controls={listId} />
       {open && (
-        <ul className="mt-1 flex flex-col">
-          {gone.map((q) => (
-            <li key={q.id} className="flex items-center gap-2 border-b border-slate-100 py-1 last:border-b-0">
-              <span className="min-w-0 flex-1 truncate text-[14px] text-slate-600">{q.text}</span>
-              <button type="button" className={textBtn} onClick={() => void send({ op: 'question.restore', id: q.id })}>되살리기</button>
-            </li>
-          ))}
-        </ul>
+        <div id={listId} className="border-t border-line">
+          <p className="px-4 pt-3 text-sm text-muted">지운 지 30일이 지나면 완전히 사라져요.</p>
+          <ul>
+            {gone.map((q) => (
+              <li key={q.id} className={`${cardRowCls} flex items-center gap-3 px-4 py-3`}>
+                <span className="min-w-0 flex-1 truncate text-base font-semibold text-ink-soft">{q.text}</span>
+                <button type="button" className={btnGhost} onClick={() => void send({ op: 'question.restore', id: q.id })}>되살리기</button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
-    </section>
+    </Card>
   );
 }

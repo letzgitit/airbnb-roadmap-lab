@@ -5,13 +5,30 @@
 
 ## 구조
 - `app/`, `components/` — 화면. 공개 화면은 정적 생성, 현황은 로그인 뒤 `/api/progress`로만 읽음
+  - `app/(site)/` — 사이트 틀(머리글 · 내비게이션 · 진행 현황 · 사진)이 감싸는 페이지들(`components/shell/`). 지인 답 화면 `app/q/`와 `app/api/`는 이 밖
+  - `components/ui/` — 공통 컴포넌트(제목 · 카드 · 추가 단추 · 필터 · 접기 · 배지 · 로그인 문 등). 화면 규칙은 `DESIGN.md`
 - `lib/core/` — 병합 엔진·검증·저장소·마크다운 내보내기(서버와 CLI 공용)
 - `content/` — 콘텐츠 JSON(다른 작업이 관리). 없으면 `fixtures/content-sample/` 사용
+- `private/` — 공개 저장소에 올리지 않는 정적 파일(3D 시안 등). `.gitignore`에 있어 GitHub에는 없고, 배포에만 실린다. 로그인 확인하는 라우트로만 내려준다
 - `scripts/` — `progress.mjs`(CLI, `README-progress.md`), `photos.mjs`(사진 CLI, `README-photos.md`), `seed-progress.mjs`, `verify-sync.mjs`
 
-## 주소로 바로 열기
-창(시트)은 한 번에 하나만 열리고 주소 해시와 함께 움직입니다. 폰의 뒤로 가기가 창을 닫습니다.
-- `/#step-3` 단계 창 · `/#notice` 주의사항(바뀐 규정 · 단계별 주의사항) · `/#scripts` 멘트함 · `/#records` 집 정보·기록(로그인했을 때만, 아니면 무시)
+## 주소
+| 주소 | 화면 | 누가 |
+|---|---|---|
+| `/` | 홈: 로그인하면 「할 일」 + 단계 안내, 로그인 전엔 단계 안내 | 모두 |
+| `/house` · `/house/log` · `/house/photos` · `/house/questions` | 우리 집: 집 정보 · 기록 · 사진 · 질문(+ 답 받는 링크) | 로그인 |
+| `/decor` · `/decor/3d` | 꾸미기: 참고 모음 · 3D 시안 | 로그인 |
+| `/money` | 돈 · 다른 집: 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길 | 로그인 |
+| `/api/room3d` | 3D 시안 HTML(`private/room3d.html`, iframe 격리) | 로그인 |
+| `/q/<토큰>` | 답 받는 링크로 지인이 여는 화면(사이트 틀 밖) | 링크를 받은 사람 |
+
+- 옛 주소: `/plan` → `/money`, `/questions` → `/house/questions`(`next.config.ts` redirects).
+- 로그인하면 내비게이션(홈 · 우리 집 · 꾸미기 · 돈 · 다른 집)이 보인다. 폰은 화면 아래, PC는 머리글 안.
+
+### 시트(홈 위에 뜨는 창)
+공개 안내 셋만 시트로 엽니다. 한 번에 하나만 열리고 주소 해시와 함께 움직입니다. 폰의 뒤로 가기가 창을 닫습니다.
+- `/#step-3` 단계 창 · `/#notice` 주의사항(바뀐 규정 · 단계별 주의사항) · `/#scripts` 대화 예시
+- 옛 `/#records`(집 정보·기록 창)는 로그인했으면 `/house`로 옮겨 열고, 아니면 해시만 지웁니다.
 - 탭·펼침 상태는 주소에 넣지 않습니다.
 
 ## 실행

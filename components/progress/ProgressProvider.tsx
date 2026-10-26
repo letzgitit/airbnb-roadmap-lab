@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { EditingMark, Me, ProgressDoc } from '@/lib/core/types';
 import type { Op } from '@/lib/core/validate';
 import { withGa } from '@/lib/client/format';
+import { btnDanger, btnGhost, btnPrimary } from '@/components/ui/buttonCls';
 
 type Status = 'loading' | 'anon' | 'forbidden' | 'ready';
 export interface SendResult { ok: boolean; status: number; body: Record<string, unknown> | null }
@@ -301,50 +302,50 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   return (
     <C.Provider value={value}>
       {children}
-      {/* 폰에선 단계 창 하단 단추 줄(이전/다음 단계)을 가리지 않게 88px 위에 띄운다 */}
-      <div className="fixed bottom-[88px] md:bottom-6 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 w-[calc(100%-32px)] max-w-md pointer-events-none" aria-live="polite">
+      {/* 폰에선 아래 탭 · 단계 창 아래 단추 줄(이전/다음 단계)을 가리지 않게 88px + 홈 막대 안전 영역 위에, PC 는 아래 24px */}
+      <div className="pointer-events-none fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-[90] flex w-[calc(100%-32px)] max-w-md -translate-x-1/2 flex-col gap-2 md:bottom-6" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto flex items-center justify-between gap-3 rounded-2xl pl-4 pr-2 py-1.5 min-h-14 text-[15px] font-bold shadow-xl ${t.kind === 'error' ? 'bg-red-600 text-snow' : 'bg-slate-900/95 text-white dark:bg-[#cbd5e1]'}`}>
+          <div key={t.id} className={`pointer-events-auto flex min-h-14 items-center justify-between gap-3 rounded-panel py-1.5 pl-4 pr-2 text-base font-bold shadow-xl ${t.kind === 'error' ? 'bg-danger text-on-accent' : 'bg-ink text-surface'}`}>
             <span className="py-1.5">{t.msg}</span>
-            {t.action && <button type="button" className="shrink-0 min-h-11 min-w-11 px-3 rounded-xl text-white font-bold underline underline-offset-2 hover:bg-white/10" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
+            {t.action && <button type="button" className="min-h-11 min-w-11 shrink-0 rounded-control px-3 font-bold text-inherit underline underline-offset-2 hover:opacity-80" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
           </div>
         ))}
       </div>
       {conflict && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="conflict-title" aria-describedby="conflict-desc">
-          <div className="absolute inset-0 bg-slate-900/50 dark:bg-black/60" />
-          <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full">
-            <div className="text-[13px] font-bold text-red-600 dark:text-red-400 mb-2"><i className="fas fa-exclamation-triangle mr-1" aria-hidden />동시에 고쳤어요</div>
-            <p id="conflict-title" className="font-bold text-slate-900 text-[17px] leading-snug">{who} 방금 이 항목을 고쳤어요.</p>
-            <div id="conflict-desc" className="mt-3 space-y-1.5 text-[15px] text-slate-600 leading-relaxed">
-              <p>최신 내용: <span className="font-bold text-slate-800 break-words">{curDesc || '(확인 불가)'}</span></p>
-              {mine && <p>내가 쓴 것: <span className="font-semibold text-slate-700 break-words">{mine}</span></p>}
+          <div className="absolute inset-0 bg-black/50 dark:bg-black/60" />
+          <div className="relative w-full max-w-md rounded-panel bg-surface p-6 shadow-2xl">
+            <div className="mb-2 text-sm font-bold text-danger-ink"><i className="fas fa-triangle-exclamation mr-1.5" aria-hidden />동시에 고쳤어요</div>
+            <p id="conflict-title" className="text-lg font-bold text-ink">{who} 방금 이 항목을 고쳤어요.</p>
+            <div id="conflict-desc" className="mt-3 space-y-1.5 text-base leading-relaxed text-ink-soft">
+              <p>최신 내용: <span className="break-words font-bold text-ink">{curDesc || '(확인 불가)'}</span></p>
+              {mine && <p>내가 쓴 것: <span className="break-words font-semibold text-ink-soft">{mine}</span></p>}
             </div>
-            <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2">
-              <button type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200" onClick={async () => {
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row">
+              <button type="button" className={`${btnGhost} flex-1`} onClick={async () => {
                 const c = conflict; setConflict(null);
                 if ('patch' in c.op) await send({ ...c.op, force: true } as Op, c.opts);
               }}>내 내용으로 덮어쓰기</button>
-              <button ref={conflictBtn} type="button" className="flex-1 min-h-11 px-4 py-3 rounded-2xl bg-blue-600 text-snow font-bold hover:bg-blue-700" onClick={takeLatest}>최신 내용 받기</button>
+              <button ref={conflictBtn} type="button" className={`${btnPrimary} flex-1`} onClick={takeLatest}>최신 내용 받기</button>
             </div>
           </div>
         </div>
       )}
       {ask && (
         <div className="fixed inset-0 z-[96] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="ask-title" aria-describedby="ask-desc">
-          <div className="absolute inset-0 bg-slate-900/50 dark:bg-black/60" onClick={() => answer(false)} />
-          <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full">
-            <p id="ask-title" className="font-bold text-slate-900 text-[17px] leading-snug">{ask.title}</p>
+          <div className="absolute inset-0 bg-black/50 dark:bg-black/60" onClick={() => answer(false)} />
+          <div className="relative w-full max-w-sm rounded-panel bg-surface p-6 shadow-2xl">
+            <p id="ask-title" className="text-lg font-bold text-ink">{ask.title}</p>
             <div id="ask-desc" className="mt-2 space-y-1.5">
-              {ask.body && <p className="line-clamp-2 break-words text-[15px] leading-relaxed text-slate-700">{ask.body}</p>}
-              {ask.note && <p className="text-[13px] leading-snug text-slate-500">{ask.note}</p>}
+              {ask.body && <p className="line-clamp-2 break-words text-base leading-relaxed text-ink-soft">{ask.body}</p>}
+              {ask.note && <p className="text-sm text-muted">{ask.note}</p>}
             </div>
             {/* 폰에서는 안전한 쪽(취소 · 계속 편집)이 위, 확인 쪽이 아래. 넓은 화면에서는 확인이 왼쪽 */}
-            <div className="mt-5 flex flex-col-reverse sm:flex-row gap-2">
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row">
               <button type="button" onClick={() => answer(true)}
-                className={`flex-1 min-h-11 px-4 py-3 rounded-2xl font-bold ${ask.danger ? 'bg-red-600 text-snow hover:bg-red-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{ask.confirmLabel ?? '확인'}</button>
+                className={`${ask.danger ? btnDanger : btnGhost} flex-1`}>{ask.confirmLabel ?? '확인'}</button>
               <button ref={cancelBtn} type="button" onClick={() => answer(false)}
-                className={`flex-1 min-h-11 px-4 py-3 rounded-2xl font-bold ${ask.danger ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-blue-600 text-snow hover:bg-blue-700'}`}>{ask.cancelLabel ?? '취소'}</button>
+                className={`${ask.danger ? btnGhost : btnPrimary} flex-1`}>{ask.cancelLabel ?? '취소'}</button>
             </div>
           </div>
         </div>

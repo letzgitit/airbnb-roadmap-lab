@@ -1,16 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { BatchView, BenchItem, LinkView, ReactionView, Vote } from '@/lib/core/bench';
 import { busyFetch } from '@/lib/client/busy';
 import { displayName, shortDate, withGa } from '@/lib/client/format';
-import { devHeaders, useProgress } from './ProgressProvider';
-import { AutoTextarea, btnGhost, btnPrimary, enterSubmit, inputCls, oneLine, textBtn, useDirty, useFormEsc } from './bits';
+import { devHeaders, useProgress } from '@/components/progress/ProgressProvider';
+import { AutoTextarea, btnGhost, btnPrimary, composerCls, dateCls, enterSubmit, inputCls, oneLine, textBtn, useDirty, useFormEsc } from '@/components/progress/bits';
+import { AddButton } from '@/components/ui/AddButton';
+import { Card } from '@/components/ui/Card';
+import { FoldRow } from '@/components/ui/FoldRow';
 
-// 「집 정보 · 기록」 창의 「꾸미기 참고」 탭: 다른 사람들이 꾸민 집(인테리어 벤치마킹) 모음.
-// 로그인한 두 사람만 /api/bench 로 받는다(우리 집 평수 · 구조 이야기가 들어 있어 공개 화면 · 저장소 코드에는 없다).
-// 묶음(수집한 날)마다 맨 위에 공통 패턴, 아래에 사진 벽돌 격자(핀터레스트처럼 사진 위주, 글은 제목 한두 줄뿐). 가장 최근 묶음만 펼치고 지난 묶음은 접어 둔다.
-// 사진을 누르면 같은 패널 안에서 상세로 넘어가고(「목록으로」로 돌아오면 보던 자리), 거기서 두 사람이 각자 좋아요 · 별로와 짧은 메모를 남긴다(누가 남겼는지 보인다).
+// 꾸미기 › 참고 모음: 다른 사람들이 꾸민 집(인테리어 벤치마킹) 모음.
+// 로그인한 두 사람만 /api/bench 로 받는다(우리 집 이야기가 들어 있어 공개 화면 · 저장소 코드에는 없다).
+// 묶음(수집한 날)마다 공통점(접어 둠) + 사진 벽돌 격자(사진 위주, 글은 제목 한두 줄뿐). 가장 최근 묶음만 펼치고 지난 묶음은 접어 둔다.
+// 사진을 누르면 같은 자리에서 상세로 넘어가고(「목록으로」로 돌아오면 보던 자리), 거기서 두 사람이 각자 좋아요 · 별로와 짧은 메모를 남긴다.
 
 const MEMO_MAX = 200;   // lib/core/bench.ts MEMO_MAX 와 같게
 interface Data { batches: BatchView[]; links: LinkView[]; reactions: Record<string, ReactionView[]> }
@@ -24,10 +27,10 @@ const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^w
 const NOTE_MAX = 200;   // lib/core/bench.ts NOTE_MAX 와 같게
 const ALL = '__all';
 const SPACE_KEY = 'bench.space';
-// 「2026-10-22」 → 「10월 22일」
+const SPACE_ORDER = ['전체', '거실주방', '손님방', '호스트방', '욕실', '현관', '조명·소품'];
 // 공간 「전체」(한 곳이 아니라 집 여러 곳에 해당)는 화면에서 「여러 공간」으로 보인다. 자료의 값은 그대로 둔다.
 const spaceLabel = (s: string) => (s === '전체' ? '여러 공간' : s);
-// 비용 줄: 값이 이미 「비용 · 가격」으로 시작하면 라벨을 빼고, 에어비앤비는 「숙박 요금」. 「언급 없음 · 확인 못함 · 비공개」면 닫힌 줄에서는 감춘다.
+// 비용 줄: 값이 이미 「비용 · 가격」으로 시작하면 라벨을 빼고, 에어비앤비는 「숙박 요금」. 「언급 없음 · 확인 못함 · 비공개」면 감춘다.
 const costView = (it: Card) => {
   const v = it.cost?.trim();
   if (!v) return null;
@@ -39,7 +42,10 @@ const bothDown = (list: ReactionView[]) => {
   const who = list.filter((r) => r.vote || r.memo);
   return who.length >= 2 && who.every((r) => r.vote === 'down');
 };
+// 「2026-10-22」 → 「10월 22일」
 const dateLabel = (d: string) => { const [, m, day] = d.split('-'); return m && day ? `${Number(m)}월 ${Number(day)}일` : d; };
+
+const gridCls = 'columns-2 gap-3 min-[560px]:columns-3';
 
 export function BenchPanel({ active }: { active: boolean }) {
   const { toast, me } = useProgress();
@@ -49,16 +55,25 @@ export function BenchPanel({ active }: { active: boolean }) {
   const [space, setSpaceState] = useState<string>(() => { try { return localStorage.getItem(SPACE_KEY) || ALL; } catch { return ALL; } });
   const setSpace = (s: string) => { setSpaceState(s); try { localStorage.setItem(SPACE_KEY, s); } catch { /* 저장이 막혀도 이번 화면에는 적용 */ } };
   const [openOld, setOpenOld] = useState<Record<string, boolean>>({});
-  // 상세: 목록은 그대로 그려 둔 채 숨기고(사진을 다시 받지 않게) 같은 패널 안에 상세를 보인다. 목록 스크롤 자리를 기억해 돌아올 때 되돌린다.
+  // 상세: 목록은 그대로 그려 둔 채 숨기고(사진을 다시 받지 않게) 같은 자리에 상세를 보인다. 목록 스크롤 자리를 기억해 돌아올 때 되돌린다.
+  // 스크롤하는 곳은 시트 안이면 그 칸(.overflow-y-auto), 페이지면 window.
   const [openId, setOpenId] = useState<string | null>(null);
   const rootRef = useRef<HTMLElement>(null);
   const scrollAt = useRef(0);
+  const moved = useRef(false);
   const scroller = () => rootRef.current?.closest<HTMLElement>('.overflow-y-auto') ?? null;
-  const openItem = (id: string) => { scrollAt.current = scroller()?.scrollTop ?? 0; setOpenId(id); };
+  const readScroll = () => { const el = scroller(); return el ? el.scrollTop : window.scrollY; };
+  const writeScroll = (y: number) => { const el = scroller(); if (el) el.scrollTop = y; else window.scrollTo(0, y); };
+  const openItem = (id: string) => { scrollAt.current = readScroll(); moved.current = true; setOpenId(id); };
   const closeItem = () => setOpenId(null);
   useLayoutEffect(() => {
+    if (!moved.current) return;   // 처음 그릴 때는 손대지 않는다(브라우저가 되살린 스크롤 자리를 지우지 않게)
+    if (!openId) { writeScroll(scrollAt.current); return; }
+    // 상세는 이 구역 맨 위부터: 페이지면 머리글 · 하위 탭이 보이는 맨 위로, 시트면 칸 맨 위로
     const el = scroller();
-    if (el) el.scrollTop = openId ? 0 : scrollAt.current;
+    if (el) el.scrollTop = 0;
+    else if (rootRef.current && rootRef.current.getBoundingClientRect().top < 0) window.scrollTo(0, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId]);
 
   const reload = useCallback(async () => {
@@ -146,16 +161,15 @@ export function BenchPanel({ active }: { active: boolean }) {
     return true;
   }, [addLinkLocal, removeLinkLocal, toast]);
 
-  // 거르기 칸: 자료에 실제로 있는 공간만(정해진 순서대로)
+  // 공간 고르기: 자료에 실제로 있는 공간만(정해진 순서대로)
   const spaces = useMemo(() => {
-    const order = ['전체', '거실주방', '손님방', '호스트방', '욕실', '현관', '조명·소품'];
     const have = new Set<string | null>([...(data?.batches ?? []).flatMap((b) => b.items.map((it) => it.space)), ...(data?.links ?? []).map((l) => l.space)]);
-    return order.filter((s) => have.has(s));
+    return SPACE_ORDER.filter((s) => have.has(s));
   }, [data]);
   const cur = space !== ALL && !spaces.includes(space) ? ALL : space;
   const pick = <T extends { space: string | null }>(items: T[]) => (cur === ALL ? items : items.filter((it) => it.space === cur));
 
-  if (state === 'anon') return <p className="py-6 text-[15px] font-semibold text-slate-500">로그인한 뒤에 볼 수 있어요.</p>;
+  if (state === 'anon') return <p className="py-6 text-base text-muted">로그인한 뒤에 볼 수 있어요.</p>;
 
   const linkCards = (data?.links ?? []).map(linkCard);
   const [firstBatch, ...older] = data?.batches ?? [];
@@ -163,62 +177,61 @@ export function BenchPanel({ active }: { active: boolean }) {
   const latest: BatchView | undefined = firstBatch ?? (linkCards.length > 0 ? { collectedAt: '', insights: [], items: [] } : undefined);
   const detail: Card | null = openId ? [...linkCards, ...(data?.batches ?? []).flatMap((b) => b.items)].find((it) => it.id === openId) ?? null : null;
   return (
-    <section ref={rootRef} className="min-w-0" aria-label="꾸미기 참고">
+    <section ref={rootRef} className="min-w-0" aria-label="참고 모음">
       {detail && <Detail it={detail} reactions={data!.reactions[detail.id] ?? []} onSave={save} onBack={closeItem} onDeleteLink={detail.link ? async () => { if (await removeLink(detail.link!)) closeItem(); } : undefined} />}
-      <div hidden={!!detail}>
-      {state === 'loading' && !data && (
-        <div role="status" aria-busy="true">
-          <span className="sr-only">불러오는 중…</span>
-          <div aria-hidden className="columns-2 gap-3 min-[560px]:columns-3">
-            {[150, 110, 130, 170, 120, 140].map((h, k) => (
-              <span key={k} style={{ height: h }} className="skeleton mb-3 block break-inside-avoid rounded-xl bg-slate-100" />
-            ))}
+      <div className={detail ? 'hidden' : 'flex flex-col gap-4'}>
+        {state === 'loading' && !data && (
+          <div role="status" aria-busy="true">
+            <span className="sr-only">불러오는 중…</span>
+            <div aria-hidden className={gridCls}>
+              {[150, 110, 130, 170, 120, 140].map((h, k) => (
+                <span key={k} style={{ height: h }} className="skeleton mb-3 block break-inside-avoid rounded-control bg-sunken" />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-      {state === 'error' && (
-        <p className="py-4 text-[15px] font-semibold text-slate-600">
-          불러오지 못했어요. <button type="button" className={textBtn} onClick={() => void reload()}>다시 불러오기</button>
-        </p>
-      )}
-      {data && <LinkAdder onAdded={addLinkLocal} />}
-      {data && !latest && (
-        <p className="py-4 text-[15px] font-semibold text-slate-500">아직 모은 자료가 없어요. 자료가 모이면 여기에 공간별로 보여요.</p>
-      )}
+        )}
+        {state === 'error' && (
+          <p className="py-4 text-base text-ink-soft">
+            불러오지 못했어요. <button type="button" className={textBtn} onClick={() => void reload()}>다시 불러오기</button>
+          </p>
+        )}
+        {data && <LinkAdder onAdded={addLinkLocal} />}
+        {data && !latest && (
+          <Card><p className="px-4 py-3 text-base text-muted">아직 모은 자료가 없어요. 자료가 모이면 여기에 공간별로 보여요.</p></Card>
+        )}
 
-      {latest && spaces.length > 1 && (
-        <div role="group" aria-label="공간 거르기" className="-mx-5 mb-2 mt-1 flex gap-1.5 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {[ALL, ...spaces].map((s) => {
-            const on = cur === s;
-            return (
-              <button key={s} type="button" aria-pressed={on} onClick={() => setSpace(s)}
-                className={`min-h-11 shrink-0 whitespace-nowrap rounded-xl border px-3 text-[14px] ${on ? 'border-slate-300 bg-slate-200 font-bold text-slate-900' : 'border-slate-200 bg-white font-semibold text-slate-600 hover:bg-slate-50'}`}>
-                {s === ALL ? '모두' : spaceLabel(s)}
-              </button>
-            );
-          })}
-        </div>
-      )}
+        {latest && (spaces.length > 1 || latest.collectedAt) && (
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            {spaces.length > 1 ? (
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-muted">공간</span>
+                <select value={cur} onChange={(e) => setSpace(e.target.value)} className={`${dateCls} pr-8`}>
+                  <option value={ALL}>전체</option>
+                  {spaces.map((s) => <option key={s} value={s}>{spaceLabel(s)}</option>)}
+                </select>
+              </label>
+            ) : <span />}
+            {latest.collectedAt && <p className="text-sm text-muted">{dateLabel(latest.collectedAt)} 모음</p>}
+          </div>
+        )}
 
-      {latest && <Batch b={latest} items={[...pick(linkCards), ...pick(latest.items)]} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} />}
+        {latest && <Batch b={latest} items={[...pick(linkCards), ...pick(latest.items)]} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} />}
 
-      {older.length > 0 && (
-        <div className="mt-8 border-t border-slate-200 pt-1">
-          {older.map((b) => {
-            const on = !!openOld[b.collectedAt];
-            return (
-              <div key={b.collectedAt} className="border-b border-slate-200 last:border-b-0">
-                <button type="button" aria-expanded={on} onClick={() => setOpenOld((m) => ({ ...m, [b.collectedAt]: !on }))}
-                  className="flex min-h-14 w-full items-center gap-3 py-3 text-left">
-                  <span className="min-w-0 flex-1 text-[15px] font-bold text-slate-800">{dateLabel(b.collectedAt)} 모음 <span className="ml-1 text-[13px] font-semibold text-slate-500">{b.items.length}건</span></span>
-                  <i className={`fas ${on ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
-                </button>
-                {on && <div className="pb-6"><Batch b={b} items={pick(b.items)} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} /></div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
+        {older.length > 0 && (
+          <Card className="mt-4">
+            {older.map((b) => {
+              const on = !!openOld[b.collectedAt];
+              const id = `bench-old-${b.collectedAt}`;
+              return (
+                <div key={b.collectedAt} className="border-b border-line last:border-b-0">
+                  <FoldRow label={`${dateLabel(b.collectedAt)} 모음`} count={b.items.length} open={on} controls={id}
+                    onToggle={() => setOpenOld((m) => ({ ...m, [b.collectedAt]: !on }))} />
+                  {on && <div id={id} className="px-4 pb-4 pt-2"><Batch b={b} items={pick(b.items)} reactions={data!.reactions} onOpen={openItem} onVote={quickVote} /></div>}
+                </div>
+              );
+            })}
+          </Card>
+        )}
       </div>
     </section>
   );
@@ -226,55 +239,50 @@ export function BenchPanel({ active }: { active: boolean }) {
 
 type SaveFn = (itemId: string, vote: Vote | null, memo: string) => Promise<boolean>;
 
-// 묶음 하나: 공통 패턴 → 사진 벽돌 격자
+// 묶음 하나: 공통점(접어 둠) → 사진 벽돌 격자 → 둘 다 별로라 숨긴 자료(접어 둠)
 function Batch({ b, items, reactions, onOpen, onVote }: { b: BatchView; items: Card[]; reactions: Data['reactions']; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
   const [showInsights, setShowInsights] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
+  const insightsId = useId();
+  const hiddenId = useId();
   const hidden = items.filter((it) => bothDown(reactions[it.id] ?? []));
   const shownItems = items.filter((it) => !bothDown(reactions[it.id] ?? []));
   return (
-    <div>
+    <div className="flex flex-col gap-4">
       {b.insights.length > 0 && (
-        <div className="mb-3 border-b border-slate-200">
-          <button type="button" aria-expanded={showInsights} onClick={() => setShowInsights((v) => !v)}
-            className="flex min-h-11 w-full items-center gap-3 py-2 text-left">
-            <span className="min-w-0 flex-1 text-[15px] font-bold text-slate-800">여러 집 공통점 {b.insights.length}개<span className="ml-2 text-[13px] font-semibold text-slate-500">{dateLabel(b.collectedAt)} 모음</span></span>
-            <i className={`fas ${showInsights ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
-          </button>
+        <Card>
+          <FoldRow label="여러 집 공통점" count={b.insights.length} open={showInsights} controls={insightsId} onToggle={() => setShowInsights((v) => !v)} />
           {showInsights && (
-            <ul className="space-y-2.5 pb-4 pt-1">
+            <ul id={insightsId} className="space-y-3 border-t border-line px-4 py-3">
               {b.insights.map((ins, i) => (
-                <li key={i} className="flex gap-2.5">
-                  <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-slate-400" aria-hidden />
+                <li key={i} className="flex gap-2">
+                  <span className="mt-2.5 size-1 shrink-0 rounded-full bg-faint" aria-hidden />
                   <div className="min-w-0">
-                    <p className="text-[15px] font-bold leading-snug text-slate-800">{ins.title}</p>
-                    {ins.detail && <p className="mt-0.5 text-[14px] leading-relaxed text-slate-600">{ins.detail}</p>}
+                    <p className="text-base font-semibold text-ink">{ins.title}</p>
+                    {ins.detail && <p className="mt-0.5 text-base leading-relaxed text-ink-soft">{ins.detail}</p>}
                   </div>
                 </li>
               ))}
             </ul>
           )}
-        </div>
+        </Card>
       )}
       {items.length === 0
-        ? <p className="py-2 text-[15px] font-semibold text-slate-500">이 공간 자료는 이 모음에 없어요.</p>
+        ? <Card><p className="px-4 py-3 text-base text-muted">이 공간 자료는 이 모음에 없어요.</p></Card>
         : shownItems.length > 0 && (
-          <ul className="columns-2 gap-3 min-[560px]:columns-3">
+          <ul className={gridCls}>
             {shownItems.map((it) => <li key={it.id} className="mb-4 min-w-0 break-inside-avoid"><Tile it={it} reactions={reactions[it.id] ?? []} onOpen={onOpen} onVote={onVote} /></li>)}
           </ul>
         )}
       {hidden.length > 0 && (
-        <div className="mt-1">
-          <button type="button" aria-expanded={showHidden} onClick={() => setShowHidden((v) => !v)}
-            className="flex min-h-11 w-full items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-500">
-            둘 다 별로라 숨긴 자료 {hidden.length}개<i className={`fas ${showHidden ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]`} aria-hidden />
-          </button>
+        <Card>
+          <FoldRow label="둘 다 별로라 숨긴 자료" count={hidden.length} open={showHidden} controls={hiddenId} onToggle={() => setShowHidden((v) => !v)} />
           {showHidden && (
-            <ul className="columns-2 gap-3 pt-1 opacity-70 min-[560px]:columns-3">
+            <ul id={hiddenId} className={`${gridCls} border-t border-line px-4 pt-3 opacity-70`}>
               {hidden.map((it) => <li key={it.id} className="mb-4 min-w-0 break-inside-avoid"><Tile it={it} reactions={reactions[it.id] ?? []} onOpen={onOpen} onVote={onVote} /></li>)}
             </ul>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -286,14 +294,14 @@ function Photo({ src, source, big }: { src: string | null; source: string; big?:
   const [loaded, setLoaded] = useState(false);
   if (!src || failed) {
     return (
-      <span className={`flex w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500 ${big ? 'aspect-[4/3]' : 'aspect-square'}`}>
-        <i className="far fa-image text-[18px]" aria-hidden />
-        <span className="break-keep text-[12px] font-bold leading-tight">{source}</span>
+      <span className={`flex w-full flex-col items-center justify-center gap-1 bg-sunken px-2 text-center text-muted ${big ? 'aspect-[4/3]' : 'aspect-square'}`}>
+        <i className="far fa-image text-lg" aria-hidden />
+        <span className="break-keep text-xs">{source}</span>
       </span>
     );
   }
   return (
-    <span className={`relative block w-full bg-slate-100 ${loaded ? '' : 'aspect-[4/5]'}`}>
+    <span className={`relative block w-full bg-sunken ${loaded ? '' : 'aspect-[4/5]'}`}>
       {!loaded && <span className="skeleton absolute inset-0" />}
       {/* 외부 주소라 next/image 도메인 목록 대신 일반 img. 출처 사이트가 막지 않게 referrer 를 보내지 않는다 */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -303,10 +311,14 @@ function Photo({ src, source, big }: { src: string | null; source: string; big?:
   );
 }
 
-const Label = ({ children }: { children: React.ReactNode }) => <p className="text-[13px] font-bold text-slate-500">{children}</p>;
+const Label = ({ children }: { children: ReactNode }) => <p className="text-sm text-muted">{children}</p>;
+const VOTE_LABEL: Record<Vote, string> = { up: '좋아요', down: '별로' };
+const VOTE_ICON: Record<Vote, string> = { up: 'fa-thumbs-up', down: 'fa-thumbs-down' };
+// 내가 누른 반응의 면: 좋아요 = 강조색, 별로 = 짙은 회색
+const VOTE_ON: Record<Vote, string> = { up: 'bg-accent text-on-accent', down: 'bg-ink-soft text-surface' };
 
 // 타일 = 사진 + 제목 한두 줄 + (왼쪽 출처 · 오른쪽 좋아요/별로 단추). 사진 · 제목을 누르면 상세로, 단추는 상세를 열지 않고 바로 저장한다.
-// 단추가 채워져 있으면 내 반응. 상대가 남긴 반응은 단추 아래 작은 글자(「아내 👍」)로, 메모가 있으면 말풍선.
+// 단추가 채워져 있으면 내 반응. 상대가 남긴 반응은 단추 아래 작은 글자(이름 + 아이콘)로, 메모가 있으면 말풍선.
 function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: ReactionView[]; onOpen: (id: string) => void; onVote: (id: string, v: Vote) => void }) {
   const mine = reactions.find((r) => r.mine) ?? null;
   const shown = reactions.filter((r) => r.vote || r.memo);
@@ -315,103 +327,98 @@ function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: Reaction
   return (
     <div>
       <button type="button" onClick={() => onOpen(it.id)} className="block w-full text-left">
-        <span className="block overflow-hidden rounded-xl border border-slate-200"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} /></span>
-        <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-[13px] font-bold leading-snug text-slate-900">{it.title}</span>
-        {it.link && <span className="block truncate px-0.5 text-[12px] font-semibold leading-snug text-blue-700 dark:text-blue-300">{withGa(it.link.addedBy)} 올림</span>}
+        <span className="block overflow-hidden rounded-control border border-line"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} /></span>
+        <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-sm font-semibold text-ink">{it.title}</span>
+        {it.link && <span className="block truncate px-0.5 text-xs text-muted">{withGa(it.link.addedBy)} 올림</span>}
       </button>
       <div className="flex items-center gap-1 px-0.5">
-        <span className="min-w-0 flex-1 truncate text-[12px] leading-snug text-slate-500">{it.source}</span>
-        <span role="group" aria-label="내 반응" className="-mr-1 flex shrink-0 items-center">
+        <span className="min-w-0 flex-1 truncate text-xs text-muted">{it.source}</span>
+        <span role="group" aria-label="내 반응" className="-mr-1.5 flex shrink-0 items-center">
           {(['up', 'down'] as const).map((v) => {
             const on = mine?.vote === v;
             return (
               <button key={v} type="button" aria-pressed={on} aria-label={`${VOTE_LABEL[v]}${on ? ' (누르면 취소)' : ''}`}
                 onClick={(e) => { e.stopPropagation(); onVote(it.id, v); }}
-                className="flex size-10 items-center justify-center rounded-full">
-                <span className={`flex size-8 items-center justify-center rounded-full border text-[14px] ${on
-                  ? (v === 'up' ? 'border-blue-600 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-400 dark:text-slate-900' : 'border-slate-500 bg-slate-500 text-white dark:border-slate-400 dark:bg-slate-400 dark:text-slate-900')
-                  : 'border-slate-200 text-slate-500'}`}>
-                  <i className={`${on ? 'fas' : 'far'} ${v === 'up' ? 'fa-thumbs-up' : 'fa-thumbs-down'}`} aria-hidden />
-                </span>
+                className={`flex size-11 items-center justify-center rounded-full text-base transition-colors ${on ? VOTE_ON[v] : 'text-muted hover:bg-sunken'}`}>
+                <i className={`${on ? 'fas' : 'far'} ${VOTE_ICON[v]}`} aria-hidden />
               </button>
             );
           })}
         </span>
       </div>
       {(others.length > 0 || myMemo) && (
-        <p className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 px-0.5 text-[12px] font-semibold leading-snug text-slate-600">
+        <p className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 px-0.5 text-xs text-muted">
           {others.map((r, i) => (
             <span key={i} className="inline-flex items-center gap-1">
               {displayName(r.name)}
-              {r.vote && <i className={`fas ${r.vote === 'up' ? 'fa-thumbs-up text-blue-700 dark:text-blue-300' : 'fa-thumbs-down text-slate-500'}`} aria-hidden />}
-              {r.memo && <i className="far fa-comment text-slate-500" aria-hidden />}
+              {r.vote && <i className={`fas ${VOTE_ICON[r.vote]}`} aria-hidden />}
+              {r.memo && <i className="far fa-comment" aria-hidden />}
               <span className="sr-only">{r.vote ? VOTE_LABEL[r.vote] : ''}{r.memo ? ' 메모 있음' : ''}</span>
             </span>
           ))}
-          {myMemo && <span className="inline-flex items-center gap-1 text-slate-500"><i className="far fa-comment" aria-hidden />내 메모<span className="sr-only"> 있음</span></span>}
+          {myMemo && <span className="inline-flex items-center gap-1"><i className="far fa-comment" aria-hidden />내 메모<span className="sr-only"> 있음</span></span>}
         </p>
       )}
     </div>
   );
 }
 
-// 상세: 같은 패널 안에서 목록을 대신해 보인다. 큰 사진 · 제목 · 맞는 이유 · 따라 할 점 · 비용 · 주의 · 원문 · 내 반응
+// 상세: 같은 자리에서 목록을 대신해 보인다. 큰 사진 · 제목 · 맞는 이유 · 따라 할 점 · 비용 · 주의 · 원문 · 반응
 function Detail({ it, reactions, onSave, onBack, onDeleteLink }: { it: Card; reactions: ReactionView[]; onSave: SaveFn; onBack: () => void; onDeleteLink?: () => Promise<void> }) {
   const cost = costView(it);
   return (
     <article aria-label={it.title}>
-      <button type="button" onClick={onBack} className={`${textBtn} -ml-1 mb-2 inline-flex min-h-11 items-center`}>
-        <i className="fas fa-chevron-left mr-1.5 text-[12px]" aria-hidden />목록으로
+      <button type="button" onClick={onBack} className={`${textBtn} mb-2`}>
+        <i className="fas fa-chevron-left mr-1.5 text-xs" aria-hidden />목록으로
       </button>
-      <div className="overflow-hidden rounded-2xl border border-slate-200"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} big /></div>
-      <h3 className="mt-3 break-words text-[18px] font-bold leading-snug text-slate-900">{it.title}</h3>
-      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-slate-500">
+      <div className="overflow-hidden rounded-panel border border-line"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} big /></div>
+      <h2 className="mt-3 break-words text-xl font-bold text-ink">{it.title}</h2>
+      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
         <span>{it.source}</span>
-        {it.space && <span className="rounded-md border border-slate-200 px-1.5 py-px text-[12px] font-bold text-slate-600">{spaceLabel(it.space)}</span>}
-        {it.link && <span>{withGa(it.link.addedBy)} 올림 · {shortDate(it.link.addedAt.slice(0, 10))}</span>}
+        {it.space && <span>{spaceLabel(it.space)}</span>}
+        {it.link && <span>{withGa(it.link.addedBy)} 올림</span>}
+        {it.link && <span className="text-ink-soft">{shortDate(it.link.addedAt.slice(0, 10))}</span>}
       </p>
       <div className="mt-4 flex flex-col gap-4">
         {it.link?.note && (
-          <div><Label>{displayName(it.link.addedBy)}의 메모</Label><p className="mt-0.5 break-words text-[15px] leading-relaxed text-slate-700">{it.link.note}</p></div>
+          <div><Label>{displayName(it.link.addedBy)}의 메모</Label><p className="mt-0.5 break-words text-base leading-relaxed text-ink-soft">{it.link.note}</p></div>
         )}
         {it.link && it.link.status !== 'done' && !it.fit && (
-          <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] leading-relaxed text-slate-600">
-            <i className="far fa-clock mr-1.5 text-[12px]" aria-hidden />Claude가 곧 설명을 채워요. 101호에 맞는 이유와 따라 할 점이 여기에 들어와요.
+          <p className="rounded-control bg-sunken px-3 py-2 text-sm text-ink-soft">
+            <i className="far fa-clock mr-1.5 text-xs" aria-hidden />Claude가 곧 설명을 채워요. 우리 집에 맞는 이유와 따라 할 점이 여기에 들어와요.
           </p>
         )}
         {it.fit && (
-          <div><Label>101호에 맞는 이유</Label><p className="mt-0.5 break-words text-[15px] leading-relaxed text-slate-700">{it.fit}</p></div>
+          <div><Label>우리 집에 맞는 이유</Label><p className="mt-0.5 break-words text-base leading-relaxed text-ink-soft">{it.fit}</p></div>
         )}
         {it.takeaways.length > 0 && (
           <div>
             <Label>따라 할 점</Label>
-            <ul className="mt-0.5 space-y-1">
+            <ul className="mt-1 space-y-1">
               {it.takeaways.map((t, i) => (
-                <li key={i} className="flex gap-2 text-[15px] leading-snug text-slate-700"><span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-slate-400" aria-hidden />{t}</li>
+                <li key={i} className="flex gap-2 text-base leading-relaxed text-ink-soft"><span className="mt-2.5 size-1 shrink-0 rounded-full bg-faint" aria-hidden />{t}</li>
               ))}
             </ul>
           </div>
         )}
         {cost && !cost.weak && (
-          <div><Label>{cost.label || '비용'}</Label><p className="mt-0.5 break-words text-[15px] leading-snug text-slate-700">{cost.text}</p></div>
+          <div><Label>{cost.label || '비용'}</Label><p className="mt-0.5 break-words text-base text-ink-soft">{cost.text}</p></div>
         )}
         {it.caution && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
-            <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-700 dark:text-red-300"><i className="fas fa-triangle-exclamation text-[12px]" aria-hidden />주의</p>
-            <p className="mt-0.5 text-[14px] leading-relaxed text-slate-800">{it.caution}</p>
+          <div className="rounded-control border border-danger-line bg-danger-soft px-3 py-2">
+            <p className="flex items-center gap-1.5 text-sm font-bold text-danger-ink"><i className="fas fa-triangle-exclamation text-xs" aria-hidden />주의</p>
+            <p className="mt-0.5 text-base leading-relaxed text-ink">{it.caution}</p>
           </div>
         )}
         <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${textBtn} self-start`}>
-          원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-[11px]" aria-hidden /><span className="sr-only">(새 탭)</span>
+          원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
         </a>
       </div>
-      <div className="mt-3 rounded-xl border border-slate-100"><Reactions itemId={it.id} title={it.title} list={reactions} onSave={onSave} /></div>
+      <div className="mt-4 border-t border-line pt-3"><Reactions itemId={it.id} title={it.title} list={reactions} onSave={onSave} /></div>
       {it.link?.mine && onDeleteLink && <DeleteLink title={it.title} onDelete={onDeleteLink} />}
     </article>
   );
 }
-
-const VOTE_LABEL: Record<Vote, string> = { up: '좋아요', down: '별로' };
 
 // 반응: 위에 두 사람이 남긴 것(이름 · 좋아요/별로 · 메모), 아래에 내 단추. 메모는 그 자리에서 펼쳐 쓴다.
 function Reactions({ itemId, title, list, onSave }: { itemId: string; title: string; list: ReactionView[]; onSave: SaveFn }) {
@@ -441,41 +448,39 @@ function Reactions({ itemId, title, list, onSave }: { itemId: string; title: str
   const startMemo = () => { setMemo(mine?.memo ?? ''); setEditing(true); };
 
   return (
-    <div className="px-4 pb-2 pt-2">
+    <div>
       {list.length > 0 && (
-        <ul className="mb-1" aria-label="남긴 반응">
+        <ul className="mb-2" aria-label="남긴 반응">
           {list.map((r, i) => (
-            <li key={i} className="flex items-start gap-2 py-1 text-[14px] leading-snug">
-              <span className="shrink-0 font-bold text-slate-800">{displayName(r.name)}</span>
+            <li key={i} className="flex items-start gap-2 py-1 text-base">
+              <span className="shrink-0 font-semibold text-ink">{displayName(r.name)}</span>
               {r.vote && (
-                <span className={`inline-flex shrink-0 items-center gap-1 font-semibold ${r.vote === 'up' ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500'}`}>
-                  <i className={`fas ${r.vote === 'up' ? 'fa-thumbs-up' : 'fa-thumbs-down'} text-[12px]`} aria-hidden />{VOTE_LABEL[r.vote]}
+                <span className="inline-flex shrink-0 items-center gap-1 text-ink-soft">
+                  <i className={`fas ${VOTE_ICON[r.vote]} text-sm`} aria-hidden />{VOTE_LABEL[r.vote]}
                 </span>
               )}
-              {r.memo && <span className="min-w-0 text-slate-700">{r.memo}</span>}
+              {r.memo && <span className="min-w-0 break-words text-ink-soft">{r.memo}</span>}
             </li>
           ))}
         </ul>
       )}
       {editing ? (
-        <form onSubmit={submit} onKeyDown={onEsc} className="py-1.5">
+        <form onSubmit={submit} onKeyDown={onEsc} className={composerCls}>
           <AutoTextarea value={memo} maxLength={MEMO_MAX} autoFocus aria-label={`「${title.slice(0, 20)}」 메모`} placeholder="예: 우리 손님방에 해 보자"
             onChange={(e) => setMemo(oneLine(e.target.value))} onKeyDown={enterSubmit} className={inputCls} />
-          <div className="mt-2 flex justify-end gap-2">
+          <div className="flex justify-end gap-2">
             <button type="button" className={btnGhost} onClick={cancel}>취소</button>
             <button type="submit" className={btnPrimary} disabled={busy || !dirty}>저장</button>
           </div>
         </form>
       ) : (
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="내 반응">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="내 반응">
           {(['up', 'down'] as const).map((v) => {
             const on = mine?.vote === v;
             return (
               <button key={v} type="button" aria-pressed={on} disabled={busy} onClick={() => void vote(v)}
-                className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 text-[14px] disabled:opacity-60 ${on
-                  ? (v === 'up' ? 'border-blue-600 font-bold text-blue-700 dark:border-blue-400 dark:text-blue-300' : 'border-slate-400 bg-slate-100 font-bold text-slate-800')
-                  : 'border-slate-200 font-semibold text-slate-600 hover:bg-slate-50'}`}>
-                <i className={`${on ? 'fas' : 'far'} ${v === 'up' ? 'fa-thumbs-up' : 'fa-thumbs-down'} text-[14px]`} aria-hidden />{VOTE_LABEL[v]}
+                className={`inline-flex min-h-11 items-center gap-1.5 rounded-control px-4 text-base transition-colors disabled:opacity-60 ${on ? `${VOTE_ON[v]} font-bold` : 'bg-sunken font-semibold text-ink-soft hover:bg-line'}`}>
+                <i className={`${on ? 'fas' : 'far'} ${VOTE_ICON[v]}`} aria-hidden />{VOTE_LABEL[v]}
               </button>
             );
           })}
@@ -500,13 +505,13 @@ function DeleteLink({ title, onDelete }: { title: string; onDelete: () => Promis
   };
   return (
     <button type="button" disabled={busy} onClick={() => void go()}
-      className="mt-3 inline-flex min-h-11 items-center gap-1.5 px-1 text-[13px] font-bold text-red-700 hover:underline disabled:opacity-50 dark:text-red-300">
-      <i className="fas fa-trash-can text-[12px]" aria-hidden />내가 올린 링크 지우기
+      className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-bold text-danger-ink hover:underline disabled:opacity-50">
+      <i className="fas fa-trash-can text-xs" aria-hidden />내가 올린 링크 지우기
     </button>
   );
 }
 
-// 탭 맨 위 「링크 올리기」: 처음엔 접힌 단추. 누르면 링크 · 왜 골랐는지(선택) · 공간(선택). 올리면 서버가 제목 · 사진을 가져오고 격자 맨 앞에 바로 생긴다.
+// 맨 위 「＋ 링크 올리기」: 처음엔 접힌 줄. 누르면 그 자리에서 링크 · 왜 골랐는지(선택) · 공간(선택). 올리면 서버가 제목 · 사진을 가져오고 격자 맨 앞에 바로 생긴다.
 function LinkAdder({ onAdded }: { onAdded: (l: LinkView) => void }) {
   const { toast } = useProgress();
   const [open, setOpen] = useState(false);
@@ -540,34 +545,30 @@ function LinkAdder({ onAdded }: { onAdded: (l: LinkView) => void }) {
     } finally { setBusy(false); }
   };
 
-  if (!open) {
-    return (
-      <button type="button" onClick={() => setOpen(true)}
-        className="mb-2 mt-1 flex min-h-11 w-full items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 text-left text-[14px] font-bold text-blue-700 hover:bg-slate-50 dark:text-blue-300">
-        <i className="fas fa-link text-[13px]" aria-hidden />링크 올리기
-        <span className="ml-auto text-[12px] font-semibold text-slate-500">보다가 마음에 든 집</span>
-      </button>
-    );
-  }
+  // 다른 화면의 「＋ ○○ 추가」와 같은 모양: 카드(rounded-panel · border-line) 한 줄 안에 AddButton, 누르면 그 카드 안에서 폼이 펼쳐진다
+  if (!open) return <Card><AddButton label="링크 올리기" onClick={() => setOpen(true)} /></Card>;
+  // noValidate: 주소 칸이 type="url" 이라 브라우저가 「example.com」처럼 https:// 없는 주소를 막는데, submit 이 https:// 를 붙여 받는다
   return (
-    <form onSubmit={submit} onKeyDown={onEsc} className="mb-3 mt-1 rounded-xl border border-slate-200 p-3">
-      <label className="block text-[13px] font-bold text-slate-600" htmlFor="bench-link-url">링크</label>
+    <Card className="px-4">
+    <form noValidate onSubmit={submit} onKeyDown={onEsc} className={composerCls}>
+      <label className="block text-sm text-muted" htmlFor="bench-link-url">링크 (인스타 · 오늘의집 · 블로그)</label>
       <input id="bench-link-url" type="url" inputMode="url" autoComplete="off" autoCapitalize="none" autoFocus value={url} onChange={(e) => { setUrl(e.target.value); setErr(''); }}
-        placeholder="인스타 · 오늘의집 · 블로그 주소를 붙여 넣기" className={`${inputCls} mt-1`} />
-      <label className="mt-3 block text-[13px] font-bold text-slate-600" htmlFor="bench-link-note">왜 골랐는지 <span className="font-semibold text-slate-500">(선택)</span></label>
+        placeholder="마음에 든 숙소 링크" className={inputCls} />
+      <label className="block pt-1 text-sm text-muted" htmlFor="bench-link-note">왜 골랐는지 (선택)</label>
       <AutoTextarea id="bench-link-note" value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(oneLine(e.target.value))} onKeyDown={enterSubmit}
-        placeholder="예: 조명이 좋아서" className={`${inputCls} mt-1`} />
-      <label className="mt-3 block text-[13px] font-bold text-slate-600" htmlFor="bench-link-space">공간 <span className="font-semibold text-slate-500">(선택)</span></label>
-      <select id="bench-link-space" value={space} onChange={(e) => setSpace(e.target.value)} className={`${inputCls} mt-1`}>
+        placeholder="예: 조명이 좋아서" className={inputCls} />
+      <label className="block pt-1 text-sm text-muted" htmlFor="bench-link-space">공간 (선택)</label>
+      <select id="bench-link-space" value={space} onChange={(e) => setSpace(e.target.value)} className={inputCls}>
         <option value="">고르지 않음</option>
         {['거실주방', '손님방', '호스트방', '욕실', '현관', '조명·소품', '전체'].map((k) => <option key={k} value={k}>{spaceLabel(k)}</option>)}
       </select>
-      {err && <p role="alert" className="mt-2 text-[14px] font-bold text-red-700 dark:text-red-300">{err}</p>}
-      <div className="mt-3 flex items-center justify-end gap-2">
-        {busy && <span role="status" className="mr-auto text-[13px] font-semibold text-slate-500">사진을 가져오는 중…</span>}
+      {err && <p role="alert" className="text-base font-bold text-danger-ink">{err}</p>}
+      <div className="flex items-center justify-end gap-2 pt-1">
+        {busy && <span role="status" className="mr-auto text-sm text-muted">사진을 가져오는 중…</span>}
         <button type="button" className={btnGhost} onClick={close}>취소</button>
         <button type="submit" className={btnPrimary} disabled={busy || !url.trim()}>올리기</button>
       </div>
     </form>
+    </Card>
   );
 }

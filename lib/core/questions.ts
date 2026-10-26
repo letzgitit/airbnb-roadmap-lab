@@ -166,10 +166,10 @@ export function applyQuestionOp(doc: ProgressDoc, op: Op | GuestAnswerOp, actor:
       return { result: doc.questions[cur.id] };
     }
     case 'guest.add': {
-      if (Object.values(doc.guests).filter((g) => !g.revokedAt).length >= MAX_GUESTS) h.fail(400, { error: 'limit', message: '손님 링크가 너무 많습니다. 안 쓰는 링크를 먼저 끊어 주세요.' });
+      if (Object.values(doc.guests).filter((g) => !g.revokedAt).length >= MAX_GUESTS) h.fail(400, { error: 'limit', message: '답 받는 링크가 너무 많아요. 안 쓰는 링크를 먼저 끊어 주세요.' });
       const g: GuestLink = { id: h.newId('g'), name: op.name.trim(), token: newToken(), createdAt: iso, createdBy: actor.name, revokedAt: null, revokedBy: null };
       doc.guests[g.id] = g;
-      h.touch(`손님 링크 만듦: ${g.name}`);
+      h.touch(`답 받는 링크 만듦: ${g.name}`);
       return { result: g };
     }
     case 'guest.revoke': {
@@ -178,7 +178,7 @@ export function applyQuestionOp(doc: ProgressDoc, op: Op | GuestAnswerOp, actor:
       if (cur.revokedAt) return { result: cur };
       const next: GuestLink = { ...cur, revokedAt: iso, revokedBy: actor.name };
       doc.guests[cur.id] = next;
-      h.touch(`손님 링크 끊음: ${cur.name}`);
+      h.touch(`답 받는 링크 끊음: ${cur.name}`);
       return { result: next };
     }
     default:

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, type ReactNode, type Ref } from 'react';
+import { IconButton } from './ui/IconButton';
 
 export interface SheetProps {
   open: boolean;
@@ -10,6 +11,8 @@ export interface SheetProps {
   /** 제목 위 작은 줄(단계 번호 등) */
   eyebrow?: ReactNode;
   subtitle?: ReactNode;
+  /** 제목 아래 줄에 두는 작은 조작(단계 진행 상태 단추 등). 메뉴를 품을 수 있게 div 로 감싼다. */
+  belowTitle?: ReactNode;
   /** 헤더 바로 아래에 붙는 막대(탭 등). 본문이 스크롤돼도 같이 남는다. */
   tabs?: ReactNode;
   footer?: ReactNode;
@@ -22,9 +25,9 @@ export interface SheetProps {
   bodyClassName?: string;
 }
 
-// 모든 창(단계 · 최근 바뀐 규정 · 집 정보·기록 · 멘트함)이 쓰는 공용 시트:
-// 폰은 아래에서 올라오는 시트(위쪽 둥근 모서리), 넓은 화면은 가운데 카드.
-export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, children, onClose, beforeClose, bodyRef, bodyClassName = 'bg-white' }: SheetProps) {
+// 공개 안내 시트(단계 · 주의사항 · 대화 예시)가 쓰는 공용 시트:
+// 폰은 아래에서 올라오는 시트(위쪽 둥근 모서리), 넓은 화면은 가운데 720px 카드.
+export function Sheet({ open, shown, title, eyebrow, subtitle, belowTitle, tabs, footer, children, onClose, beforeClose, bodyRef, bodyClassName = 'bg-surface' }: SheetProps) {
   const uid = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const askRef = useRef<() => void>(() => {});
@@ -66,24 +69,22 @@ export function Sheet({ open, shown, title, eyebrow, subtitle, tabs, footer, chi
   if (!open) return null;
   return (
     <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-50 outline-none" role="dialog" aria-modal="true" aria-labelledby={`${uid}-title`}>
-      <div className="absolute inset-0 bg-slate-900/50 dark:bg-black/60" onClick={() => askRef.current()} />
-      <div className={`absolute inset-x-0 bottom-0 top-10 flex flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-transform duration-300 ease-out ${shown ? '' : 'translate-y-full'} md:relative md:top-auto md:mx-auto md:mt-[7vh] md:h-[85vh] md:max-w-[760px] md:rounded-3xl`}>
-        <div className="shrink-0 border-b border-slate-100 bg-white">
-          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
+      <div className="absolute inset-0 bg-black/50 dark:bg-black/60" onClick={() => askRef.current()} />
+      <div className={`absolute inset-x-0 bottom-0 top-[calc(40px+env(safe-area-inset-top))] flex flex-col overflow-hidden rounded-t-panel bg-surface shadow-2xl transition-transform duration-300 ease-out ${shown ? '' : 'translate-y-full'} md:relative md:top-auto md:mx-auto md:mt-[7vh] md:h-[85vh] md:max-w-content md:rounded-panel`}>
+        <div className="shrink-0 border-b border-line bg-surface">
+          <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
             <div className="min-w-0">
               {eyebrow && <div className="mb-1.5 flex items-center gap-2">{eyebrow}</div>}
-              <h2 id={`${uid}-title`} className="text-xl font-bold leading-snug text-slate-900">{title}</h2>
-              {subtitle && <p className="mt-1 text-[13px] leading-snug text-slate-600">{subtitle}</p>}
+              <h2 id={`${uid}-title`} className="text-xl font-bold text-ink">{title}</h2>
+              {subtitle && <p className="mt-1 text-sm text-ink-soft">{subtitle}</p>}
+              {belowTitle && <div className="mt-2">{belowTitle}</div>}
             </div>
-            <button type="button" onClick={() => askRef.current()} aria-label="닫기"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200">
-              <i className="fas fa-times" aria-hidden />
-            </button>
+            <IconButton label="닫기" icon="fa-xmark" variant="filled" onClick={() => askRef.current()} />
           </div>
           {tabs}
         </div>
         <div ref={bodyRef} className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${bodyClassName}`}>{children}</div>
-        {footer && <div className="shrink-0 border-t border-slate-100 bg-white">{footer}</div>}
+        {footer && <div className="shrink-0 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">{footer}</div>}
       </div>
     </div>
   );

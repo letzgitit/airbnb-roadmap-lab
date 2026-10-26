@@ -47,9 +47,9 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
   ];
 
   return (
-    <Sheet open={open} shown={shown} onClose={onClose} bodyRef={bodyRef} bodyClassName="relative bg-white" title="주의사항"
+    <Sheet open={open} shown={shown} onClose={onClose} bodyRef={bodyRef} bodyClassName="relative bg-surface" title="주의사항"
       tabs={<TabBar items={items} value={tab} onChange={(id) => setTab(id as Tab)} label="주의사항 종류" idPrefix={uid} />}>
-      <div role="tabpanel" id={panelDomId(uid, tab)} aria-labelledby={tabDomId(uid, tab)} className="px-5 pb-6 pt-1">
+      <div role="tabpanel" id={panelDomId(uid, tab)} aria-labelledby={tabDomId(uid, tab)} className="px-4 pb-6 pt-1">
         {tab === 'rules' ? (
           <ul>
             {updates.map((u, i) => {
@@ -57,21 +57,23 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
               const url = safeUrl(u.url);
               const src = u.source || (url ? u.url : '');
               return (
-                <li key={i} data-notice={i} className="border-b border-slate-200 last:border-b-0">
+                <li key={i} data-notice={i} className="border-b border-line last:border-b-0">
                   <button type="button" aria-expanded={on} aria-controls={`${uid}-body-${i}`} onClick={() => setExpanded(on ? null : i)}
-                    className="flex min-h-14 w-full items-center gap-3 py-3 text-left">
-                    <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold tabular-nums text-slate-700">{u.date}</span>
-                    <span className="min-w-0 flex-1 text-[15px] font-bold leading-snug text-slate-800">{u.title}</span>
-                    <i className={`fas ${on ? 'fa-chevron-up' : 'fa-chevron-down'} shrink-0 text-[12px] text-slate-500`} aria-hidden />
+                    className="flex min-h-11 w-full items-center gap-3 py-3 text-left">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-normal tabular-nums text-muted">{u.date}</span>
+                      <span className="block text-base font-semibold text-ink">{u.title}</span>
+                    </span>
+                    <i className={`fas fa-chevron-down shrink-0 text-xs text-muted transition-transform ${on ? 'rotate-180' : ''}`} aria-hidden />
                   </button>
                   {on && (
                     <div id={`${uid}-body-${i}`} className="pb-4">
-                      <p className="text-[15px] leading-relaxed text-slate-700">{u.text}</p>
+                      <p className="text-base leading-relaxed text-ink-soft">{u.text}</p>
                       {src && (
-                        <p className="mt-3 text-[13px] font-semibold text-slate-600">
+                        <p className="mt-3 text-sm font-normal text-muted">
                           출처{' '}
                           {url
-                            ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] font-bold text-blue-700 dark:text-blue-300 underline underline-offset-2">{src}<i className="fas fa-arrow-up-right-from-square ml-1 text-[12px]" aria-hidden /></a>
+                            ? <a href={url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] text-accent-ink underline underline-offset-2">{src}<i className="fas fa-arrow-up-right-from-square ml-1 text-xs" aria-hidden /></a>
                             : src}
                         </p>
                       )}
@@ -83,8 +85,8 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
           </ul>
         ) : (
           withWarnings.map((s) => (
-            <section key={s.id} aria-label={`${s.id}. ${s.title}`} className="pt-5">
-              <h3 className="text-[15px] font-bold text-slate-900">{s.id}. {s.title}</h3>
+            <section key={s.id} aria-label={`${s.id}. ${s.title}`} className="pt-6 first:pt-4">
+              <h3 className="text-lg font-bold text-ink">{s.id}. {s.title}</h3>
               <WarningList items={s.warnings} />
             </section>
           ))

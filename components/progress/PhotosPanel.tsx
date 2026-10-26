@@ -6,15 +6,20 @@ import { relTime, withGa } from '@/lib/client/format';
 import { useProgress } from './ProgressProvider';
 import { busyFetch } from '@/lib/client/busy';
 import { byStepPosition, REF_LABEL, REF_STEP } from '@/lib/core/photo-order';
-import { AddRow, btnGhost, btnPrimary, inputCls, textBtn, TrashButton, useBusy, useDirty } from './bits';
+import { btnGhost, btnPrimary, inputCls, textBtn, TrashButton, useBusy, useDirty } from './bits';
+import { AddButton } from '@/components/ui/AddButton';
+import { Card, cardRowCls } from '@/components/ui/Card';
+import { FoldRow } from '@/components/ui/FoldRow';
+import { IconButton } from '@/components/ui/IconButton';
+import { Segmented } from '@/components/ui/Segmented';
 
 // 삭제 확인 창 안내(서버가 30일 보관 — lib/core/photos.ts TRASH_KEEP_MS)
-const PHOTO_TRASH_NOTE = '지운 사진은 30일 동안 사진 탭 맨 아래 「삭제한 사진」에서 되살릴 수 있어요.';
+const PHOTO_TRASH_NOTE = '지운 사진은 30일 동안 사진 화면 맨 아래 「삭제한 사진」에서 되살릴 수 있어요.';
 
 // 사진: 로그인한 두 사람만 /api/photos 로 받는다(공개 화면 · 저장소 코드에는 사진도 설명도 없다).
 // 타임라인 단계별로 묶고(단계 순서, 사진이 없는 단계는 숨김), 단계 안은 찍은 날짜 순.
 // 참고 사진(stepId 0, 다른 집 현장 등 우리 집이 아닌 사진)은 단계와 따로 맨 끝 칸에 모으고, 단계 창 사진 줄에는 나오지 않는다.
-// 「집 정보 · 기록」 창의 「사진」 탭과 단계 창의 사진 줄이 같은 목록 · 크게 보기 · 올리기 창을 같이 쓴다(PhotosProvider).
+// 우리 집 › 사진 화면과 단계 시트의 사진 줄이 같은 목록 · 크게 보기 · 올리기 창을 같이 쓴다(PhotosProvider — 사이트 틀이 한 번 감싼다).
 
 export interface StepName { id: number; title: string }
 interface Data { photos: PhotoView[]; trash: PhotoView[] }
@@ -191,7 +196,7 @@ const stepLabel = (steps: StepName[], id: number) => {
 function ThumbImg({ id }: { id: string }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  if (failed) return <span className="flex h-full w-full items-center justify-center px-1 text-center text-[12px] font-semibold text-slate-500">못 불러왔어요</span>;
+  if (failed) return <span className="flex h-full w-full items-center justify-center px-1 text-center text-xs text-muted">못 불러왔어요</span>;
   return (
     <>
       {!loaded && <span className="skeleton absolute inset-0" aria-hidden />}
@@ -205,21 +210,23 @@ function ThumbImg({ id }: { id: string }) {
 function Thumb({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
   return (
     <button type="button" onClick={onOpen} aria-label={`${p.caption || p.album || '사진'} 열기`}
-      className="relative block aspect-square w-full overflow-hidden rounded-lg bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500">
+      className="relative block aspect-square w-full overflow-hidden rounded-control bg-sunken">
       {p.hasImage
         ? <ThumbImg id={p.id} />
-        : <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-500"><i className="fas fa-file-pdf text-[28px] text-slate-500" aria-hidden /><span className="text-[13px] font-bold">PDF</span></span>}
-      {p.kind === 'pdf' && p.hasImage && <span className="keep-light absolute left-1 top-1 rounded bg-slate-900/80 px-1.5 py-0.5 text-[12px] font-bold text-white">PDF</span>}
-      <span className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-slate-900/10" aria-hidden />
+        : <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted"><i className="fas fa-file-pdf text-[28px]" aria-hidden /><span className="text-sm font-bold">PDF</span></span>}
+      {/* 사진 위 「PDF」 표시: 어떤 화면 모드에서도 어두운 바탕 + 흰 글자 */}
+      {p.kind === 'pdf' && p.hasImage && <span className="keep-light absolute left-1 top-1 rounded-control bg-ink/80 px-1.5 py-0.5 text-xs font-bold text-on-accent">PDF</span>}
+      <span className="pointer-events-none absolute inset-0 rounded-control ring-1 ring-inset ring-ink/10" aria-hidden />
     </button>
   );
 }
 
-// ── 「집 정보 · 기록」 창의 「사진」 탭 ──
+// ── 우리 집 › 사진 화면 ──
 const NO_GROUP = -1;   // 최신순 · 오래된순의 「단계 묶음 없음」 표시(제목 줄 없음)
 export function PhotosPanel({ active }: { active: boolean }) {
   const { steps, data, state, shown, sort, setSort, kind, setKind, query, setQuery, ensure, reload, view, upload, patch } = usePhotos();
   const [trashOpen, setTrashOpen] = useState(false);
+  const trashId = useId();
   // 검색칸: 입력하는 대로(0.2초 쉬었다가) 거른다. 한글 조합 중에는 거르지 않고, 조합이 끝나면 바로 거른다.
   const [text, setText] = useState(query);
   const composing = useRef(false);
@@ -246,149 +253,150 @@ export function PhotosPanel({ active }: { active: boolean }) {
     return out;
   }, [shown, sort]);
 
-  if (state === 'anon') return <p className="py-6 text-[15px] font-semibold text-slate-500">로그인한 뒤에 볼 수 있어요.</p>;
+  if (state === 'anon') return <Card className="px-4 py-3"><p className="text-base text-muted">로그인한 뒤에 볼 수 있어요.</p></Card>;
 
+  const has = !!data && data.photos.length > 0;
   return (
-    <section className="min-w-0" aria-label="사진">
-      <div className="flex items-center justify-between gap-2 pb-3 pt-1">
-        <p className="text-[13px] font-semibold text-slate-500" aria-live="polite">
-          {data && data.photos.length > 0 ? (filtering ? `${shown.length}장 (전체 ${data.photos.length}장)` : `${shown.length}장`) : ''}
-        </p>
-        <button type="button" className={btnPrimary} onClick={() => upload()}>
-          <i className="fas fa-plus mr-1.5 text-[14px]" aria-hidden />사진 올리기
-        </button>
-      </div>
+    <>
+      <Card as="section" aria-label="사진">
+        {/* 첫 줄 「＋ 사진 올리기」 → 올리기 창(단계는 지금 단계로 골라 둔 채) */}
+        <AddButton label="사진 올리기" icon="fa-plus" onClick={() => upload()} />
 
-      {data && data.photos.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2" role="search" aria-label="사진 찾기">
-          <div className="relative min-w-[150px] flex-1">
-            <i className="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-slate-400" aria-hidden />
-            <input type="search" value={text} aria-label="사진 검색(설명 · 묶음 · 단계 이름)" placeholder="설명 · 묶음 · 단계 검색" autoComplete="off"
-              onChange={(e) => setText(e.target.value)}
-              onCompositionStart={() => { composing.current = true; }}
-              onCompositionEnd={(e) => { composing.current = false; setQuery(e.currentTarget.value.trim()); }}
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-9 text-[14px] font-semibold text-slate-900 placeholder-slate-500 [&::-webkit-search-cancel-button]:hidden focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
-            {text && (
-              <button type="button" aria-label="검색어 지우기" onClick={() => { setText(''); setQuery(''); }}
-                className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:text-slate-800">
-                <i className="fas fa-times" aria-hidden />
-              </button>
-            )}
+        {has && (
+          <div className="space-y-2 border-t border-line px-4 py-3" role="search" aria-label="사진 찾기">
+            <p className="text-sm text-muted" aria-live="polite">
+              {filtering ? `${shown.length}장 (전체 ${data.photos.length}장)` : `${shown.length}장`}
+            </p>
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <i className="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-faint" aria-hidden />
+                <input type="search" value={text} aria-label="사진 검색(설명 · 앨범 · 단계 이름)" placeholder="설명 · 앨범 · 단계" autoComplete="off"
+                  onChange={(e) => setText(e.target.value)}
+                  onCompositionStart={() => { composing.current = true; }}
+                  onCompositionEnd={(e) => { composing.current = false; setQuery(e.currentTarget.value.trim()); }}
+                  className="min-h-11 w-full rounded-control border border-line-strong bg-surface pl-9 pr-11 text-lg font-semibold text-ink placeholder:font-normal placeholder:text-faint focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink [&::-webkit-search-cancel-button]:hidden" />
+                {text && (
+                  <button type="button" aria-label="검색어 지우기" onClick={() => { setText(''); setQuery(''); }}
+                    className="absolute right-0 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:text-ink">
+                    <i className="fas fa-times" aria-hidden />
+                  </button>
+                )}
+              </div>
+              <select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
+                className="min-h-11 shrink-0 rounded-control border border-line-strong bg-surface px-3 text-lg font-semibold text-ink focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink">
+                <option value="default">기본 순서</option>
+                <option value="newest">최신순</option>
+                <option value="oldest">오래된순</option>
+              </select>
+            </div>
+            <Segmented<KindFilter> label="보기 거르기" value={kind} onChange={setKind}
+              options={[{ value: 'all', label: '전체' }, { value: 'image', label: '사진' }, { value: 'doc', label: '문서' }]} />
           </div>
-          <select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
-            className="h-11 rounded-xl border border-slate-200 bg-white px-2.5 text-[14px] font-semibold text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200">
-            <option value="default">기본 순서</option>
-            <option value="newest">최신순</option>
-            <option value="oldest">오래된순</option>
-          </select>
-          <div role="group" aria-label="보기 거르기" className="inline-flex h-11 overflow-hidden rounded-xl border border-slate-200">
-            {([['all', '전체'], ['image', '사진'], ['doc', '문서']] as const).map(([k, label]) => (
-              <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}
-                className={`px-3 text-[14px] ${kind === k ? 'bg-slate-200 font-bold text-slate-900' : 'bg-white font-semibold text-slate-600 hover:bg-slate-50'}`}>{label}</button>
+        )}
+
+        {has && shown.length === 0 && (
+          <p className="border-t border-line px-4 py-3 text-base text-muted">{query ? `「${query}」에 맞는 ${kind === 'doc' ? '문서가' : '사진이'} 없어요.` : kind === 'doc' ? '올린 문서가 없어요.' : '올린 사진이 없어요.'}</p>
+        )}
+        {state === 'loading' && !data && (
+          <div className="border-t border-line px-4 py-3" role="status" aria-busy="true">
+            <span className="sr-only">사진을 불러오는 중…</span>
+            {/* 실제 목록과 같은 틀: 단계 제목 줄 + 날짜 줄 + 썸네일 격자(+ 설명 줄) */}
+            <div aria-hidden>
+              <span className="skeleton mb-1 block h-6 w-44 rounded-control bg-sunken" />
+              <span className="skeleton mb-1 mt-2 block h-4 w-16 rounded-control bg-sunken" />
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                {[0, 1, 2, 3, 4, 5].map((k) => (
+                  <div key={k}>
+                    <span className="skeleton block aspect-square w-full rounded-control bg-sunken" />
+                    <span className="skeleton mt-1 block h-4 w-3/4 rounded-control bg-sunken" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {state === 'error' && (
+          <p className="border-t border-line px-4 py-3 text-base text-ink-soft">
+            사진을 불러오지 못했어요. <button type="button" className={textBtn} onClick={() => void reload()}>다시 불러오기</button>
+          </p>
+        )}
+        {data && data.photos.length === 0 && (
+          <p className="border-t border-line px-4 py-3 text-base text-muted">아직 사진이 없어요. 집 사진, 계약서, 등기부 같은 걸 올려 두세요.</p>
+        )}
+
+        {sections.length > 0 && (
+          <div className="border-t border-line px-4 pb-4 pt-3">
+            {sections.map((s) => (
+              <div key={s.stepId} className="mt-6 first:mt-0">
+                {s.stepId !== NO_GROUP && <h3 className="flex items-baseline gap-2 text-base font-bold text-ink">{stepLabel(steps, s.stepId)}<span className="text-sm font-normal text-muted">{s.n}</span></h3>}
+                {s.days.map((d) => (
+                  <div key={d.day} className="mt-2">
+                    <p className="mb-1 text-sm text-muted">{dayLabel(d.day)}</p>
+                    <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                      {d.items.map((p) => (
+                        <li key={p.id} className="min-w-0">
+                          <Thumb p={p} onOpen={() => view(p.id)} />
+                          {(p.caption || p.album) && <p className="mt-1 line-clamp-1 text-sm text-ink-soft">{p.caption || p.album}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             ))}
           </div>
-        </div>
-      )}
-      {data && data.photos.length > 0 && shown.length === 0 && (
-        <p className="py-4 text-[15px] font-semibold text-slate-500">{query ? `「${query}」에 맞는 사진이 없어요.` : '이 종류의 사진이 없어요.'}</p>
-      )}
+        )}
+      </Card>
 
-      {state === 'loading' && !data && (
-        <div role="status" aria-busy="true">
-          <span className="sr-only">사진을 불러오는 중…</span>
-          {/* 실제 목록과 같은 틀: 단계 제목 줄 + 날짜 줄 + 썸네일 격자(+ 설명 줄) */}
-          <div aria-hidden>
-            <span className="skeleton mb-1 block h-[22px] w-44 rounded-md bg-slate-100" />
-            <span className="skeleton mb-1 mt-2 block h-[18px] w-16 rounded-md bg-slate-100" />
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-5">
-              {[0, 1, 2, 3, 4, 5].map((k) => (
-                <div key={k}>
-                  <span className="skeleton block aspect-square w-full rounded-lg bg-slate-100" />
-                  <span className="skeleton mt-0.5 block h-[18px] w-3/4 rounded bg-slate-100" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-      {state === 'error' && (
-        <p className="py-4 text-[15px] font-semibold text-slate-600">
-          사진을 불러오지 못했어요. <button type="button" className={textBtn} onClick={() => void reload()}>다시 불러오기</button>
-        </p>
-      )}
-      {data && data.photos.length === 0 && (
-        <p className="py-4 text-[15px] font-semibold text-slate-500">아직 사진이 없어요. 집 사진, 계약서, 등기부 같은 걸 올려 두세요.</p>
-      )}
-
-      {sections.map((s) => (
-        <div key={s.stepId} className="mt-5 first:mt-0">
-          {s.stepId !== NO_GROUP && <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-bold text-slate-900">{stepLabel(steps, s.stepId)}<span className="text-[13px] font-semibold text-slate-500">{s.n}</span></h3>}
-          {s.days.map((d) => (
-            <div key={d.day} className="mt-2">
-              <p className="mb-1 text-[13px] font-semibold text-slate-500">{dayLabel(d.day)}</p>
-              <ul className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-5">
-                {d.items.map((p) => (
-                  <li key={p.id} className="min-w-0">
-                    <Thumb p={p} onOpen={() => view(p.id)} />
-                    {(p.caption || p.album) && <p className="mt-0.5 line-clamp-1 text-[13px] font-semibold text-slate-600">{p.caption || p.album}</p>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      ))}
-
+      {/* 맨 아래 「삭제한 사진 n개」(기본 접힘) — 할 일 · 집 정보 · 기록의 「삭제한 ○○」와 같은 모양 */}
       {data && data.trash.length > 0 && (
-        <div className="mt-8 border-t border-slate-200 pt-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="flex items-center gap-2 text-[17px] font-bold text-slate-800"><i className="fas fa-trash-can text-slate-500" aria-hidden /> 삭제한 사진 <span className="font-semibold text-slate-500">{data.trash.length}</span></h3>
-            <button type="button" className={textBtn} onClick={() => setTrashOpen((v) => !v)} aria-expanded={trashOpen}>{trashOpen ? '접기' : '보기'}</button>
-          </div>
+        <Card as="section" aria-label="삭제한 사진" className="mt-8">
+          <FoldRow label="삭제한 사진" count={data.trash.length} open={trashOpen} onToggle={() => setTrashOpen((v) => !v)} controls={trashId} />
           {trashOpen && (
-            <>
-              <p className="mt-1 text-[13px] text-slate-500">지운 지 30일이 지나면 완전히 사라져요.</p>
-              <ul className="mt-2">
+            <div id={trashId} className="border-t border-line">
+              <p className="px-4 pt-3 text-sm text-muted">지운 지 30일이 지나면 완전히 사라져요.</p>
+              <ul>
                 {data.trash.map((p) => (
-                  <li key={p.id} className="flex items-center gap-3 border-b border-slate-200 py-3 last:border-b-0">
-                    <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-slate-100">
+                  <li key={p.id} className={`${cardRowCls} flex items-center gap-3 px-4 py-3`}>
+                    <span className="relative size-12 shrink-0 overflow-hidden rounded-control bg-sunken">
                       {p.hasImage && <ThumbImg id={p.id} />}
-                      <span className="pointer-events-none absolute inset-0 rounded-md ring-1 ring-inset ring-slate-900/10" aria-hidden />
+                      <span className="pointer-events-none absolute inset-0 rounded-control ring-1 ring-inset ring-ink/10" aria-hidden />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-bold text-slate-500">{stepLabel(steps, p.stepId)}</div>
-                      <div className="truncate text-[15px] font-semibold text-slate-700">{p.caption || p.album || (p.kind === 'pdf' ? 'PDF' : '사진')}</div>
-                      <div className="flex flex-wrap gap-x-2 text-[13px] font-semibold text-slate-500"><span>{p.deletedBy ? `${withGa(p.deletedBy)} 삭제` : '삭제'}</span><span>{relTime(p.deletedAt)}</span></div>
+                      <div className="truncate text-sm text-muted">{stepLabel(steps, p.stepId)}</div>
+                      <div className="truncate text-base font-semibold text-ink-soft">{p.caption || p.album || (p.kind === 'pdf' ? 'PDF' : '사진')}</div>
+                      <div className="flex flex-wrap gap-x-2 text-sm text-muted"><span>{p.deletedBy ? `${withGa(p.deletedBy)} 삭제` : '삭제'}</span><span>{relTime(p.deletedAt)}</span></div>
                     </div>
-                    <button type="button" className={btnGhost} onClick={() => void patch(p.id, 'PATCH', { restore: true })}>복원</button>
+                    <button type="button" className={btnGhost} onClick={() => void patch(p.id, 'PATCH', { restore: true })}>되살리기</button>
                   </li>
                 ))}
               </ul>
-            </>
+            </div>
           )}
-        </div>
+        </Card>
       )}
-    </section>
+    </>
   );
 }
 
-// ── 단계 창의 사진 줄: 그 단계 사진을 작은 썸네일로 가로로 늘어놓고, 누르면 같은 크게 보기 ──
+// ── 단계 시트의 사진 줄: 그 단계 사진을 작은 썸네일로 가로로 늘어놓고, 누르면 같은 크게 보기 ──
+// 이름 · props({ stepId })는 단계 시트(StepModal)가 쓰므로 바꾸지 않는다.
 export function StepPhotos({ stepId }: { stepId: number }) {
   const { ordered, ensure, view, upload, state } = usePhotos();
   useEffect(() => { ensure(); }, [ensure]);
   const items = ordered.filter((p) => p.stepId === stepId);
   return (
     <section aria-label="이 단계 사진">
-      <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-bold text-slate-700">사진{items.length > 0 && <span className="text-[13px] font-semibold text-slate-500">{items.length}</span>}</h3>
+      <h3 className="mb-2 flex items-baseline gap-2 text-base font-bold text-ink">사진{items.length > 0 && <span className="text-sm font-normal text-muted">{items.length}</span>}</h3>
       {items.length > 0 ? (
-        <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
-          {items.map((p) => <li key={p.id} className="w-[76px] shrink-0"><Thumb p={p} onOpen={() => view(p.id, stepId)} /></li>)}
+        <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+          {items.map((p) => <li key={p.id} className="w-19 shrink-0"><Thumb p={p} onOpen={() => view(p.id, stepId)} /></li>)}
         </ul>
       ) : (
-        <p className="text-[13px] font-semibold text-slate-500">{state === 'error' ? '사진을 불러오지 못했어요.' : '아직 이 단계 사진이 없어요.'}</p>
+        <p className="text-base text-muted">{state === 'error' ? '사진을 불러오지 못했어요.' : '아직 이 단계 사진이 없어요.'}</p>
       )}
-      {/* 「할 일 추가」와 같은 모양의 올리기 줄(이 단계를 골라 둔 채로 열린다) */}
-      <AddRow label="사진 올리기" onClick={() => upload(stepId)} />
+      {/* 마지막 줄 「＋ 사진 올리기」(이 단계를 골라 둔 채로 올리기 창이 열린다) */}
+      <AddButton label="사진 올리기" onClick={() => upload(stepId)} />
     </section>
   );
 }
@@ -501,46 +509,45 @@ function UploadDialog({ steps, initialStep, onDone, onClose }: { steps: StepName
   const pct = progress ? Math.round((progress.done / Math.max(1, progress.total)) * 100) : 0;
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center md:items-center" role="dialog" aria-modal="true" aria-labelledby={`${uid}-t`}>
-      <div className="absolute inset-0 bg-slate-900/60 dark:bg-black/70" onClick={() => void tryClose()} />
-      <form className="relative max-h-[90vh] w-full max-w-[520px] space-y-3 overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl md:rounded-3xl" onSubmit={(e) => {
+      <div className="absolute inset-0 bg-black/50 dark:bg-black/60" onClick={() => void tryClose()} />
+      <form className="relative max-h-[90vh] w-full max-w-content space-y-3 overflow-y-auto rounded-t-panel bg-surface p-4 shadow-2xl md:rounded-panel" onSubmit={(e) => {
         e.preventDefault();
         if (!files.length || busy) return;
         void submit();
       }}>
         <div className="flex items-center justify-between gap-3">
-          <h2 id={`${uid}-t`} className="text-xl font-bold text-slate-900">사진 올리기</h2>
-          <button type="button" onClick={() => void tryClose()} aria-label="닫기" disabled={busy}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40"><i className="fas fa-times" aria-hidden /></button>
+          <h2 id={`${uid}-t`} className="text-xl font-bold text-ink">사진 올리기</h2>
+          <IconButton label="닫기" icon="fa-xmark" variant="filled" disabled={busy} onClick={() => void tryClose()} />
         </div>
-        <div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <input id={`${uid}-file`} type="file" accept="image/*,application/pdf" multiple className="sr-only"
             onChange={(e) => { setFiles([...(e.target.files ?? [])]); setErrors([]); }} />
-          <label ref={firstRef} tabIndex={-1} htmlFor={`${uid}-file`} className={`${btnGhost} inline-flex cursor-pointer items-center`}>
-            <i className="fas fa-images mr-1.5 text-[15px] text-slate-500" aria-hidden />{files.length ? '다시 고르기' : '사진 · PDF 고르기'}
+          <label ref={firstRef} tabIndex={-1} htmlFor={`${uid}-file`} className={`${btnGhost} cursor-pointer`}>
+            <i className="fas fa-images text-base text-muted" aria-hidden />{files.length ? '다시 고르기' : '사진 · PDF 고르기'}
           </label>
-          <span className="ml-3 text-[15px] font-semibold text-slate-700">{files.length ? `${files.length}개 골랐어요` : ''}</span>
+          {files.length > 0 && <span className="text-base text-ink-soft">{files.length}개 골랐어요</span>}
         </div>
         <div>
-          <label htmlFor={`${uid}-step`} className="mb-1 block text-[13px] font-bold text-slate-600">단계</label>
+          <label htmlFor={`${uid}-step`} className="mb-1 block text-sm text-ink-soft">단계</label>
           <StepSelect id={`${uid}-step`} steps={steps} value={stepId} onChange={setStepId} />
         </div>
         <div>
-          <label htmlFor={`${uid}-cap`} className="mb-1 block text-[13px] font-bold text-slate-600">설명 (안 적어도 돼요)</label>
+          <label htmlFor={`${uid}-cap`} className="mb-1 block text-sm text-ink-soft">설명 (안 적어도 돼요)</label>
           <input id={`${uid}-cap`} className={inputCls} maxLength={100} placeholder="예: 주방" value={caption} onChange={(e) => setCaption(e.target.value)} />
         </div>
-        <label className="flex min-h-11 items-center gap-2 text-[15px] font-semibold text-slate-700">
-          <input type="checkbox" className="h-5 w-5 shrink-0" checked={doc} onChange={(e) => setDoc(e.target.checked)} />
-          <span>글씨 많은 문서 <span className="text-[13px] text-slate-500">(계약서 · 등기부처럼 작은 글씨를 또렷하게)</span></span>
+        <label className="flex min-h-11 items-center gap-3 text-base font-semibold text-ink">
+          <input type="checkbox" className="size-5 shrink-0" checked={doc} onChange={(e) => setDoc(e.target.checked)} />
+          <span>글씨 많은 문서 <span className="text-sm font-normal text-muted">(계약서 · 등기부처럼 작은 글씨를 또렷하게)</span></span>
         </label>
         {progress && (
           <div aria-live="polite">
-            <p className="text-[13px] font-bold text-slate-600">올리는 중… {progress.done}/{progress.total}</p>
-            <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-blue-600 transition-all" style={{ width: `${pct}%` }} /></div>
+            <p className="text-sm text-ink-soft">올리는 중… {progress.done}/{progress.total}</p>
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-sunken"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} /></div>
           </div>
         )}
         {errors.length > 0 && (
-          <ul className="space-y-1 text-[13px] font-semibold text-slate-800" role="alert">
-            {errors.map((e) => <li key={e} className="flex gap-1.5"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-600" aria-hidden />{e}</li>)}
+          <ul className="space-y-1 text-sm text-danger-ink" role="alert">
+            {errors.map((e) => <li key={e} className="flex gap-1.5"><span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-danger" aria-hidden />{e}</li>)}
           </ul>
         )}
         <div className="flex justify-end gap-2 pb-[env(safe-area-inset-bottom)]">
@@ -613,16 +620,17 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
   };
 
   // 옆 화살표는 넓은 화면만. 폰은 아래 줄의 「이전」「다음」 단추
-  const navBtn = 'absolute top-1/2 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 sm:flex';
-  const darkBtn = 'inline-flex min-h-11 shrink-0 items-center rounded-xl bg-white/10 px-3 text-[15px] font-bold hover:bg-white/20';
+  // 크게 보기는 화면 모드와 상관없이 늘 어두운 면이다(.keep-light 로 토큰을 밝은 값으로 되돌린 뒤 어둡게 칠한다)
+  const navBtn = 'absolute top-1/2 hidden size-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 sm:flex';
+  const darkBtn = 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-white/10 px-3 text-base font-bold hover:bg-white/20';
   return (
     <div className="keep-light fixed inset-0 z-[70] flex flex-col bg-slate-950" role="dialog" aria-modal="true" aria-label="사진 크게 보기">
       <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 text-white">
-        <p className="min-w-0 text-[13px] font-semibold leading-snug text-slate-300">
+        <p className="min-w-0 text-sm text-slate-300">
           <span className="block truncate">{stepLabel(steps, p.stepId)}</span>
           <span className="flex flex-wrap gap-x-3"><span>{dayLabel(p.takenAt)}</span>{p.album && <span className="truncate">{p.album}</span>}<span>{index + 1} / {n}</span></span>
         </p>
-        <button ref={closeRef} type="button" onClick={onClose} aria-label="닫기" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
+        <button ref={closeRef} type="button" onClick={onClose} aria-label="닫기" className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
           <i className="fas fa-times" aria-hidden />
         </button>
       </div>
@@ -635,10 +643,10 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
               onLoad={() => setImg('ok')} onError={() => setImg('error')} onClick={() => setActual((v) => !v)}
               className={`${actual ? 'm-auto block max-w-none cursor-zoom-out' : 'h-full w-full cursor-zoom-in object-contain'} ${img === 'error' ? 'invisible' : ''}`} />
           </div>
-        ) : <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-300"><i className="fas fa-file-pdf text-[56px] text-slate-500" aria-hidden /><span className="text-[15px] font-bold">PDF 문서</span></div>}
-        {p.hasImage && img === 'loading' && <span className="skeleton pointer-events-none absolute inset-3 rounded-2xl bg-white/5" aria-hidden />}
+        ) : <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-300"><i className="fas fa-file-pdf text-[56px] text-slate-500" aria-hidden /><span className="text-base font-bold">PDF 문서</span></div>}
+        {p.hasImage && img === 'loading' && <span className="skeleton pointer-events-none absolute inset-3 rounded-panel bg-white/5" aria-hidden />}
         {p.hasImage && img !== 'ok' && (
-          <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-[15px] font-semibold text-slate-300" aria-live="polite">
+          <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-base text-slate-300" aria-live="polite">
             {img === 'loading' ? '불러오는 중…' : '사진을 불러오지 못했어요.'}
           </p>
         )}
@@ -651,13 +659,13 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
       </div>
       <div className="shrink-0 bg-slate-900 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 text-white">
         {editing ? (
-          <form className="mx-auto max-w-[640px] space-y-2" onSubmit={(e) => {
+          <form className="mx-auto max-w-content space-y-2" onSubmit={(e) => {
             e.preventDefault();
             void run(async () => { if (await onSave(p, { stepId, caption })) setEditing(false); });
           }}>
-            <label htmlFor={`${shownId}-step`} className="block text-[13px] font-bold text-slate-300">단계</label>
+            <label htmlFor={`${shownId}-step`} className="block text-sm text-slate-300">단계</label>
             <StepSelect id={`${shownId}-step`} steps={steps} value={stepId} onChange={setStepId} />
-            <label htmlFor={`${shownId}-cap`} className="block text-[13px] font-bold text-slate-300">설명</label>
+            <label htmlFor={`${shownId}-cap`} className="block text-sm text-slate-300">설명</label>
             <input id={`${shownId}-cap`} className={inputCls} maxLength={100} value={caption} placeholder="예: 주방" onChange={(e) => setCaption(e.target.value)} />
             <div className="flex justify-end gap-2">
               <button type="button" className={btnGhost} onClick={() => setEditing(false)}>취소</button>
@@ -672,10 +680,10 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
                 <button type="button" onClick={() => go(1)} className={darkBtn}>다음<i className="fas fa-chevron-right ml-1.5" aria-hidden /></button>
               </div>
             )}
-            <p className="min-w-0 flex-1 basis-40 text-[15px] font-semibold leading-snug">{p.caption || <span className="text-slate-400">설명 없음</span>}</p>
+            <p className="min-w-0 flex-1 basis-40 text-base font-semibold">{p.caption || <span className="font-normal text-slate-400">설명 없음</span>}</p>
             {p.kind === 'pdf' && (
-              <a href={src(p.id, 'file')} target="_blank" rel="noopener" className="inline-flex min-h-11 shrink-0 items-center rounded-xl bg-white px-3 text-[15px] font-bold text-slate-900 hover:bg-slate-100">
-                <i className="fas fa-file-pdf mr-1.5 text-slate-500" aria-hidden />PDF 열기
+              <a href={src(p.id, 'file')} target="_blank" rel="noopener" className="inline-flex min-h-11 shrink-0 items-center rounded-control bg-surface px-3 text-base font-bold text-ink hover:bg-sunken">
+                <i className="fas fa-file-pdf mr-1.5 text-muted" aria-hidden />PDF 열기
               </a>
             )}
             {/* 글씨 많은 문서를 PC 에서 크게: 큰 사진만 새 탭으로 연다(로그인한 같은 창이라 그대로 열린다) */}
@@ -684,7 +692,7 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
             {/* 같은 단계 안에서 한 칸씩. 맨 앞 · 맨 뒤에서는 눌리지 않는다. 정렬 · 검색 · 거르기 중에는 숨긴다 */}
             {showMove && (
               <div className="flex w-full items-center gap-2">
-                <span className="text-[12px] font-semibold text-slate-300">순서</span>
+                <span className="text-xs text-slate-300">순서</span>
                 <button type="button" disabled={busy || !canMove(p.id, -1)} onClick={() => void run(() => onMove(p.id, -1))} aria-label="같은 단계에서 앞자리로 옮기기" className={`${darkBtn} disabled:opacity-40`}>앞자리로</button>
                 <button type="button" disabled={busy || !canMove(p.id, 1)} onClick={() => void run(() => onMove(p.id, 1))} aria-label="같은 단계에서 뒷자리로 옮기기" className={`${darkBtn} disabled:opacity-40`}>뒷자리로</button>
               </div>

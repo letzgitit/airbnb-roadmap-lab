@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { setMode, useThemeMode, type ThemeMode } from '@/lib/client/theme';
 
-// 머리줄 오른쪽 끝의 아이콘 단추 하나. 누르면 「시스템 / 라이트 / 다크」 작은 메뉴가 열린다.
+// 옛 머리글의 화면 모드 단추. 새 틀은 「설정」 메뉴(components/shell/AccountMenu.tsx)가 맡는다 —
+// 옛 머리글이 남은 화면(질문 · 돈)이 정리되면 지운다.
 const OPTIONS: { mode: ThemeMode; label: string; icon: string }[] = [
   { mode: 'system', label: '시스템', icon: 'fa-circle-half-stroke' },
   { mode: 'light', label: '라이트', icon: 'fa-sun' },
@@ -54,20 +55,20 @@ export function ThemeToggle() {
     <div ref={wrapRef} className="relative shrink-0">
       <button ref={btnRef} type="button" aria-label="화면 모드" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined}
         onClick={() => setOpen((v) => !v)} onKeyDown={onBtnKey}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50">
-        <i className={`fas ${cur.icon} text-[15px]`} aria-hidden />
+        className="inline-flex size-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-sunken">
+        <i className={`fas ${cur.icon} text-base`} aria-hidden />
       </button>
       {open && (
         <div id={menuId} role="menu" aria-label="화면 모드" onKeyDown={onMenuKey}
-          className="absolute right-0 top-full z-[60] mt-2 w-max min-w-[7.5rem] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:shadow-black/50">
+          className="absolute right-0 top-full z-[60] mt-2 w-max min-w-32 overflow-hidden rounded-control border border-line bg-surface py-1 shadow-xl dark:shadow-black/50">
           {OPTIONS.map((o, i) => {
             const on = o.mode === mode;
             return (
               <button key={o.mode} ref={(el) => { itemRefs.current[i] = el; }} type="button" role="menuitemradio" aria-checked={on} tabIndex={on ? 0 : -1}
                 onClick={() => pick(o.mode)}
-                className={`flex min-h-11 w-full items-center gap-4 whitespace-nowrap px-4 text-left text-[14px] hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none ${on ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
+                className={`flex min-h-11 w-full items-center gap-4 whitespace-nowrap px-4 text-left text-base hover:bg-sunken focus-visible:bg-sunken focus-visible:outline-none ${on ? 'font-bold text-ink' : 'font-semibold text-ink-soft'}`}>
                 <span className="flex-1">{o.label}</span>
-                {on && <i className="fas fa-check text-[13px] text-slate-900" aria-hidden />}
+                {on && <i className="fas fa-check text-sm text-ink" aria-hidden />}
               </button>
             );
           })}

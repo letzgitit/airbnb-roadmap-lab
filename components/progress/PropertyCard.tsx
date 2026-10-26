@@ -2,13 +2,15 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { PropertyItem } from '@/lib/core/types';
+import { AddButton } from '@/components/ui/AddButton';
+import { Card, cardRowCls } from '@/components/ui/Card';
 import { useProgress } from './ProgressProvider';
 import {
-  AddRow, AutoTextarea, btnGhost, btnPrimary, EditBadge, enterSubmit, inputCls, LastEdit, oneLine, rowCls, rowSub, rowText,
+  AutoTextarea, btnGhost, btnPrimary, composerCls, EditBadge, enterSubmit, inputCls, LastEdit, oneLine, rowCls, rowSub, rowText,
   TRASH_NOTE, TrashButton, useBusy, useDirty, useEditing, useFormEsc,
 } from './bits';
 
-// 「집 정보 · 기록」 창의 「집 정보」 탭. 줄 = [이름 13px / 값 15px] + 줄 끝 휴지통, 글을 누르면 그 자리에서 고친다.
+// 우리 집 › 집 정보. 카드 첫 줄 「＋ 집 정보 추가」 → 줄 = [항목 이름 13px / 값 15px] + 줄 끝 휴지통, 글을 누르면 그 자리에서 고친다.
 export function PropertyCard() {
   const { doc } = useProgress();
   const [composing, setComposing] = useState(false);
@@ -21,20 +23,19 @@ export function PropertyCard() {
   const items = Object.values(doc.property).filter((p) => !p.deletedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   return (
-    // 「집 정보 · 기록」 창 안에서만 쓴다(창이 바깥 틀이라 카드 테두리·배경은 두지 않는다)
-    <section className="min-w-0" aria-label="집 정보">
-      {items.length === 0 && (
-        <p className="pb-2 text-[15px] font-semibold text-slate-500">주소, 조건, 인도일, 렌트프리, 첫 월세일 같은 집 정보를 자유롭게 적어 두세요.</p>
-      )}
+    <Card as="section" aria-label="집 정보">
       <ul>
-        {items.map((p) => <PropRow key={p.id} p={p} />)}
-        <li className={rowCls}>
+        <li className={composing ? `${cardRowCls} px-4` : cardRowCls}>
           {composing
             ? <PropComposer onClose={closeComposer} />
-            : <AddRow buttonRef={addRef} label="집 정보 추가" onClick={() => setComposing(true)} />}
+            : <AddButton buttonRef={addRef} label="집 정보 추가" onClick={() => setComposing(true)} />}
         </li>
+        {items.length === 0 && (
+          <li className={`${cardRowCls} px-4 py-3 text-base text-muted`}>주소, 조건, 인도일, 렌트프리, 첫 월세일 같은 집 정보를 자유롭게 적어 두세요.</li>
+        )}
+        {items.map((p) => <PropRow key={p.id} p={p} />)}
       </ul>
-    </section>
+    </Card>
   );
 }
 
@@ -47,7 +48,7 @@ function PropComposer({ onClose }: { onClose: () => void }) {
   useDirty('form:add-prop', dirty);
   const esc = useFormEsc(dirty, onClose);
   return (
-    <form className="my-2 w-full space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3" onKeyDown={esc} onSubmit={(e) => {
+    <form className={composerCls} onKeyDown={esc} onSubmit={(e) => {
       e.preventDefault();
       if (!label.trim() || !value.trim()) return;
       void run(() => send({ op: 'property.add', label, value }, { onSuccess: () => { setLabel(''); setValue(''); onClose(); } }));
@@ -86,8 +87,8 @@ function PropRow({ p }: { p: PropertyItem }) {
 
   if (ed.open) {
     return (
-      <li className="my-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
-        <form className="space-y-2" onKeyDown={esc} onSubmit={(e) => {
+      <li className={`${cardRowCls} px-4`}>
+        <form className={composerCls} onKeyDown={esc} onSubmit={(e) => {
           e.preventDefault();
           void run(() => send({ op: 'property.update', id: p.id, baseVersion: base, patch: { label, value } }, {
             onSuccess: () => { ed.stop(); window.requestAnimationFrame(() => textBtnRef.current?.focus()); },
@@ -110,10 +111,10 @@ function PropRow({ p }: { p: PropertyItem }) {
   }
   return (
     <li className={rowCls}>
-      <button ref={textBtnRef} type="button" aria-label={`${p.label} 수정`} className="min-w-0 flex-1 py-3 text-left"
+      <button ref={textBtnRef} type="button" aria-label={`${p.label} 수정`} className="min-w-0 flex-1 py-3 pl-4 text-left"
         onClick={() => { setLabel(p.label); setValue(p.value); setOrig({ label: p.label, value: p.value }); setBase(p.version); ed.start(); }}>
         <span className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${rowSub}`}><span>{p.label}</span><EditBadge k={`prop:${p.id}`} /></span>
-        <span className={`mt-0.5 block whitespace-pre-wrap ${rowText} text-slate-800`}>{p.value}</span>
+        <span className={`mt-0.5 block whitespace-pre-wrap break-words ${rowText}`}>{p.value}</span>
       </button>
       <TrashButton label={`${p.label} 삭제`} onClick={() => void del()} />
     </li>
