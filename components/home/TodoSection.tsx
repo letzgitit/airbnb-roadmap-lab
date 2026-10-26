@@ -9,7 +9,6 @@ import { AddButton } from '@/components/ui/AddButton';
 import { Card, cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { Meta } from '@/components/ui/Meta';
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { TaskComposer, type StepRef } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
 import { daysUntil, useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
@@ -19,6 +18,8 @@ import { daysUntil, useEditingSet, useStickyDone } from '@/components/tasks/useT
 //   기한 지남은 앞 LATE_SHOWN 개만 보이고 나머지는 「기한 지남 n개 더 보기」로 접는다(폰 첫 화면이 기한 지남으로 다 차지 않게).
 // 오늘 = 기기 날짜. 빈 묶음은 숨긴다. 묶음 안은 마감 → 단계 → 만든 순.
 // 줄은 단계 시트 「우리 할 일」과 같은 TaskRow(보조 줄에 단계 이름이 붙는다). 맨 아래 「삭제한 할 일」.
+// 구역 전체를 접는다: 기본은 접힘(새로고침하면 다시 접힘, 기억하지 않음). 접혀도 제목 줄 「할 일」 + 요약 숫자 + 화살표는 보이고,
+//   제목 줄 전체가 펼침 단추다. 추가 폼 · 고치는 폼이 열려 있거나 방금 체크한 줄이 제자리를 지키는 동안은 접지 않는다.
 type Group = 'late' | 'today' | 'week' | 'later';
 const GROUPS: { id: Group; label: string }[] = [
   { id: 'late', label: '기한 지남' },
@@ -40,11 +41,12 @@ const byDueStep = (a: TaskItem, b: TaskItem) =>
 export function TodoSection({ steps, defaultStepId }: { steps: StepRef[]; defaultStepId: number }) {
   const { doc } = useProgress();
   const { editing, reportEdit } = useEditingSet();
-  const { isDone, onToggle } = useStickyDone();
+  const { isDone, onToggle, hasSticky } = useStickyDone();
   const [showNoDate, setShowNoDate] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [showAllLate, setShowAllLate] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const uid = useId();
   // 줄이 사라진 뒤(지우기) 포커스가 몸통으로 빠지지 않게 구역 제목으로 돌려보낸다
   const headingRef = useRef<HTMLDivElement>(null);
@@ -90,12 +92,25 @@ export function TodoSection({ steps, defaultStepId }: { steps: StepRef[]; defaul
       onEditChange={reportEdit} onToggle={onToggle} onGone={focusHeading} />
   );
   const empty = all.length === 0;
+  const busy = composing || editing.size > 0 || hasSticky;
+  const isOpen = expanded || busy;
 
   return (
     <section aria-labelledby={`${uid}-h`}>
-      <div ref={headingRef} tabIndex={-1} className="outline-none">
-        <SectionHeader id={`${uid}-h`} title="할 일" summary={summary} />
+      <div ref={headingRef} tabIndex={-1} className={`outline-none ${isOpen ? 'mb-3' : ''}`}>
+        <h2 id={`${uid}-h`} className="scroll-mt-20">
+          <button type="button" aria-expanded={isOpen} aria-controls={`${uid}-body`}
+            onClick={() => { if (!busy) setExpanded((v) => !v); }}
+            className="-mx-2 flex min-h-11 w-[calc(100%+1rem)] items-center gap-3 rounded-control px-2 py-1 text-left transition-colors hover:bg-sunken">
+            <span className="min-w-0 flex-1">
+              <span className="block text-lg font-bold text-ink">할 일</span>
+              {summary && <span className="mt-0.5 block text-sm font-normal text-muted">{summary}</span>}
+            </span>
+            <i className={`fas fa-chevron-down text-xs text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
+          </button>
+        </h2>
       </div>
+      {isOpen && <div id={`${uid}-body`}>
       <Card>
         <div className={cardRowCls}>
           {composing
@@ -139,6 +154,7 @@ export function TodoSection({ steps, defaultStepId }: { steps: StepRef[]; defaul
         )}
       </Card>
       <TrashCard kinds={['task']} />
+      </div>}
     </section>
   );
 }

@@ -29,7 +29,9 @@ export function useStickyDone() {
     }, STICKY_MS));
   }, []);
   const isDone = useCallback((t: TaskItem) => sticky[t.id] ?? t.done, [sticky]);
-  return { isDone, onToggle };
+  /** 방금 체크 · 해제해 제자리를 지키는 줄이 있는가(홈 「할 일」이 그동안 접히지 않게) */
+  const hasSticky = Object.keys(sticky).length > 0;
+  return { isDone, onToggle, hasSticky };
 }
 
 /**
