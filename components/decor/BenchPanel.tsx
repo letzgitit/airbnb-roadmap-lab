@@ -210,10 +210,14 @@ export function BenchPanel({ active }: { active: boolean }) {
   const vote = member ? quickVote : undefined;
 
   const linkCards = (data?.links ?? []).map(linkCard);
-  const [firstBatch, ...older] = data?.batches ?? [];
+  // 공개 화면은 고른 항목이 몇 개뿐이라 수집한 날로 나누지 않고 한 격자로 다 펼친다(날짜 표시도 없음). 로그인 화면은 그대로 묶음별.
+  const batches: BatchView[] = !member && data && data.batches.length > 0
+    ? [{ collectedAt: '', insights: [], items: data.batches.flatMap((b) => b.items) }]
+    : data?.batches ?? [];
+  const [firstBatch, ...older] = batches;
   // 수집 묶음이 아직 없어도 올린 링크가 있으면 격자를 보인다
   const latest: BatchView | undefined = firstBatch ?? (linkCards.length > 0 ? { collectedAt: '', insights: [], items: [] } : undefined);
-  const all: Card[] = [...linkCards, ...(data?.batches ?? []).flatMap((b) => b.items)];
+  const all: Card[] = [...linkCards, ...batches.flatMap((b) => b.items)];
   const detail: Card | null = openId ? all.find((it) => it.id === openId) ?? null : null;
   const at = detail ? order.indexOf(detail.id) : -1;
   const near = (id: string | undefined) => (id ? all.find((it) => it.id === id) ?? null : null);
