@@ -133,6 +133,8 @@ export function Room3D() {
   const [height, setHeight] = useState(DEFAULT_H);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // iframe 이 room3d:ready 를 보내기 전엔 그 자리에 「3D 불러오는 중…」을 덮어 둔다(빈 상자로 멈춘 듯 보이지 않게). 화면 모드가 바뀌어 다시 불러올 때도 같다.
+  const [readySrc, setReadySrc] = useState<string | null>(null);
 
   // 전체 화면: 단추는 3D 장면 안(iframe)에 있고, 누르면 room3d:fs 로 알려 온다. 이 화면이 iframe 감싸개를 전체 화면으로 만든다
   // (iframe 이 스스로 전체 화면을 켜는 게 아니라 allow="fullscreen" 은 필요 없다). 안 되면 화면을 꽉 채운 겹침(100dvh)으로 대신한다.
@@ -199,6 +201,7 @@ export function Room3D() {
       if (!d || typeof d !== 'object') return;
       if (d.type === 'room3d:ready') {
         frameReady.current = true; handOver(win, saved.current);
+        setReadySrc(frameRef.current?.getAttribute('src') ?? null);
         win.postMessage({ type: 'room3d:fsstate', on: fsOn.current }, '*');
         return;
       }
@@ -267,11 +270,22 @@ export function Room3D() {
   // 화면 모드가 바뀌면 src 가 바뀌어 다시 불러온다(시안이 <html data-theme> 로 장면 바탕을 고른다). 다시 불러오면 room3d:ready 가 또 와서 상태를 다시 넘긴다.
   const src = `/api/room3d?theme=${dark ? 'dark' : 'light'}${devAs()}`;
   const wrapCls = fs === 'overlay' ? 'fixed inset-0 z-[100] bg-page' : fs === 'native' ? 'bg-page' : '';
+  const loading = readySrc !== src;
   return (
     <div>
       <div ref={wrapRef} className={wrapCls} style={fs === 'overlay' ? { height: '100dvh' } : undefined}>
-        <iframe ref={frameRef} key={src} src={src} title="3D 시안" sandbox="allow-scripts" referrerPolicy="no-referrer"
-          style={{ height: fs === 'off' ? height : '100%' }} className="block w-full" />
+        <div className="relative" style={fs === 'off' ? undefined : { height: '100%' }}>
+          <iframe ref={frameRef} key={src} src={src} title="3D 시안" sandbox="allow-scripts" referrerPolicy="no-referrer"
+            style={{ height: fs === 'off' ? height : '100%' }} className="block w-full" />
+          {loading && (
+            <div role="status" aria-busy="true" className="skeleton absolute inset-0 flex items-center justify-center rounded-panel bg-sunken">
+              <span className="flex items-center gap-2 text-base font-bold text-ink-soft">
+                <span aria-hidden className="inline-block size-[18px] animate-spin rounded-full border-2 border-line-strong border-t-ink motion-reduce:[animation-duration:2.4s]" />
+                3D 불러오는 중…
+              </span>
+            </div>
+          )}
+        </div>
       </div>
       <p className="mt-2 flex justify-end">
         <a href={src} target="_blank" rel="noopener" className={textBtn}>

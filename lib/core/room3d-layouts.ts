@@ -7,11 +7,12 @@ import { redisEnv, sanitize } from './store';
 // 꾸미기 › 3D 시안에서 가구를 옮긴 배치를 이름 붙여 여러 개 저장한다. 로그인한 두 사람이 같이 본다.
 // 고른 상태(oedomin:room3d:state)와 따로 둔다. 배치 하나 = { 이름, 저장한 사람, 시각, 가구별 [옮긴 x, 옮긴 z, 90° 돌린 횟수] }.
 // 가구 id · 옮긴 거리는 3D 시안 HTML(private/)이 정하고, 여기서는 모양 · 상한만 검사한다(공개 저장소라 집 치수는 코드에 없다).
+// 벽에 거는 것(선반 · 액자 · 벽등 …)도 같은 꼴로 적는다 — 시안마다 따로인 id(w-시안-이름), 돌린 횟수 = 바라보는 벽 방향. 그래서 묶음 수 상한이 바닥 가구보다 넉넉하다.
 // Redis 해시 한 개(필드 = 배치 id)라 두 사람이 동시에 다른 배치를 고쳐도 서로 덮어쓰지 않는다.
 export const ROOM3D_LAYOUTS_KEY = 'oedomin:room3d:layouts';
 export const MAX_LAYOUTS = 20;
 export const MAX_NAME = 30;
-const MAX_UNITS = 40;
+const MAX_UNITS = 80;
 const MAX_SHIFT = 2000;          // cm. 집보다 넉넉히 — 이보다 크면 잘못 온 값
 const UNIT_RE = /^[a-z0-9-]{1,40}$/;
 const LAYOUT_ID_RE = /^l-[0-9a-f]{8}$/;
