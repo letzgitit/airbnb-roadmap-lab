@@ -522,11 +522,13 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
             <i className="fas fa-chevron-right" aria-hidden />
           </button>
         )}
+        {/* 원문 보기: 맨 아래에 있으면 못 찾아서(2026-10-26) 사진 위 오른쪽 아래에 띄운다. 자리를 따로 차지하지 않고 엄지가 닿는다.
+            좌우 화살표는 세로 가운데, 「n / n」은 사진 위 줄이라 겹치지 않는다. 밀기(onDown)는 a · button 위에서 시작하면 잡지 않으므로 누르기가 밀기로 오인되지 않는다. */}
+        <a href={it.url} target="_blank" rel="noopener noreferrer" draggable={false}
+          className="absolute bottom-3 right-3 z-10 inline-flex min-h-11 items-center gap-1.5 rounded-full bg-black/60 px-4 text-sm font-bold text-snow shadow-md backdrop-blur-sm transition-colors hover:bg-black/75">
+          원문 보기<i className="fas fa-arrow-up-right-from-square text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
+        </a>
       </div>
-      {/* 원문 보기: 맨 아래에 있으면 못 찾아서(2026-10-26) 사진 바로 밑(제목 위)에 주 단추로 — 사진이 세로로 길어도 폰 첫 화면에 걸리게. 사진 밖이라 좌우 화살표 · 밀기와 겹치지 않는다 */}
-      <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${btnPrimary} mt-3 w-full justify-center min-[560px]:w-auto`}>
-        원문 보기<i className="fas fa-arrow-up-right-from-square text-sm" aria-hidden /><span className="sr-only">(새 탭)</span>
-      </a>
       <h2 className="mt-3 break-words text-xl font-bold text-ink">{it.title}</h2>
       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
         <span>{it.source}</span>
