@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   // 3D 시안 HTML 은 git 에 안 올리고(private/ 는 .gitignore) 배포에만 싣는다. 라우트 핸들러가 fs 로 읽으니 서버 묶음에 넣어 준다.
   outputFileTracingIncludes: {
     '/api/room3d': ['./private/room3d.html'],
+    // 3D 시안 살 것 값 표(로그인한 사람에게만 상태 라우트가 실어 준다)
+    '/api/decor/room3d-state': ['./private/room3d-prices.json'],
     // 사진 시안: 목록 라우트도 어떤 사진이 있는지(readdir) 보므로 둘 다 폴더째 싣는다. 키는 라우트 경로 글롭('[file]' 은 글롭에서 글자 묶음이라 '*')
     '/api/restyle': ['./private/restyle/**/*'],
     '/api/restyle/*': ['./private/restyle/**/*'],

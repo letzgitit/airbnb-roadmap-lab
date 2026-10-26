@@ -20,6 +20,7 @@
 | `/decor/3d` · `/decor/photos` · `/decor/refs` | 꾸미기: 3D 시안 · 사진 시안 · 참고 모음(`/decor` → `/decor/3d`) | 모두(참고 모음은 공개로 고른 항목의 사진 · 제목만, 쓰기는 로그인) |
 | `/money` | 돈 · 다른 집: 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길 | 로그인 |
 | `/api/room3d` | 3D 시안 HTML(`private/room3d.html`, iframe 격리) | 모두 |
+| `/api/decor/room3d-state` | 3D 시안에서 고른 상태(시안 · 켠 항목 · 문) 저장 · 불러오기, 살 것 값 표(`private/room3d-prices.json`) | 로그인 |
 | `/q/<토큰>` | 답 받는 링크로 지인이 여는 화면(사이트 틀 밖) | 링크를 받은 사람 |
 
 - 옛 주소: `/plan` → `/money`, `/questions` → `/house/questions`(`next.config.ts` redirects).
