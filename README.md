@@ -21,6 +21,7 @@
 | `/money` | 돈 · 다른 집: 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길 | 로그인 |
 | `/api/room3d` | 3D 시안 HTML(`private/room3d.html`, iframe 격리) | 모두 |
 | `/api/decor/room3d-state` | 3D 시안에서 고른 상태(시안 · 켠 항목 · 문) 저장 · 불러오기, 살 것 값 표(`private/room3d-prices.json`) | 로그인 |
+| `/api/decor/room3d-layouts` | 3D 시안에서 가구를 옮긴 배치를 이름 붙여 저장 · 불러오기 · 이름 바꾸기 · 지우기(키 `oedomin:room3d:layouts`, 이름 30자 · 20개까지) | 로그인 |
 | `/q/<토큰>` | 답 받는 링크로 지인이 여는 화면(사이트 틀 밖) | 링크를 받은 사람 |
 
 - 옛 주소: `/plan` → `/money`, `/questions` → `/house/questions`(`next.config.ts` redirects).

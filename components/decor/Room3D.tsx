@@ -11,6 +11,8 @@ import { textBtn } from '@/components/progress/bits';
 // 고른 상태(시안 · 켠 항목 · 문)도 iframe 이 저장하지 못하니 이 화면이 맡는다: 로그인했으면 /api/decor/room3d-state 로 불러와
 // room3d:restore · room3d:auth(값) 로 넘기고, iframe 이 room3d:state 로 알려 주면 저장한다. 로그인 안 했으면 저장 없이 기본안.
 // iframe 쪽 출처가 null 이라 '*' 로만 보낼 수 있다 — 그래서 상태(항목 id · 문 · 시안)와 값 표만 싣는다.
+// 가구 배치(이름 붙여 저장한 것)도 같은 길: iframe 이 room3d:layout-op 로 부탁 → 이 화면이 /api/decor/room3d-layouts 를 불러 room3d:layout-res 로 돌려준다.
+// 배치에는 가구 묶음 id · 옮긴 거리 · 돌린 횟수와 이름 · 저장한 사람 · 시각만 있다.
 const MIN_H = 480;
 const MAX_H = 5000;   // 폭이 좁은 폰에서 시안 내용이 3000px 남짓 + 가구 고르기 목록(장면 아래, 목록은 창 높이 60% 안에서 밀림)까지 안쪽 스크롤이 안 생기게
 const DEFAULT_H = 640;
@@ -37,7 +39,46 @@ function exitFs(setFs: (f: Fs) => void) {
   setFs('off');
 }
 type SavedState = { concept: string; on: string[]; doors: Record<string, boolean> };
-type Saved = { member: boolean; state: SavedState | null; prices: Record<string, [number, number]> };
+type Saved = { member: boolean; state: SavedState | null; prices: Record<string, [number, number]>; layouts: unknown[] | null };
+
+// 이름 붙여 저장한 가구 배치(/api/decor/room3d-layouts). iframe 이 room3d:layout-op 로 부탁하면 이 화면이 대신 부르고
+// room3d:layout-res 로 결과(목록 전체)를 돌려준다. 모양 검사는 서버가 한다 — 여기서는 크기 · 종류만 거른다.
+// 마지막으로 불러온 배치 id 는 이 브라우저에만 기억해 두었다가(localStorage) 다시 열 때 그 배치로 연다.
+const LAYOUT_API = '/api/decor/room3d-layouts';
+const LAST_LAYOUT = 'room3d:last-layout';
+const LAYOUT_ID_RE = /^l-[0-9a-f]{8}$/;
+type LayoutOp = { op: 'list' | 'create' | 'update' | 'rename' | 'delete'; req: number; id?: string; name?: string; layout?: unknown };
+function asLayoutOp(v: unknown): LayoutOp | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  if (!['list', 'create', 'update', 'rename', 'delete'].includes(o.op as string) || typeof o.req !== 'number' || !Number.isFinite(o.req)) return null;
+  if (o.id !== undefined && (typeof o.id !== 'string' || !LAYOUT_ID_RE.test(o.id))) return null;
+  if (o.name !== undefined && (typeof o.name !== 'string' || o.name.length > 200)) return null;
+  if (o.layout !== undefined && (!o.layout || typeof o.layout !== 'object' || JSON.stringify(o.layout).length > 6000)) return null;
+  return { op: o.op as LayoutOp['op'], req: o.req, id: o.id as string | undefined, name: o.name as string | undefined, layout: o.layout };
+}
+const readLast = () => { try { const v = localStorage.getItem(LAST_LAYOUT); return v && LAYOUT_ID_RE.test(v) ? v : null; } catch { return null; } };
+const writeLast = (id: string | null) => { try { if (id) localStorage.setItem(LAST_LAYOUT, id); else localStorage.removeItem(LAST_LAYOUT); } catch { /* 저장 못 해도 괜찮다 */ } };
+async function runLayoutOp(op: LayoutOp): Promise<Record<string, unknown>> {
+  if (op.op === 'list') {
+    try {
+      const res = await fetch(LAYOUT_API, { cache: 'no-store', headers: devHeaders() });
+      const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      return res.ok ? { ok: true, items: Array.isArray(j.items) ? j.items : null } : { ok: false, error: typeof j.error === 'string' ? j.error : 'server_error' };
+    } catch { return { ok: false, error: 'network' }; }
+  }
+  const method = op.op === 'create' ? 'POST' : op.op === 'delete' ? 'DELETE' : 'PUT';
+  const body = op.op === 'create' ? { name: op.name, layout: op.layout }
+    : op.op === 'update' ? { id: op.id, layout: op.layout }
+    : op.op === 'rename' ? { id: op.id, name: op.name } : { id: op.id };
+  try {
+    const res = await fetch(LAYOUT_API, { method, cache: 'no-store', headers: { 'content-type': 'application/json', ...devHeaders() }, body: JSON.stringify(body) });
+    const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    return res.ok ? { ok: true, item: j.item ?? null, items: Array.isArray(j.items) ? j.items : null } : { ok: false, error: typeof j.error === 'string' ? j.error : 'server_error' };
+  } catch {
+    return { ok: false, error: 'network' };
+  }
+}
 
 const ID_RE = /^[a-z0-9-]{1,40}$/;
 const DOOR_KEYS = ['big', 'small', 'util', 'bath', 'ent'];
@@ -67,6 +108,7 @@ function handOver(win: Window | null | undefined, s: Saved | null) {
   if (!win || !s || !s.member) return;
   if (s.state) win.postMessage({ type: 'room3d:restore', ...s.state }, '*');
   win.postMessage({ type: 'room3d:auth', prices: s.prices }, '*');
+  if (s.layouts) win.postMessage({ type: 'room3d:layouts', items: s.layouts, current: readLast() }, '*');
 }
 
 // 개발 서버의 두 사람 흉내(?as=)를 iframe 주소에도 넘긴다(iframe 요청에는 머리글을 못 붙인다). 운영 빌드에선 빈 글자.
@@ -135,12 +177,16 @@ export function Room3D() {
     fetch('/api/decor/room3d-state', { cache: 'no-store', headers: devHeaders() })
       .then(async (res) => {
         if (!alive) return;
-        if (!res.ok) { saved.current = { member: false, state: null, prices: {} }; return; }
+        if (!res.ok) { saved.current = { member: false, state: null, prices: {}, layouts: null }; return; }
         const j = (await res.json()) as { state?: unknown; prices?: unknown };
-        saved.current = { member: true, state: asState(j.state), prices: asPrices(j.prices) };
+        // 저장한 배치 목록도 같이(못 읽으면 빈 목록 — 저장은 해 볼 수 있게)
+        const lj = await fetch(LAYOUT_API, { cache: 'no-store', headers: devHeaders() })
+          .then((r) => (r.ok ? (r.json() as Promise<{ items?: unknown }>) : null)).catch(() => null);
+        if (!alive) return;
+        saved.current = { member: true, state: asState(j.state), prices: asPrices(j.prices), layouts: Array.isArray(lj?.items) ? lj.items : [] };
         if (frameReady.current) handOver(frameRef.current?.contentWindow, saved.current);
       })
-      .catch(() => { if (alive) saved.current = { member: false, state: null, prices: {} }; });
+      .catch(() => { if (alive) saved.current = { member: false, state: null, prices: {}, layouts: null }; });
     return () => { alive = false; if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, []);
 
@@ -157,6 +203,21 @@ export function Room3D() {
         return;
       }
       if (d.type === 'room3d:fs') { if ((d as { on?: unknown }).on === true) enterFs(wrapRef.current, setFs); else exitFs(setFs); return; }
+      if (d.type === 'room3d:layout-op') {
+        const op = asLayoutOp(d), s = saved.current;
+        if (!op) return;
+        if (!s || !s.member) { win.postMessage({ type: 'room3d:layout-res', req: op.req, ok: false, error: 'unauthorized' }, '*'); return; }
+        void runLayoutOp(op).then((r) => {
+          if (Array.isArray(r.items)) s.layouts = r.items;
+          frameRef.current?.contentWindow?.postMessage({ type: 'room3d:layout-res', req: op.req, ...r }, '*');
+        });
+        return;
+      }
+      if (d.type === 'room3d:layout-current') {
+        const id = (d as { id?: unknown }).id;
+        if (id === null || (typeof id === 'string' && LAYOUT_ID_RE.test(id))) writeLast(id);
+        return;
+      }
       if (d.type === 'room3d:state') {
         const s = saved.current, st = asState(d);
         if (!s || !s.member || !st) return;
