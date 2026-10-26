@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getActor } from '@/lib/session';
+import { getActor, memberName } from '@/lib/session';
 import { checkWriteRequest, NO_STORE } from '@/lib/http';
 import {
   createLayout, deleteLayout, isLayoutId, LayoutError, listLayouts, parseLayout, parseLayoutName, updateLayout,
@@ -30,7 +30,8 @@ async function guard(req: Request, write: boolean) {
   if (write) { const bad = checkWriteRequest(req); if (bad) return { res: fail(403, bad) } as const; }
   const a = await getActor(req);
   if (!a.ok) return { res: fail(a.status, a.status === 401 ? 'unauthorized' : 'forbidden') } as const;
-  return { name: a.actor.name } as const;
+  // 저장한 사람: MEMBER_NAMES 에 적은 이름만 남긴다(이메일 앞부분은 남기지 않는다 — 없으면 화면은 시각만)
+  return { name: memberName(a.actor.email) } as const;
 }
 
 async function run(fn: () => Promise<Response>): Promise<Response> {

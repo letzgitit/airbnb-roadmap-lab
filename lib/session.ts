@@ -20,6 +20,11 @@ function memberNames(): Map<string, string> {
   return m;
 }
 
+/** MEMBER_NAMES 에 적어 둔 이름만(없으면 빈 글자). 이메일 앞부분을 화면에 보이면 안 되는 곳(3D 배치 「저장한 사람」)에 쓴다 */
+export function memberName(email: string): string {
+  return memberNames().get(email.trim().toLowerCase()) ?? '';
+}
+
 function nameFrom(email: string) {
   return memberNames().get(email) || email.split('@')[0];
 }
