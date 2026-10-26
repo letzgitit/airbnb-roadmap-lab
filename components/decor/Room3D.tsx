@@ -16,6 +16,26 @@ const MAX_H = 5000;   // 폭이 좁은 폰에서 시안 내용이 3000px 남짓 
 const DEFAULT_H = 640;
 
 type State = 'checking' | 'ok' | 'anon' | 'forbidden' | 'missing' | 'error';
+// 화면 전체로 크게 보기: native = 브라우저 전체 화면(Fullscreen API), overlay = 그게 안 되는 곳(아이폰 사파리 등)에서 화면을 꽉 채운 고정 겹침
+type Fs = 'off' | 'native' | 'overlay';
+type FsDoc = Document & { webkitFullscreenElement?: Element | null; webkitFullscreenEnabled?: boolean; webkitExitFullscreen?: () => void };
+type FsEl = HTMLDivElement & { webkitRequestFullscreen?: () => void };
+const fsElement = () => document.fullscreenElement ?? (document as FsDoc).webkitFullscreenElement ?? null;
+// 켜기: 브라우저 전체 화면을 먼저 해 보고(켜지면 fullscreenchange 가 'native' 로 맞춘다), 안 되면 겹침
+function enterFs(el: FsEl | null, setFs: (f: Fs) => void) {
+  if (!el) return;
+  const can = document.fullscreenEnabled || (document as FsDoc).webkitFullscreenEnabled;
+  if (can && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).catch(() => setFs('overlay'));
+  else if (can && el.webkitRequestFullscreen) { try { el.webkitRequestFullscreen(); } catch { setFs('overlay'); } }
+  else setFs('overlay');
+}
+function exitFs(setFs: (f: Fs) => void) {
+  if (fsElement()) {
+    if (document.exitFullscreen) void document.exitFullscreen().catch(() => {});
+    else (document as FsDoc).webkitExitFullscreen?.();
+  }
+  setFs('off');
+}
 type SavedState = { concept: string; on: string[]; doors: Record<string, boolean> };
 type Saved = { member: boolean; state: SavedState | null; prices: Record<string, [number, number]> };
 
@@ -70,6 +90,33 @@ export function Room3D() {
   const [state, setState] = useState<State>('checking');
   const [height, setHeight] = useState(DEFAULT_H);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // 전체 화면: 단추는 3D 장면 안(iframe)에 있고, 누르면 room3d:fs 로 알려 온다. 이 화면이 iframe 감싸개를 전체 화면으로 만든다
+  // (iframe 이 스스로 전체 화면을 켜는 게 아니라 allow="fullscreen" 은 필요 없다). 안 되면 화면을 꽉 채운 겹침(100dvh)으로 대신한다.
+  const [fs, setFs] = useState<Fs>('off');
+  const fsOn = useRef(false);
+  useEffect(() => {
+    const onChange = () => setFs((prev) => (fsElement() === wrapRef.current && wrapRef.current ? 'native' : prev === 'native' ? 'off' : prev));
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFs((prev) => (prev === 'overlay' ? 'off' : prev)); };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  // 상태가 바뀌면 iframe 에 알린다(장면이 화면을 꽉 채우는 모양으로 바뀐다). 겹침일 땐 뒤 페이지가 밀리지 않게 막는다.
+  useEffect(() => {
+    fsOn.current = fs !== 'off';
+    frameRef.current?.contentWindow?.postMessage({ type: 'room3d:fsstate', on: fs !== 'off' }, '*');
+    if (fs !== 'overlay') return;
+    const root = document.documentElement, prev = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => { root.style.overflow = prev; };
+  }, [fs]);
 
   // 먼저 HEAD 로 확인한다: 파일이 없으면 iframe 안에 오류 화면을 띄우는 대신 이 화면에서 한 줄로 알린다. 「다시 불러오기」 = tries 하나 올림.
   const [tries, setTries] = useState(0);
@@ -104,7 +151,12 @@ export function Room3D() {
       if (!win || e.source !== win) return;
       const d = e.data as { type?: unknown; h?: unknown } | null;
       if (!d || typeof d !== 'object') return;
-      if (d.type === 'room3d:ready') { frameReady.current = true; handOver(win, saved.current); return; }
+      if (d.type === 'room3d:ready') {
+        frameReady.current = true; handOver(win, saved.current);
+        win.postMessage({ type: 'room3d:fsstate', on: fsOn.current }, '*');
+        return;
+      }
+      if (d.type === 'room3d:fs') { if ((d as { on?: unknown }).on === true) enterFs(wrapRef.current, setFs); else exitFs(setFs); return; }
       if (d.type === 'room3d:state') {
         const s = saved.current, st = asState(d);
         if (!s || !s.member || !st) return;
@@ -153,10 +205,13 @@ export function Room3D() {
 
   // 화면 모드가 바뀌면 src 가 바뀌어 다시 불러온다(시안이 <html data-theme> 로 장면 바탕을 고른다). 다시 불러오면 room3d:ready 가 또 와서 상태를 다시 넘긴다.
   const src = `/api/room3d?theme=${dark ? 'dark' : 'light'}${devAs()}`;
+  const wrapCls = fs === 'overlay' ? 'fixed inset-0 z-[100] bg-page' : fs === 'native' ? 'bg-page' : '';
   return (
     <div>
-      <iframe ref={frameRef} key={src} src={src} title="3D 시안" sandbox="allow-scripts" referrerPolicy="no-referrer"
-        style={{ height }} className="block w-full" />
+      <div ref={wrapRef} className={wrapCls} style={fs === 'overlay' ? { height: '100dvh' } : undefined}>
+        <iframe ref={frameRef} key={src} src={src} title="3D 시안" sandbox="allow-scripts" referrerPolicy="no-referrer"
+          style={{ height: fs === 'off' ? height : '100%' }} className="block w-full" />
+      </div>
       <p className="mt-2 flex justify-end">
         <a href={src} target="_blank" rel="noopener" className={textBtn}>
           새 창으로 크게 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
