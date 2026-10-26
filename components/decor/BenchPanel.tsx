@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { BatchView, BenchItem, LinkView, ReactionView, Vote } from '@/lib/core/bench';
 import { busyFetch } from '@/lib/client/busy';
 import { displayName, shortDate, withGa } from '@/lib/client/format';
@@ -59,22 +59,46 @@ export function BenchPanel({ active }: { active: boolean }) {
   // 스크롤하는 곳은 시트 안이면 그 칸(.overflow-y-auto), 페이지면 window.
   const [openId, setOpenId] = useState<string | null>(null);
   const rootRef = useRef<HTMLElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const scrollAt = useRef(0);
   const moved = useRef(false);
   const scroller = () => rootRef.current?.closest<HTMLElement>('.overflow-y-auto') ?? null;
   const readScroll = () => { const el = scroller(); return el ? el.scrollTop : window.scrollY; };
   const writeScroll = (y: number) => { const el = scroller(); if (el) el.scrollTop = y; else window.scrollTo(0, y); };
-  const openItem = (id: string) => { scrollAt.current = readScroll(); moved.current = true; setOpenId(id); };
+  const lastOpen = useRef<string | null>(null);
+  const openItem = (id: string) => { scrollAt.current = readScroll(); moved.current = true; lastOpen.current = id; setOpenId(id); };
+  // 상세에서 옆 항목으로: 목록 스크롤 자리는 처음 연 때 것을 그대로 두고, 상세만 바꾼다
+  const goItem = (id: string) => { lastOpen.current = id; setOpenId(id); };
   const closeItem = () => setOpenId(null);
   useLayoutEffect(() => {
     if (!moved.current) return;   // 처음 그릴 때는 손대지 않는다(브라우저가 되살린 스크롤 자리를 지우지 않게)
-    if (!openId) { writeScroll(scrollAt.current); return; }
+    if (!openId) {
+      writeScroll(scrollAt.current);
+      // 상세에서 옆으로 넘겨 다른 항목에서 돌아왔으면, 그 타일이 화면 밖일 때 보이는 자리로
+      const tile = lastOpen.current ? listRef.current?.querySelector<HTMLElement>(`[data-bench-tile="${CSS.escape(lastOpen.current)}"]`) : null;
+      if (tile) {
+        const r = tile.getBoundingClientRect();
+        const box = scroller()?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+        if (r.bottom < box.top + 60 || r.top > box.bottom - 60) tile.scrollIntoView({ block: 'center' });
+      }
+      return;
+    }
     // 상세는 이 구역 맨 위부터: 페이지면 머리글 · 하위 탭이 보이는 맨 위로, 시트면 칸 맨 위로
     const el = scroller();
     if (el) el.scrollTop = 0;
     else if (rootRef.current && rootRef.current.getBoundingClientRect().top < 0) window.scrollTo(0, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId]);
+
+  // 상세의 이전 · 다음 = 목록에 지금 보이는 타일 순서 그대로(공간 고르기 · 둘 다 별로로 숨김 · 접은 지난 묶음까지 반영).
+  // 목록은 상세 아래에 그려 둔 채 숨겨 두므로, 그 안의 타일 차례를 읽는다. 지금 항목이 목록에서 빠지면(예: 둘 다 별로가 돼 접힌 칸으로 감) 직전 차례를 그대로 쓴다.
+  const [order, setOrder] = useState<string[]>([]);
+  useLayoutEffect(() => {
+    if (!openId) return;
+    const ids = [...new Set([...(listRef.current?.querySelectorAll<HTMLElement>('[data-bench-tile]') ?? [])].map((el) => el.dataset.benchTile!))];
+    if (!ids.includes(openId)) return;
+    setOrder((o) => (o.join('\n') === ids.join('\n') ? o : ids));
+  }, [openId, data, space, openOld]);   // 상세가 떠 있는 동안 목록 차례가 바뀌는 건 반응이 바뀔 때(data)뿐
 
   const reload = useCallback(async () => {
     if (!started.current) setState('loading');
@@ -175,11 +199,17 @@ export function BenchPanel({ active }: { active: boolean }) {
   const [firstBatch, ...older] = data?.batches ?? [];
   // 수집 묶음이 아직 없어도 올린 링크가 있으면 격자를 보인다
   const latest: BatchView | undefined = firstBatch ?? (linkCards.length > 0 ? { collectedAt: '', insights: [], items: [] } : undefined);
-  const detail: Card | null = openId ? [...linkCards, ...(data?.batches ?? []).flatMap((b) => b.items)].find((it) => it.id === openId) ?? null : null;
+  const all: Card[] = [...linkCards, ...(data?.batches ?? []).flatMap((b) => b.items)];
+  const detail: Card | null = openId ? all.find((it) => it.id === openId) ?? null : null;
+  const at = detail ? order.indexOf(detail.id) : -1;
+  const near = (id: string | undefined) => (id ? all.find((it) => it.id === id) ?? null : null);
+  const prev = at > 0 ? near(order[at - 1]) : null;
+  const next = at >= 0 && at < order.length - 1 ? near(order[at + 1]) : null;
   return (
     <section ref={rootRef} className="min-w-0" aria-label="참고 모음">
-      {detail && <Detail it={detail} reactions={data!.reactions[detail.id] ?? []} onSave={save} onBack={closeItem} onDeleteLink={detail.link ? async () => { if (await removeLink(detail.link!)) closeItem(); } : undefined} />}
-      <div className={detail ? 'hidden' : 'flex flex-col gap-4'}>
+      {detail && <Detail it={detail} reactions={data!.reactions[detail.id] ?? []} onSave={save} onBack={closeItem} onDeleteLink={detail.link ? async () => { if (await removeLink(detail.link!)) closeItem(); } : undefined}
+        prev={prev} next={next} onGo={goItem} pos={at >= 0 ? { i: at + 1, n: order.length } : null} />}
+      <div ref={listRef} className={detail ? 'hidden' : 'flex flex-col gap-4'}>
         {state === 'loading' && !data && (
           <div role="status" aria-busy="true">
             <span className="sr-only">불러오는 중…</span>
@@ -305,7 +335,7 @@ function Photo({ src, source, big }: { src: string | null; source: string; big?:
       {!loaded && <span className="skeleton absolute inset-0" />}
       {/* 외부 주소라 next/image 도메인 목록 대신 일반 img. 출처 사이트가 막지 않게 referrer 를 보내지 않는다 */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="" loading={big ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer" onLoad={() => setLoaded(true)} onError={() => setFailed(true)}
+      <img src={src} alt="" loading={big ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer" draggable={false} onLoad={() => setLoaded(true)} onError={() => setFailed(true)}
         className={loaded ? 'block h-auto w-full' : 'absolute inset-0 h-full w-full object-cover opacity-0'} />
     </span>
   );
@@ -325,7 +355,7 @@ function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: Reaction
   const others = shown.filter((r) => !r.mine);
   const myMemo = !!mine?.memo;
   return (
-    <div>
+    <div data-bench-tile={it.id}>
       <button type="button" onClick={() => onOpen(it.id)} className="block w-full text-left">
         <span className="block overflow-hidden rounded-control border border-line"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} /></span>
         <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-sm font-semibold text-ink">{it.title}</span>
@@ -364,14 +394,114 @@ function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: Reaction
 }
 
 // 상세: 같은 자리에서 목록을 대신해 보인다. 큰 사진 · 제목 · 맞는 이유 · 따라 할 점 · 비용 · 주의 · 원문 · 반응
-function Detail({ it, reactions, onSave, onBack, onDeleteLink }: { it: Card; reactions: ReactionView[]; onSave: SaveFn; onBack: () => void; onDeleteLink?: () => Promise<void> }) {
+// 옆 항목으로 넘기기: 사진 양옆 화살표(넓은 화면은 마우스를 올리면 또렷해지고, 폰은 늘 보인다) · 사진을 좌우로 밀기 · 키보드 ← →.
+// 항목마다 사진이 한 장이라 사진 넘기기와 겹치지 않는다. 메모를 쓰다 넘기면 「저장 안 한 내용」 확인을 먼저 띄운다.
+type Near = { id: string; title: string } | null;
+const SWIPE = 60;   // 이만큼(px) 옆으로 밀면 넘긴다
+function Detail({ it, reactions, onSave, onBack, onDeleteLink, prev, next, onGo, pos }: {
+  it: Card; reactions: ReactionView[]; onSave: SaveFn; onBack: () => void; onDeleteLink?: () => Promise<void>;
+  prev: Near; next: Near; onGo: (id: string) => void; pos: { i: number; n: number } | null;
+}) {
   const cost = costView(it);
+  const { confirmDiscard } = useProgress();
+  const memoDirty = useRef(false);
+  const go = useCallback((to: Near) => {
+    if (!to) return;
+    if (!memoDirty.current) { onGo(to.id); return; }
+    void confirmDiscard().then((ok) => { if (ok) onGo(to.id); });
+  }, [confirmDiscard, onGo]);
+
+  // 키보드 ← → : 글을 쓰는 중이거나 확인 창 · 시트가 떠 있으면 그대로 둔다
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const to = e.key === 'ArrowLeft' ? prev : next;
+      if (!to) return;
+      e.preventDefault();
+      go(to);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [prev, next, go]);
+
+  // 끝에 닿아 누르던 화살표가 사라지면 반대쪽 화살표로 초점을 옮긴다(초점이 화면 밖으로 빠지지 않게)
+  const prevBtn = useRef<HTMLButtonElement>(null);
+  const nextBtn = useRef<HTMLButtonElement>(null);
+  const navFocus = useRef(false);
+  useEffect(() => {
+    if (!navFocus.current) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && a.isConnected) return;
+    (prevBtn.current ?? nextBtn.current)?.focus();
+  }, [it.id]);
+
+  // 사진 밀기: 손가락은 옆으로 밀 때만 잡고(위아래는 스크롤), 마우스는 끌기. 미는 동안 사진이 따라오고, 넘길 쪽이 없으면 덜 따라온다.
+  const [dx, setDx] = useState(0);
+  const drag = useRef<{ id: number; x: number; y: number; on: boolean } | null>(null);
+  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button, a')) return;
+    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false };
+    if (e.pointerType === 'mouse') e.preventDefault();
+  };
+  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const mx = e.clientX - d.x;
+    if (!d.on) {
+      const my = Math.abs(e.clientY - d.y);
+      if (my > Math.abs(mx) && my > 6) { drag.current = null; return; }
+      if (Math.abs(mx) < 8) return;
+      d.on = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    setDx((mx > 0 ? !!prev : !!next) ? mx : mx / 4);
+  };
+  const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    drag.current = null;
+    setDx(0);
+    if (!d || d.id !== e.pointerId || !d.on) return;
+    const mx = e.clientX - d.x;
+    if (mx <= -SWIPE) go(next);
+    else if (mx >= SWIPE) go(prev);
+  };
+  const onCancel = () => { drag.current = null; setDx(0); };
+
+  // 반투명 동그라미. 마우스가 있는 화면은 사진에 올리거나 초점이 오면 또렷해지고, 터치 화면은 늘 또렷하게.
+  const arrowCls = 'absolute z-10 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-snow shadow-md transition-opacity hover:bg-black/65 focus-visible:opacity-100 [@media(hover:hover)]:opacity-40 [@media(hover:hover)]:group-hover:opacity-100';
+  // 세로로 긴 사진에서도 화살표가 첫 화면 안에 오게: 사진 높이의 가운데, 단 화면 높이 40%를 넘지 않게
+  const arrowTop = { top: 'min(50%, 40vh)' };
   return (
     <article aria-label={it.title}>
-      <button type="button" onClick={onBack} className={`${textBtn} mb-2`}>
-        <i className="fas fa-chevron-left mr-1.5 text-xs" aria-hidden />목록으로
-      </button>
-      <div className="overflow-hidden rounded-panel border border-line"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} big /></div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <button type="button" onClick={onBack} className={textBtn}>
+          <i className="fas fa-chevron-left mr-1.5 text-xs" aria-hidden />목록으로
+        </button>
+        {pos && pos.n > 1 && <p className="text-sm tabular-nums text-muted" aria-live="polite"><span className="sr-only">목록에서 </span>{pos.i} / {pos.n}</p>}
+      </div>
+      <div className="group relative touch-pan-y select-none" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}>
+        <div className="overflow-hidden rounded-panel border border-line"
+          style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: dx ? 'none' : 'transform 200ms ease-out' }}>
+          <Photo key={it.id} src={it.image} source={it.link ? hostOf(it.url) : it.source} big />
+        </div>
+        {prev && (
+          <button ref={prevBtn} type="button" onClick={() => { navFocus.current = true; go(prev); }} style={arrowTop}
+            aria-label={`이전 자료: ${prev.title}`} className={`${arrowCls} left-2`}>
+            <i className="fas fa-chevron-left" aria-hidden />
+          </button>
+        )}
+        {next && (
+          <button ref={nextBtn} type="button" onClick={() => { navFocus.current = true; go(next); }} style={arrowTop}
+            aria-label={`다음 자료: ${next.title}`} className={`${arrowCls} right-2`}>
+            <i className="fas fa-chevron-right" aria-hidden />
+          </button>
+        )}
+      </div>
       <h2 className="mt-3 break-words text-xl font-bold text-ink">{it.title}</h2>
       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
         <span>{it.source}</span>
@@ -414,20 +544,21 @@ function Detail({ it, reactions, onSave, onBack, onDeleteLink }: { it: Card; rea
           원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
         </a>
       </div>
-      <div className="mt-4 border-t border-line pt-3"><Reactions itemId={it.id} title={it.title} list={reactions} onSave={onSave} /></div>
+      <div className="mt-4 border-t border-line pt-3"><Reactions key={it.id} itemId={it.id} title={it.title} list={reactions} onSave={onSave} dirtyRef={memoDirty} /></div>
       {it.link?.mine && onDeleteLink && <DeleteLink title={it.title} onDelete={onDeleteLink} />}
     </article>
   );
 }
 
 // 반응: 위에 두 사람이 남긴 것(이름 · 좋아요/별로 · 메모), 아래에 내 단추. 메모는 그 자리에서 펼쳐 쓴다.
-function Reactions({ itemId, title, list, onSave }: { itemId: string; title: string; list: ReactionView[]; onSave: SaveFn }) {
+function Reactions({ itemId, title, list, onSave, dirtyRef }: { itemId: string; title: string; list: ReactionView[]; onSave: SaveFn; dirtyRef?: { current: boolean } }) {
   const mine = list.find((r) => r.mine) ?? null;
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [memo, setMemo] = useState('');
   const dirty = editing && memo.trim() !== (mine?.memo ?? '');
   useDirty(`bench:${itemId}`, dirty);
+  useEffect(() => { if (!dirtyRef) return; dirtyRef.current = dirty; return () => { dirtyRef.current = false; }; }, [dirty, dirtyRef]);
   const cancel = () => setEditing(false);
   const onEsc = useFormEsc(dirty, cancel);
 

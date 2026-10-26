@@ -94,52 +94,79 @@ export function RestylePhotos() {
   );
 }
 
+// 썸네일을 누르면 위 비교 화면에 바로 들어간다(위 시안 고르기 단추도 같이 바뀐다). 비교 화면이 화면 밖이면 그쪽으로 부드럽게 스크롤.
+// 「지금」 썸네일 = 막대를 오른쪽 끝까지 밀어 지금 사진만 보이게(고른 시안은 그대로라, 막대를 다시 밀면 그 시안과 겹쳐 보인다).
+const NOW = '__now';
 function RoomSection({ room, names }: { room: RestyleRoom; names: Map<string, string> }) {
   const [pick, setPick] = useState(room.shots[0].concept);
+  const [pos, setPos] = useState(50);
+  const [glide, setGlide] = useState(false);   // 썸네일로 바꿀 때만 막대가 미끄러지듯 움직인다(손으로 밀 때는 바로 따라온다)
+  const compareRef = useRef<HTMLDivElement>(null);
   const shot = room.shots.find((s) => s.concept === pick) ?? room.shots[0];
   const name = (id: string) => names.get(id) ?? id;
   const headId = `restyle-room-${room.id}`;
+  const current = pos >= 100 ? NOW : shot.concept;
+  const choose = (id: string) => {
+    setGlide(true);
+    if (id === NOW) setPos(100);
+    else { setPick(id); if (pos <= 0 || pos >= 100) setPos(50); }
+    const el = compareRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      const head = 64;   // 위에 붙어 있는 머리글 높이만큼은 가려진 것으로 본다
+      if (r.top < head || r.bottom > window.innerHeight) {
+        const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top: window.scrollY + r.top - head - 12, behavior: smooth ? 'smooth' : 'auto' });
+      }
+    }
+  };
   return (
     <section aria-labelledby={headId}>
       <SectionHeader id={headId} title={room.name} />
       {room.shots.length > 1 && (
         <div className="mb-3">
-          <Segmented label={`${room.name} 시안 고르기`} value={shot.concept} onChange={setPick}
+          <Segmented label={`${room.name} 시안 고르기`} value={shot.concept} onChange={(v) => { setGlide(true); setPick(v); if (pos <= 0 || pos >= 100) setPos(50); }}
             options={room.shots.map((s) => ({ value: s.concept, label: name(s.concept) }))} />
         </div>
       )}
-      <Compare before={photoUrl(room.original)} after={photoUrl(shot.file)}
-        beforeAlt={`${room.name} 지금 모습`} afterAlt={`${room.name} ${name(shot.concept)} 시안`}
-        afterLabel={name(shot.concept)} roomName={room.name} />
+      <div ref={compareRef}>
+        <Compare before={photoUrl(room.original)} after={photoUrl(shot.file)}
+          beforeAlt={`${room.name} 지금 모습`} afterAlt={`${room.name} ${name(shot.concept)} 시안`}
+          afterLabel={name(shot.concept)} roomName={room.name}
+          pos={pos} onPos={(p) => { setGlide(false); setPos(p); }} glide={glide} />
+      </div>
       {room.note && <p className="mt-2 text-sm leading-relaxed text-muted">{room.note}</p>}
       {/* 썸네일 = 지금 + 시안 수(5개면 6장). 폰 2열 · 넓으면 3열이라 6장이 빈칸 없이 3줄 · 2줄로 떨어진다. */}
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Thumb src={photoUrl(room.original)} alt={`${room.name} 지금`} caption="지금" />
+        <Thumb src={photoUrl(room.original)} alt={`${room.name} 지금`} caption="지금" on={current === NOW} onPick={() => choose(NOW)} />
         {room.shots.map((s) => (
-          <Thumb key={s.concept} src={photoUrl(s.file)} alt={`${room.name} ${name(s.concept)}`} caption={name(s.concept)} />
+          <Thumb key={s.concept} src={photoUrl(s.file)} alt={`${room.name} ${name(s.concept)}`} caption={name(s.concept)}
+            on={current === s.concept} onPick={() => choose(s.concept)} />
         ))}
       </div>
     </section>
   );
 }
 
-function Thumb({ src, alt, caption }: { src: string; alt: string; caption: string }) {
+// 썸네일 = 누르는 단추. 지금 위에 보이는 것에는 강조색 테두리 + 글자를 진하게.
+function Thumb({ src, alt, caption, on, onPick }: { src: string; alt: string; caption: string; on: boolean; onPick: () => void }) {
   return (
-    <figure className="m-0">
+    <button type="button" aria-pressed={on} onClick={onPick} aria-label={`${caption} 위에서 보기`}
+      className="group block w-full rounded-control text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={alt} loading="lazy" decoding="async" width={1600} height={900}
-        className="block aspect-video h-auto w-full rounded-control bg-sunken object-cover" />
-      <figcaption className="mt-1 text-sm text-muted">{caption}</figcaption>
-    </figure>
+        className={`block aspect-video h-auto w-full rounded-control bg-sunken object-cover transition-shadow ${on ? 'ring-2 ring-accent ring-offset-2 ring-offset-page' : 'group-hover:opacity-90'}`} />
+      <span className={`mt-1.5 block text-sm ${on ? 'font-bold text-ink' : 'text-muted'}`}>{caption}</span>
+    </button>
   );
 }
 
 // 막대 밀어 비교: 왼쪽 = 지금, 오른쪽 = 시안. 마우스는 누른 자리로 바로 옮기고, 손가락은 옆으로 밀 때만 옮긴다(위아래로 밀면 화면이 스크롤된다).
 // 키보드는 화면에 안 보이는 range 입력(← → Home End)으로, 포커스가 오면 동그라미에 고리가 생긴다.
-function Compare({ before, after, beforeAlt, afterAlt, afterLabel, roomName }: {
+function Compare({ before, after, beforeAlt, afterAlt, afterLabel, roomName, pos, onPos: setPos, glide }: {
   before: string; after: string; beforeAlt: string; afterAlt: string; afterLabel: string; roomName: string;
+  pos: number; onPos: (p: number) => void; glide: boolean;
 }) {
-  const [pos, setPos] = useState(50);
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; touch: boolean; moved: boolean; x: number; y: number } | null>(null);
 
@@ -177,6 +204,7 @@ function Compare({ before, after, beforeAlt, afterAlt, afterLabel, roomName }: {
   const onCancel = () => { drag.current = null; };
 
   const left = `${pos}%`;
+  const ease = glide ? 'motion-safe:transition-[left,clip-path] motion-safe:duration-300 motion-safe:ease-out' : '';
   return (
     <div ref={box} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
       className="relative aspect-video w-full cursor-ew-resize touch-pan-y select-none overflow-hidden rounded-panel border border-line bg-sunken">
@@ -185,15 +213,15 @@ function Compare({ before, after, beforeAlt, afterAlt, afterLabel, roomName }: {
         className="pointer-events-none absolute inset-0 size-full object-cover" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={after} alt={afterAlt} draggable={false} decoding="async" width={1600} height={900}
-        className="pointer-events-none absolute inset-0 size-full object-cover" style={{ clipPath: `inset(0 0 0 ${left})` }} />
-      <span aria-hidden className="pointer-events-none absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-snow">지금</span>
-      <span aria-hidden className="pointer-events-none absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-snow">{afterLabel}</span>
-      <span aria-hidden className="pointer-events-none absolute inset-y-0 -ml-px w-0.5 bg-snow shadow-[0_0_0_1px_rgba(0,0,0,0.2)]" style={{ left }} />
+        className={`pointer-events-none absolute inset-0 size-full object-cover ${ease}`} style={{ clipPath: `inset(0 0 0 ${left})` }} />
+      {pos > 0 && <span aria-hidden className="pointer-events-none absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-snow">지금</span>}
+      {pos < 100 && <span aria-hidden className="pointer-events-none absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-snow">{afterLabel}</span>}
+      <span aria-hidden className={`pointer-events-none absolute inset-y-0 -ml-px w-0.5 bg-snow shadow-[0_0_0_1px_rgba(0,0,0,0.2)] ${ease}`} style={{ left }} />
       <input type="range" min={0} max={100} step={1} value={Math.round(pos)} onChange={(e) => setPos(Number(e.target.value))}
         aria-label={`${roomName} 지금과 ${afterLabel} 비교 위치`} aria-valuetext={`왼쪽 지금 ${Math.round(pos)}%, 오른쪽 ${afterLabel}`}
         className="peer sr-only" />
       <span aria-hidden
-        className="keep-light pointer-events-none absolute top-1/2 grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-surface text-ink shadow-md peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-snow peer-focus-visible:ring-2 peer-focus-visible:ring-accent"
+        className={`keep-light pointer-events-none absolute top-1/2 grid ${ease} size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-surface text-ink shadow-md peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-snow peer-focus-visible:ring-2 peer-focus-visible:ring-accent`}
         style={{ left }}>
         <i className="fas fa-arrows-left-right text-base" />
       </span>
