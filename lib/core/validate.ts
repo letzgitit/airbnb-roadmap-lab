@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LOG_KINDS, STEP_COUNT, TASK_KINDS } from './types.ts';
+import { LOG_KINDS, STEP_COUNT, TASK_KINDS, TASK_OWNERS } from './types.ts';
 
 const dateStr = z.string().refine((s) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
@@ -10,7 +10,8 @@ const dateStr = z.string().refine((s) => {
 const nullableDate = z.union([dateStr, z.null()]);
 // 할 일 종류: 정해진 값 하나 또는 null(종류 지우기)
 const taskKind = z.union([z.enum(TASK_KINDS), z.null()], { error: `종류는 ${TASK_KINDS.join(' · ')} 중 하나 또는 null 이어야 합니다.` });
-const text = z.string().trim().min(1, '내용을 입력하세요.').max(200, '200자 이하로 입력하세요.');
+// 제목: 줄바꿈 · 겹친 공백을 한 칸으로(Todoist 에서 받는 제목과 같은 정규화 — lib/core/todoist.ts normText)
+const text = z.string().transform((s) => s.replace(/\s+/g, ' ').trim()).pipe(z.string().min(1, '내용을 입력하세요.').max(200, '200자 이하로 입력하세요.'));
 const stepId = z.number().int().min(1).max(STEP_COUNT);
 const version = z.number().int().min(0);
 // 서버가 만드는 id 모양(t_/l_/p_ + 영숫자)만 받는다. `constructor`·`__proto__` 같은 값이 레코드 조회에 들어가지 않게.
@@ -23,12 +24,22 @@ export const stepPatch = z.object({
   note: z.string().max(1000, '메모는 1000자 이하로 입력하세요.').optional(),
 }).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
 
+// 할 일 맡은 사람: 정해진 값 하나 또는 null(지우기)
+const taskOwner = z.union([z.enum(TASK_OWNERS), z.null()], { error: `맡은 사람은 ${TASK_OWNERS.join(' · ')} 중 하나 또는 null 이어야 합니다.` });
+// 할 일 자세한 내용: ≤1000자, 빈 글 · null = 지우기
+export const TASK_NOTE_MAX = 1000;
+const taskNote = z.union([z.string().trim().max(TASK_NOTE_MAX, `자세한 내용은 ${TASK_NOTE_MAX}자 이하로 입력하세요.`), z.null()]);
+// Todoist 할 일 id(영숫자) 또는 null(짝 끊기)
+export const todoistId = z.union([z.string().regex(/^[A-Za-z0-9]{1,64}$/, 'Todoist id 형식이 올바르지 않습니다.'), z.null()]);
 export const taskPatch = z.object({
   text: text.optional(),
   due: nullableDate.optional(),
   stepId: stepId.optional(),
   done: z.boolean().optional(),
   kind: taskKind.optional(),
+  note: taskNote.optional(),
+  owner: taskOwner.optional(),
+  todoistId: todoistId.optional(),
 }).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
 
 export const logPatch = z.object({
@@ -89,7 +100,7 @@ export const opSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('guest.add'), name: personName }),
   z.object({ op: z.literal('guest.revoke'), id: gid }),
   z.object({ op: z.literal('step.update'), stepId, baseVersion: version, patch: stepPatch, force: z.boolean().optional() }),
-  z.object({ op: z.literal('task.add'), stepId, text, due: nullableDate.optional(), kind: taskKind.optional() }),
+  z.object({ op: z.literal('task.add'), stepId, text, due: nullableDate.optional(), kind: taskKind.optional(), note: taskNote.optional(), owner: taskOwner.optional() }),
   z.object({ op: z.literal('task.update'), id, baseVersion: version.optional(), patch: taskPatch, force: z.boolean().optional() }),
   z.object({ op: z.literal('task.delete'), id }),
   z.object({ op: z.literal('task.restore'), id }),

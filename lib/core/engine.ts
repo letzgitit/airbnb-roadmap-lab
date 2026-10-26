@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getStore } from './store.ts';
 import type { Op } from './validate.ts';
 import { applyQuestionOp, purgeQuestions, type GuestAnswerOp } from './questions.ts';
+import { applyTodoistOp, findByTodoistId, type TodoistEngineOp } from './todoist.ts';
 import type { LogEntry, MoneyItem, PlanState, ProgressDoc, PropertyItem, StepState, TaskItem } from './types.ts';
 
 export interface Actor { email: string; name: string }
@@ -83,13 +84,22 @@ function guardUpdate<T extends { id: string; version: number; updatedBy: string;
   return cur;
 }
 
-// 엔진이 받는 연산: API · CLI 가 보내는 Op + 서버 안에서만 만드는 손님 답
-export type EngineOp = Op | GuestAnswerOp;
+// 엔진이 받는 연산: API · CLI 가 보내는 Op + 서버 안에서만 만드는 손님 답 · Todoist 동기화
+export type EngineOp = Op | GuestAnswerOp | TodoistEngineOp;
 
 function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { result?: unknown } {
   const iso = new Date(now).toISOString();
   pruneEditing(doc, now);
   const bump = (cur: { version: number }) => ({ version: cur.version + 1, updatedAt: iso, updatedBy: actor.name });
+
+  // Todoist 웹훅 반영 · 짝 적기(lib/core/todoist.ts)
+  if (op.op === 'task.fromTodoist' || op.op === 'task.todoistSent') {
+    return applyTodoistOp(doc, op, iso, now, {
+      newId, bump, clip, maxTasks: MAX_TASKS,
+      touch: (text) => touch(doc, actor, iso, text),
+      fail: (status, body) => { throw new OpError(status, body); },
+    });
+  }
 
   // 질문 · 손님 링크(lib/core/questions.ts)
   const q = applyQuestionOp(doc, op, actor, iso, now, {
@@ -128,6 +138,8 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
         version: 1, createdAt: iso, createdBy: actor.name, updatedAt: iso, updatedBy: actor.name,
         deletedAt: null, deletedBy: null,
         ...(op.kind ? { kind: op.kind } : {}),
+        ...(op.note ? { note: op.note } : {}),
+        ...(op.owner ? { owner: op.owner } : {}),
       };
       doc.tasks[t.id] = t;
       touch(doc, actor, iso, `할 일 추가: ${clip(t.text)}`);
@@ -136,14 +148,29 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
     case 'task.update': {
       const keys = Object.keys(op.patch);
       const toggleOnly = keys.length === 1 && keys[0] === 'done';
-      const cur = guardUpdate(own(doc.tasks, op.id), 'task', op.baseVersion, op.force, toggleOnly);
+      // Todoist 짝만 적는 것도 version 없이(짝 맞추기 도구가 한꺼번에 적을 때)
+      const linkOnly = keys.length === 1 && keys[0] === 'todoistId';
+      const cur = guardUpdate(own(doc.tasks, op.id), 'task', op.baseVersion, op.force, toggleOnly || linkOnly);
+      if (op.patch.todoistId) {
+        const other = findByTodoistId(doc, op.patch.todoistId);
+        if (other && other.id !== cur.id && !other.deletedAt) throw new OpError(409, { error: 'todoist_linked', kind: 'task', id: other.id, current: other });
+      }
       const next: TaskItem = { ...cur, ...op.patch, ...bump(cur) };
+      // 사람이 단계나 종류를 고르면 「자동으로 고름」 표시를 지운다
+      if (cur.autoFill && (op.patch.stepId !== undefined || op.patch.kind !== undefined)) next.autoFill = null;
+      if (op.patch.todoistId !== undefined && op.patch.todoistId !== cur.todoistId) {
+        // 짝을 새로 적거나 끊으면 Todoist 쪽 기록을 비운다(짝 맞추기 도구로 적은 짝은 다음 반영 때 맞춰진다)
+        next.todoistAt = null; next.todoistSent = null; delete next.todoistError;
+      }
+      // 자세한 내용을 비우거나 null 로 보내면 키를 지운다(없으면 저장하지 않는 것과 같게)
+      if (op.patch.note !== undefined && !op.patch.note) delete next.note;
+      if (op.patch.owner === null) delete next.owner;
       if (op.patch.done !== undefined && op.patch.done !== cur.done) {
         next.doneBy = op.patch.done ? actor.name : null;
         next.doneAt = op.patch.done ? iso : null;
       }
       doc.tasks[cur.id] = next;
-      touch(doc, actor, iso, `할 일 '${clip(next.text)}' ${toggleOnly ? (next.done ? '체크함' : '체크 해제') : '수정함'}`);
+      touch(doc, actor, iso, `할 일 '${clip(next.text)}' ${toggleOnly ? (next.done ? '체크함' : '체크 해제') : linkOnly ? 'Todoist 짝 적음' : '수정함'}`);
       return { result: next };
     }
     case 'task.delete': {

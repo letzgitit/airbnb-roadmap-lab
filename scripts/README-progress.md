@@ -70,8 +70,8 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 
 | 연산 | 필수 필드 | 비고 |
 |---|---|---|
-| `task.add` | `stepId`(1~14), `text`(1~200자) | `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다) |
-| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기). **`done`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
+| `task.add` | `stepId`(1~14), `text`(1~200자) | `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다). `note`(선택): 자세한 내용 ≤1000자(제목은 짧게, 길게 적을 것은 여기). `owner`(선택): `남편` `아내` `같이` |
+| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기) `note`(빈 글 · null = 지우기) `owner`(null = 지우기) `todoistId`(Todoist 짝, null = 짝 끊기). **`done`만, 또는 `todoistId`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
 | `task.delete` / `task.restore` | `id` | 소프트 삭제(30일 보관 후 정리) |
 | `step.update` | `stepId`, `baseVersion`, `patch` | `patch`: `status`(`todo` `doing` `done`) `targetDate` `note`(≤1000자). 아직 한 번도 안 고친 단계의 version은 0 |
 | `log.add` | `kind`(`결정` `통화` `일정` `메모`), `text`(≤1000자) | 「현황 메모/결정 기록」 |
@@ -103,6 +103,66 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 { "store": "file", "written": true, "dryRun": false,
   "applied": [ { "index": 0, "op": "task.add", "result": { "id": "t_…", "version": 1 } } ],
   "failed":  [ { "index": 3, "op": "step.update", "status": 409, "error": { "error": "conflict", "current": { "version": 1 } } } ] }
+```
+
+## Todoist 동기화
+
+Todoist 라벨 `외도민`(바꾸려면 `TODOIST_LABEL`) 할 일 ↔ 사이트 할 일을 양쪽으로 맞춘다. 코드: `lib/core/todoist*.ts`, 웹훅 `app/api/todoist/webhook`.
+
+- 🔴 Todoist 토큰(`TODOIST_API_TOKEN` · `TODOIST_CLIENT_SECRET`)은 **Vercel 환경 변수에만** 둔다. `.env.local`에 넣지 않는다(공개 저장소 · 로컬 시험). CLI에서 쓸 때는 운영 키와 같이 저장소 밖에 받아 그 명령 안에서만 쓴다.
+- Todoist 로 보내는 것은 **운영 저장소(redis)일 때만**이다. 로컬 연습 저장소면 토큰이 있어도 보내지 않는다(stderr `[Todoist] 로컬 연습 저장소 — 반영 건너뜀`). 시험할 때만 `TODOIST_API_BASE`에 가짜 서버 주소를 주면 로컬에서도 그 서버로 보낸다.
+- 운영 저장소에 할 일 연산을 `apply --yes` 하는데 토큰이 없으면 쓰지 않고 멈춘다(종료 코드 4). Todoist 에 안 보내도 되면 `--no-todoist`(나중에 `todoist-sync`로 맞출 수 있다).
+
+| 사이트 | Todoist | 비고 |
+|---|---|---|
+| `text` | `content` | 200자 넘으면 199자 + `…` 로 줄여 받는다 |
+| `note` | `description` | 1000자 넘으면 999자 + `…` |
+| `due` | `due` | 날짜만. 시각이 있는 Todoist 날짜는 그날 날짜로 받는다. 사이트에서 날짜를 지우면 Sync API `item_update` 에 `due: null` |
+| `done` | 완료(close / reopen) | |
+| 삭제 · 복원 | 삭제 / 새로 만들기 | Todoist 는 지운 할 일을 되살리는 API 가 없어, 사이트에서 복원하면 새로 만들고 새 id 를 적는다 |
+| `stepId` `kind` `owner` | — | 사이트에만 |
+
+- **Todoist → 사이트**: 웹훅(`item:added` `item:updated` `item:completed` `item:uncompleted` `item:deleted`) → 서명(`X-Todoist-Hmac-SHA256` = base64 HMAC-SHA256(client secret, 본문)) 확인 → 엔진 연산 `task.fromTodoist`(서버 안에서만 만든다, CLI · API 로는 못 보낸다). 라벨 없는 할 일은 무시한다. 짝이 있던 할 일에서 라벨을 떼도 사이트 할 일은 그대로 둔다.
+- **사이트 → Todoist**: `/api/progress/mutate`(응답 뒤 `after`)와 이 CLI의 `apply`(쓴 뒤, `--dry-run` · `--no-todoist` 제외)가 같은 `pushToTodoist`(`lib/core/todoist-push.ts`)를 부른다. 보낼 때마다 문서를 다시 읽어 **지금 사이트 값과 `todoistSent`(Todoist 에 있다고 아는 값)의 차이만** 보내고 `todoistSent`를 맞춘다. 그래서 같은 할 일에 대한 보내기 둘이 순서가 뒤집혀도 마지막 상태로 모이고, 추가 직후 고치기 · 체크 · 삭제도 (짝을 적은 뒤 다시 읽어) 따라간다. 새로 만든 Todoist id · `todoistSent` 는 `task.todoistSent`(서버 전용)로 적고 항목 version 을 올리지 않는다. 보내기가 실패하면 할 일에 `todoistError`가 남는다(`get`에 ⚠️).
+- **돌고 도는 것 막기 · 늦게 온 웹훅**: 웹훅으로 바뀐 것은 Todoist 로 다시 보내지 않는다. 웹훅 값이 `todoistSent`와 같으면 되돌아온 것(또는 Todoist 쪽은 그대로)이라 사이트를 건드리지 않는다. 다른 칸 중 사이트에서도 고친 칸(사이트 값 ≠ `todoistSent`)은 사람이 웹훅 시각보다 나중에 고쳤으면 사이트 값을 둔다(다음 보내기가 맞춘다). 이미 반영한 것보다 앞선 웹훅(`todoistAt`)은 버리고, 같은 시각은 값으로 가린다. 사이트에서 막 만든 할 일이 Todoist 를 돌아 `item:added`로 오면(아직 id 를 못 적었을 때) 짝 없는 · 같은 제목 · 같은 날짜 · 10분 안에 만들거나 고친 사이트 할 일에 짝만 적는다(단계 고르기도 안 한다). 짝을 적는 쪽이 늦으면 방금 만든 Todoist 할 일을 중복으로 보고 지운다. 저장소가 바빠(503) 웹훅 반영에 실패하면 500 으로 답해 Todoist 가 다시 보낸다(값으로 견주므로 다시 받아도 안전).
+- **복원**: Todoist 에서도 지웠으면(`todoistSent.deleted`) 새로 만들고 새 id 를 적는다. 지우기가 실패해 Todoist 에 아직 있으면 새로 만들지 않는다. 이미 지운 것은 다시 지우지 않는다.
+- **반복 할 일**: Todoist 에서 반복 할 일을 완료하면 다음 날짜로 넘어갈 뿐이라 사이트에는 「안 끝남 · 새 날짜」로 들어온다. 🔴 사이트에서 반복 할 일의 날짜를 고치면 Todoist 쪽 반복 규칙이 사라진다(날짜 하나로 바뀐다). 반복 할 일의 날짜는 Todoist 에서 고친다.
+- **제목 정규화**: 사이트 입력과 Todoist 에서 받는 제목 모두 줄바꿈 · 겹친 공백을 한 칸으로 줄이고 앞뒤 공백을 지운다.
+- **Todoist 에서 새로 만든 할 일의 단계 · 종류**: ① `ANTHROPIC_API_KEY`가 있으면 Claude API(`claude-haiku-5-5`, 4초 제한)에 제목과 14단계 이름 · 설명(공개 콘텐츠)을 주고 단계 번호 · 종류를 받는다 → ② 실패 · 키 없음이면 낱말 규칙(`lib/core/todoist-classify.ts`) → ③ 그래도 없으면 지금 진행 중인 단계(없으면 아직 안 끝난 첫 단계). 고른 방법은 할 일의 `autoFill`(`claude` · `keyword` · `default`)에 남고, `get` 에 「단계 자동(…)」, md 에 「(단계 자동)」으로 보인다. 사람이 단계나 종류를 고치면 지워진다. 만든 사람(`createdBy`)은 `Todoist`.
+  - 단계를 다시 보려면: `get --json` 에서 `autoFill` 이 있는 할 일을 찾아 `task.update`로 `stepId` · `kind`를 고친다.
+
+### 다시 맞추기 (`todoist-sync`)
+
+```bash
+(set -a; . "$OUT/prod.env"; node scripts/progress.mjs todoist-sync)          # 차이만 보기
+(set -a; . "$OUT/prod.env"; node scripts/progress.mjs todoist-sync --yes)    # 다른 칸을 사이트 값으로 맞춤
+```
+
+- Todoist 의 라벨 붙은 끝나지 않은 할 일(`GET /api/v1/tasks?label=…`)을 읽어 사이트 현황과 견준다(운영 저장소 + 토큰일 때만 돈다). 보여 주는 것: 「값이 다름」 · 「보내기 실패 표시」 · 「Todoist 에 없음(완료 · 삭제됨?)」 · 「짝 없음」 · 「Todoist 에만」.
+- `--yes`는 「값이 다름」 · 「보내기 실패 표시」만 사이트 값(정본)으로 맞춘다. 나머지는 손대지 않는다(짝은 아래 짝 맞추기 도구로).
+- Vercel 에서 토큰을 「Sensitive」로 두면 `vercel env pull`로 안 내려온다 — 그때는 CLI 쓰기에 `--no-todoist`를 붙이고, 맞추기는 사이트(배포) 쪽 보내기에 맡긴다.
+
+### 이미 있는 할 일 짝 맞추기 (`scripts/todoist-match.mjs`)
+
+사이트 할 일과 Todoist 할 일 목록을 제목 · 날짜로 짝지어 표를 만들고, 짝을 적는 연산 묶음을 만든다. 저장소 · Todoist 에 붙지 않고 파일만 읽고 쓴다(출력은 저장소 밖에만).
+
+```bash
+OUT=/저장소/밖/폴더
+node scripts/progress.mjs get --json > "$OUT/site.json"            # 또는 사이트 GET /api/progress 응답
+# Todoist 할 일 목록(GET /api/v1/tasks 응답 {results:[...]} 또는 배열)을 "$OUT/todoist.json" 에 저장
+node scripts/todoist-match.mjs --site "$OUT/site.json" --todoist "$OUT/todoist.json" --out "$OUT/match" --ops "$OUT/link.json"
+#   → match.json(표) · match.md(사람이 읽는 표) · link.json(patch). --min 날짜다름|비슷함 으로 더 넓게, --all-labels 로 라벨 없는 것도
+node scripts/progress.mjs apply "$OUT/link.json" --dry-run && node scripts/progress.mjs apply "$OUT/link.json" --yes
+```
+
+- 정도: 「확실」(제목 · 날짜 같음) · 「날짜다름」(제목 같음) · 「비슷함」(공백 · 문장부호 빼고 많이 닮음, 한쪽이 잘림). 기본은 「확실」만 연산에 넣는다. 제목은 공백 · 문장부호 · 대소문자를 무시하고 견준다.
+- 짝을 적는 연산(`todoistId`만 바꾸는 `task.update`)은 Todoist 를 부르지 않는다. 짝을 적어도 다른 칸(제목 · 날짜 · 완료)을 맞추지는 않는다 — 다음에 한쪽에서 고칠 때 맞춰진다.
+- 이미 짝이 있는 사이트 할 일 · 이미 짝으로 쓰인 Todoist id · 지운 사이트 할 일은 후보에서 뺀다.
+
+### 시험
+
+```bash
+node --test scripts/test-todoist.mjs   # 임시 폴더의 연습 파일만 쓰고, Todoist · Claude API 는 가짜 fetch
 ```
 
 ## export-md

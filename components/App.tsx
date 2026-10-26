@@ -8,20 +8,18 @@ import type { StepCounts } from './TimelineChart';
 import { StepModal } from './StepModal';
 import { ScriptsModal } from './ScriptsModal';
 import { NoticeModal } from './NoticeModal';
-import { TodoSection } from './home/TodoSection';
 import { GuideSection } from './home/GuideSection';
 import { useProgress } from './progress/ProgressProvider';
 import { useSheetRouter, type SheetKind } from './use-sheet-router';
 
 // 홈. 머리글 · 내비게이션 · 진행 현황(ProgressProvider) · 사진(PhotosProvider)은 사이트 틀(components/shell/SiteShell)이 맡는다.
-// 구성: (로그인) 「할 일」 → 「단계」(공개 안내: 요약 · 검색 · 주의사항/대화 예시 · 범례 · 14단계) → 꼬리글.
+// 구성: 「단계」(요약 · 검색 · 주의사항/대화 예시 · 범례 · 로그인 전 14단계 「n일째」 막대 / 로그인 후 실제 날짜 타임라인 + 고른 날의 할 일) → 꼬리글.
 // 공개 안내 시트 셋(단계 · 주의사항 · 대화 예시)은 주소 해시(#step-3 · #notice · #scripts)와 함께 열고 닫는다.
 export default function App({ content }: { content: Content }) {
   const { steps, scripts, updates } = content;
   const { status, doc, hasDirty, confirmDiscard } = useProgress();
   const loggedIn = status === 'ready' && !!doc;
   const stepIds = useMemo(() => steps.map((s) => s.id), [steps]);
-  const stepRefs = useMemo(() => steps.map((s) => ({ id: s.id, title: s.title })), [steps]);
 
   // 저장 안 한 편집이 있는 시트는 떠나기 전에 앱 안 확인 창을 거친다(단계 창 = 그 창 안의 폼)
   const isDirty = useCallback((kind: SheetKind) => (kind === 'step' ? hasDirty('modal') : false), [hasDirty]);
@@ -67,7 +65,6 @@ export default function App({ content }: { content: Content }) {
     <>
       <h1 className="sr-only">외도민 타임 라인</h1>
       <div className="flex flex-col gap-6">
-        {loggedIn && <TodoSection steps={stepRefs} defaultStepId={currentId ?? steps[0]?.id ?? 1} />}
         <GuideSection steps={steps} updates={updates} scripts={scripts} statuses={statuses} counts={counts} currentId={currentId}
           onStep={openStep} onNotice={openNotice} onScript={openScript} />
       </div>

@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
     // 사진 시안: 목록 라우트도 어떤 사진이 있는지(readdir) 보므로 둘 다 폴더째 싣는다. 키는 라우트 경로 글롭('[file]' 은 글롭에서 글자 묶음이라 '*')
     '/api/restyle': ['./private/restyle/**/*'],
     '/api/restyle/*': ['./private/restyle/**/*'],
+    // Todoist 웹훅: 새 할 일의 단계를 고를 때 단계 이름 · 설명(공개 콘텐츠)을 fs 로 읽는다
+    '/api/todoist/webhook': ['./content/*.json', './fixtures/content-sample/*.json'],
   },
   // 옛 주소(구조 개편 전 북마크 · 홈 화면 바로가기)
   async redirects() {

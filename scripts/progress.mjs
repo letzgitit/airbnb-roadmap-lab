@@ -17,10 +17,12 @@ const { opSchema } = await import('../lib/core/validate.ts');
 const { readContent } = await import('../lib/core/content-read.ts');
 const { renderMarkdown, kst } = await import('../lib/core/markdown.ts');
 const { getStore } = await import('../lib/core/store.ts');
+const { pushToTodoist, todoistConfig, pushAllowed, isRealTodoist, planSync, applySync, fetchTodoistLabeled } = await import('../lib/core/todoist-push.ts');
 
 // 손님 링크 주소를 찍을 때 쓰는 사이트 주소(NEXT_PUBLIC_SITE_URL 이 있으면 그것)
 const SITE_URL = 'https://jumoney-oedomin.vercel.app';
 const STATUS = { todo: '시작 전', doing: '진행 중', done: '완료' };
+const AUTO = { claude: 'Claude', keyword: '낱말 규칙', default: '기본 단계' };
 
 function usage(msg) {
   if (msg) console.error(`오류: ${msg}\n`);
@@ -28,9 +30,11 @@ function usage(msg) {
   node scripts/progress.mjs get [--json]
   node scripts/progress.mjs apply <patch.json> [--by <이름>] [--dry-run] [--yes]
   node scripts/progress.mjs export-md <out.md>
+  node scripts/progress.mjs todoist-sync [--yes] [--json]   운영 현황 ↔ Todoist 차이 보기(--yes: 사이트 값으로 맞춤)
   node scripts/progress.mjs export-md <out.md> --doc <progress.json>   (저장소 대신 사이트 /api/progress 응답 파일로)
   --dry-run  지금 저장된 값에 적용해 보기만 하고 쓰지 않음
   --yes      원격(운영) 저장소에 실제로 쓸 때 필요
+  --no-todoist  운영 저장소에 쓰는데 Todoist 토큰이 없을 때, Todoist 에 안 보내는 것을 알고 쓴다는 표시
 자세한 내용: scripts/README-progress.md`);
   process.exit(2);
 }
@@ -54,7 +58,8 @@ function normalize(raw) {
 function describeOp(op) {
   const p = op.patch ? ` ${JSON.stringify(op.patch)}` : '';
   switch (op.op) {
-    case 'task.add': return `할 일 추가 [${op.stepId}단계] "${op.text}"${op.due ? ` 마감 ${op.due}` : ''}${op.kind ? ` 종류 ${op.kind}` : ''}`;
+    case 'task.add': return `할 일 추가 [${op.stepId}단계] "${op.text}"${op.due ? ` 마감 ${op.due}` : ''}${op.kind ? ` 종류 ${op.kind}` : ''}${op.note ? ` 자세히 ${op.note.length}자` : ''}${op.owner ? ` 맡은 사람 ${op.owner}` : ''}`;
+    case 'task.update': if (op.patch && Object.keys(op.patch).length === 1 && 'todoistId' in op.patch) return `할 일 ${op.id} Todoist 짝 ${op.patch.todoistId ?? '끊기'}`; return `${op.op} ${op.id}${op.baseVersion !== undefined ? ` (v${op.baseVersion})` : ''}${op.force ? ' 덮어쓰기' : ''}${p}`;
     case 'log.add': return `기록 추가 [${op.kind}] "${op.text}"`;
     case 'property.add': return `집 정보 추가 ${op.label}: ${op.value}`;
     case 'money.add': return `돈 흐름 추가 ${op.date ?? '날짜 미정'} "${op.text}" ${op.amount ?? '금액 미정'}만 (${op.via})${op.estimate ? ' 추정' : ''}`;
@@ -85,7 +90,10 @@ function printGet(doc, steps) {
   console.log('\n[할 일]');
   if (!live.length) console.log('  (없음)');
   for (const t of live.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'))) {
-    console.log(`  ${t.done ? '☑' : '☐'} ${t.kind ? `[${t.kind}] ` : ''}${t.text}  — ${t.stepId}단계${t.due ? ` · 마감 ${t.due}` : ''}${t.done ? ` · ${t.doneBy}` : ''}  (id ${t.id} v${t.version})`);
+    const auto = t.autoFill ? ` · 단계 자동(${AUTO[t.autoFill] ?? t.autoFill})` : '';
+    console.log(`  ${t.done ? '☑' : '☐'} ${t.kind ? `[${t.kind}] ` : ''}${t.text}  — ${t.stepId}단계${auto}${t.owner ? ` · ${t.owner}` : ''}${t.due ? ` · 마감 ${t.due}` : ''}${t.done ? ` · ${t.doneBy}` : ''}  (id ${t.id} v${t.version}${t.todoistId ? ` · todoist ${t.todoistId}` : ''})`);
+    if (t.note) for (const line of t.note.split('\n')) console.log(`      ${line}`);
+    if (t.todoistError) console.log(`      ⚠️ Todoist 보내기 실패: ${t.todoistError} (todoist-sync 로 다시 맞춤)`);
   }
   const money = Object.values(doc.money ?? {}).filter((m) => !m.deletedAt).sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
   console.log(`\n[돈 흐름] 출발점 ${doc.plan ? `현금 ${doc.plan.cash ?? '-'}만 · 마통 여유 ${doc.plan.credit ?? '-'}만  (plan v${doc.plan.version})` : '(없음, plan v0)'}`);
@@ -122,7 +130,7 @@ function assertNotTracked(out) {
 
 // ── 인자 ──
 const [cmd, ...rest] = process.argv.slice(2);
-const KNOWN = new Set(['--json', '--dry-run', '--yes', '--by', '--doc']);
+const KNOWN = new Set(['--json', '--dry-run', '--yes', '--by', '--doc', '--no-todoist']);
 const byIdx = rest.indexOf('--by');
 const byFlag = byIdx >= 0 ? rest[byIdx + 1] : undefined;
 if (byIdx >= 0 && (!byFlag || byFlag.startsWith('--'))) usage('--by 뒤에 이름이 필요합니다.');
@@ -187,6 +195,13 @@ try {
       console.error('원격(운영) 저장소입니다. 위 내용이 맞으면 --yes 를 붙여 다시 실행하세요(미리 보기는 --dry-run).');
       process.exit(3);
     }
+    // 운영에 할 일을 쓰는데 Todoist 토큰이 없으면 Todoist 와 어긋난다 → 알고 쓰는지 묻는다
+    const hasTaskOps = items.some((it) => it.op.op.startsWith('task.'));
+    if (remote && !dryRun && hasTaskOps && !todoistConfig() && !flags.has('--no-todoist')) {
+      console.error('🔴 운영 저장소에 할 일을 쓰는데 TODOIST_API_TOKEN 이 없어 Todoist 에 반영되지 않습니다.');
+      console.error('   토큰을 같이 받아 다시 실행하거나, Todoist 에 안 보내도 되면 --no-todoist 를 붙이세요(나중에 todoist-sync 로 맞출 수 있음).');
+      process.exit(4);
+    }
 
     // 3) 연속된 같은 by 끼리 묶어 적용(순서 유지). dry-run 은 앞 묶음 결과가 다음 묶음에 이어지도록 한 번에 돌린다.
     const groups = [];
@@ -203,7 +218,17 @@ try {
     outcomes.sort((a, b) => a.index - b.index);
     const applied = outcomes.filter((o) => o.ok).map((o) => ({ index: o.index, op: list[o.index].op, result: o.result }));
     const failed = outcomes.filter((o) => !o.ok).map((o) => ({ index: o.index, op: list[o.index].op, status: o.status, error: o.error }));
-    console.log(JSON.stringify({ store: store.kind, written: !dryRun && applied.length > 0, dryRun, applied, failed }, null, 2));
+    // 할 일이 바뀌었으면 Todoist 에도 반영(TODOIST_API_TOKEN 이 없으면 건너뜀). 결과는 stderr 한 줄.
+    let todoist;
+    if (!dryRun && !flags.has('--no-todoist')) {
+      const taskOps = outcomes.filter((o) => o.ok && items[o.index].op.op.startsWith('task.')).map((o) => ({ op: items[o.index].op, result: o.result }));
+      if (taskOps.length) {
+        const r = await pushToTodoist(taskOps);
+        todoist = r.skipped ? { skipped: r.skipped } : { calls: r.calls.length, linked: r.linked, errors: r.errors };
+        console.error(r.skipped === 'no_token' ? '[Todoist] 토큰 없음 — 반영 건너뜀' : r.skipped === 'local_store' ? '[Todoist] 로컬 연습 저장소 — 반영 건너뜀(운영 저장소일 때만 보낸다)' : `[Todoist] 호출 ${r.calls.length}건 · 짝 적음 ${r.linked.length}건${r.errors.length ? ` · 실패 ${r.errors.length}건` : ''}`);
+      }
+    }
+    console.log(JSON.stringify({ store: store.kind, written: !dryRun && applied.length > 0, dryRun, applied, failed, ...(todoist ? { todoist } : {}) }, null, 2));
     if (failed.length) process.exitCode = 1;
   } else if (cmd === 'export-md') {
     if (!pos[0]) usage('출력 파일 경로가 필요합니다.');
@@ -214,6 +239,27 @@ try {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, md, 'utf8');
     console.log(JSON.stringify({ ok: true, out, version: doc.version }));
+  } else if (cmd === 'todoist-sync') {
+    // 운영 현황 ↔ Todoist(라벨 붙은 끝나지 않은 할 일) 차이를 보여 주고, --yes 면 사이트 값으로 맞춘다
+    const cfg = todoistConfig();
+    if (!cfg) { console.error('오류: TODOIST_API_TOKEN 이 없습니다. 운영 env 를 받은 괄호 안에서 실행하세요(README-progress 맨 위).'); process.exit(2); }
+    if (!pushAllowed(cfg)) { console.error('오류: 로컬 연습 저장소입니다. todoist-sync 는 운영 저장소에서만 돕니다(시험은 TODOIST_API_BASE 에 가짜 서버).'); process.exit(2); }
+    if (!isRealTodoist(cfg)) console.error(`[Todoist] 가짜 서버 ${cfg.base}`);
+    const doc = await readDoc();
+    const rows = planSync(doc, await fetchTodoistLabeled());
+    const LABEL = { differs: '값이 다름', missing: 'Todoist 에 없음(완료 · 삭제됨?)', error: '보내기 실패 표시', unpaired: '짝 없음', todoistOnly: 'Todoist 에만' };
+    const count = Object.fromEntries(Object.keys(LABEL).map((k) => [k, rows.filter((r) => r.kind === k).length]));
+    for (const k of ['differs', 'error', 'missing']) for (const r of rows.filter((x) => x.kind === k)) {
+      console.error(`  [${LABEL[k]}] ${r.text}  (사이트 ${r.siteId} · todoist ${r.todoistId})${r.fields ? `  칸: ${r.fields.join(', ')}` : ''}${r.error ? `  ${r.error}` : ''}`);
+    }
+    console.error(`차이 ${count.differs} · 실패 표시 ${count.error} · Todoist 에 없음 ${count.missing} · 짝 없음 ${count.unpaired} · Todoist 에만 ${count.todoistOnly}`);
+    let pushed = null;
+    if (flags.has('--yes')) {
+      pushed = await applySync(rows);
+      console.error(`[Todoist] 맞춤: 호출 ${pushed.calls.length}건${pushed.errors.length ? ` · 실패 ${pushed.errors.length}건` : ''}`);
+    } else if (count.differs + count.error) console.error('사이트 값으로 맞추려면 --yes 를 붙이세요. 「Todoist 에 없음」 · 「짝 없음」 · 「Todoist 에만」은 손대지 않습니다(짝 맞추기는 scripts/todoist-match.mjs).');
+    console.log(JSON.stringify(flags.has('--json') ? { count, rows, pushed } : { count, pushed }, null, 2));
+    if (pushed?.errors.length) process.exitCode = 1;
   } else usage(cmd ? `모르는 명령 ${cmd}` : undefined);
 } catch (e) {
   if (e instanceof OpError) console.error(JSON.stringify({ error: e.body }));

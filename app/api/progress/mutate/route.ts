@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { getActor } from '@/lib/session';
 import { mutate, OpError } from '@/lib/core/engine';
 import { opSchema } from '@/lib/core/validate';
 import { checkWriteRequest, NO_STORE } from '@/lib/http';
+import { pushToTodoist } from '@/lib/core/todoist-push';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,11 @@ export async function POST(req: Request) {
 
   try {
     const { doc, result } = await mutate(parsed.data, a.actor);
+    // 할 일이 바뀌었으면 응답을 보낸 뒤 Todoist 에도 반영(토큰 없으면 건너뜀, 실패해도 이 응답과 상관없다)
+    if (parsed.data.op.startsWith('task.')) {
+      const op = parsed.data;
+      after(async () => { await pushToTodoist([{ op, result }]).catch(() => undefined); });
+    }
     return NextResponse.json({ doc, result, me: { email: a.actor.email, name: a.actor.name } }, { headers: NO_STORE });
   } catch (e) {
     if (e instanceof OpError) return NextResponse.json(e.body, { status: e.status, headers: NO_STORE });

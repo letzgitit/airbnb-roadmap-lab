@@ -23,9 +23,29 @@ export interface StepState {
 // 할 일 종류(선택). 없는 할 일(옛 데이터 포함)은 종류를 보이지 않는다 — 옮기는 작업 없이 그대로 읽힌다.
 export const TASK_KINDS = ['결정', '연락', '일정 확정', '구매', '예약', '서류', '공사', '확인'] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
+// 할 일 맡은 사람(선택). 없으면 키가 없다. Todoist 와는 맞추지 않는다.
+export const TASK_OWNERS = ['남편', '아내', '같이'] as const;
+export type TaskOwner = (typeof TASK_OWNERS)[number];
+// Todoist 에서 들어온 새 할 일의 단계 · 종류를 누가 골랐나(사람이 단계나 종류를 고치면 지운다).
+// claude: Claude API · keyword: 낱말 규칙 · default: 둘 다 못 골라 기본 단계
+export const AUTO_FILL_BY = ['claude', 'keyword', 'default'] as const;
+export type AutoFillBy = (typeof AUTO_FILL_BY)[number];
+// Todoist 와 맞추는 칸만 모은 값(lib/core/todoist.ts)
+export interface TodoistState { text: string; note: string | null; due: string | null; done: boolean; deleted: boolean }
 export interface TaskItem {
   id: string; stepId: number; text: string; due: string | null; done: boolean;
   kind?: TaskKind | null;
+  // 자세한 내용(선택, ≤1000자). 제목(text)은 짧게 두고 길게 적을 것은 여기에. 없으면 키가 없다.
+  note?: string | null;
+  owner?: TaskOwner | null;
+  // 2026-10-27 추가(선택): Todoist 짝. todoistId = 짝인 Todoist 할 일 id, todoistAt = 마지막으로 반영한 Todoist 웹훅의 triggered_at
+  todoistId?: string | null;
+  todoistAt?: string | null;
+  // Todoist 에 지금 있다고 아는 값(마지막으로 보냈거나 웹훅으로 받은 값). 사이트 값과 다르면 아직 못 보낸 것
+  todoistSent?: TodoistState | null;
+  // 마지막 사이트 → Todoist 보내기가 실패했으면 그 까닭(짧은 글, 토큰 · 본문 없음). 성공하면 지운다
+  todoistError?: string | null;
+  autoFill?: AutoFillBy | null;
   doneBy: string | null; doneAt: string | null;
   version: number; createdAt: string; createdBy: string; updatedAt: string; updatedBy: string;
   deletedAt: string | null; deletedBy: string | null;

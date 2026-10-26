@@ -2,7 +2,9 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { RefItem, Step } from '@/lib/core/types';
-import { dayLabel } from '@/lib/client/format';
+import { dayLabel, shortDate, todayStr } from '@/lib/client/format';
+import { stepRanges } from './home/step-dates';
+import { FIXED_DAY0, PLAN_WORD, toTimelineSteps } from './home/timeline-config';
 import { SECTION_ORDER, TAB_LABEL, sectionCount, type StepSection, type StepTab } from '@/lib/client/step-sections';
 import { Sheet } from './Sheet';
 import { TabBar, panelDomId, tabDomId, type TabItem } from './TabBar';
@@ -26,6 +28,9 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
   onClose: () => void; beforeClose: () => Promise<boolean>; onGo: (i: number) => void;
 }) {
   const step = steps[index];
+  const { doc: progressDoc } = useProgress();
+  // 로그인했으면 머리 줄에 우리 실제 기간(홈 타임라인 막대와 같은 계산)
+  const real = loggedIn && progressDoc && step ? stepRanges(toTimelineSteps(steps), progressDoc, todayStr(), FIXED_DAY0).find((r) => r.id === step.id) : null;
   const uid = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<StepTab>('todo');
@@ -65,7 +70,9 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
       eyebrow={
         <span className="flex flex-wrap gap-x-3 text-sm font-normal text-muted">
           <span>{step.id}단계</span>
-          {dayLabel(step.day) && <span className="text-ink-soft">{dayLabel(step.day)}</span>}
+          {/* 로그인했으면 앞말을 붙여 공개 일정과 우리 실제 기간을 나란히(「보통 13~18일째」 「우리 일정 10/13~11/3」) */}
+          {dayLabel(step.day) && <span className="text-ink-soft">{real ? `${PLAN_WORD} ` : ''}{dayLabel(step.day)}</span>}
+          {real && <span className="text-ink-soft">우리 일정 {shortDate(real.from)}~{shortDate(real.to)}</span>}
         </span>
       }
       title={step.title}

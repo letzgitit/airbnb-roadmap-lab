@@ -9,7 +9,7 @@ import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, dateCls, EditBadge, enterSubmit, inputCls, LastEdit, leadCls, oneLine, rowCls, rowText, textBtn,
   TRASH_NOTE, TrashButton, useBusy, useDirty, useEditing, useFormEsc,
 } from '@/components/progress/bits';
-import { KindSelect, type StepRef } from './TaskComposer';
+import { KindSelect, NoteField, OwnerSelect, type StepRef, type TaskOwner, type TaskWithNote } from './TaskComposer';
 
 /**
  * 할 일 한 줄(홈 「할 일」과 단계 시트 「우리 할 일」이 같이 쓴다): [체크 44px] [글 + 보조 한 줄] [휴지통 44px].
@@ -22,24 +22,27 @@ import { KindSelect, type StepRef } from './TaskComposer';
  * - inset: 카드 안이면 펼친 폼 좌우에 여백을 둔다.
  * - quietLate: 홈 「기한 지남」 묶음 안의 줄. 묶음 이름이 이미 빨강이라 날짜 보조 줄은 muted 로 둔다.
  */
-export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, onEditChange, onToggle, onGone }: {
+export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, onEditChange, onToggle, onGone }: {
   t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
   onEditChange: (id: string, open: boolean) => void; onToggle: (t: TaskItem) => void; onGone: () => void;
 }) {
+  const t = task as TaskWithNote; // 지산판(데이터에 note · owner 가 아직 없음)과 같은 코드를 쓰려고 둔 이름
   const { send, toast, confirm } = useProgress();
   const ed = useEditing(`task:${t.id}`);
   const [text, setText] = useState('');
   const [due, setDue] = useState('');
   const [kind, setKind] = useState<TaskKind | ''>('');
+  const [note, setNote] = useState('');
+  const [owner, setOwner] = useState<TaskOwner | ''>('');
   const [sid, setSid] = useState(t.stepId);
   const [moveOpen, setMoveOpen] = useState(false);
   const [base, setBase] = useState(t.version);
-  const [orig, setOrig] = useState<{ text: string; due: string; kind: TaskKind | ''; sid: number }>({ text: '', due: '', kind: '', sid: t.stepId });
+  const [orig, setOrig] = useState<{ text: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; sid: number }>({ text: '', due: '', kind: '', owner: '', note: '', sid: t.stepId });
   const { busy, run } = useBusy();
   const textBtnRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const dl = dueLabel(t.due, todayStr());
-  const dirty = ed.open && (text !== orig.text || due !== orig.due || kind !== orig.kind || sid !== orig.sid);
+  const dirty = ed.open && (text !== orig.text || due !== orig.due || kind !== orig.kind || note !== orig.note || owner !== orig.owner || sid !== orig.sid);
   useDirty(`form:task:${t.id}`, dirty, scope);
   const esc = useFormEsc(dirty, ed.stop);
   const deleted = !!t.deletedAt;
@@ -66,7 +69,7 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
     onGone();
   };
   // 상대가 지운 글을 내 폼 내용 그대로 새 할 일로 올린다
-  const saveAsNew = () => run(() => send({ op: 'task.add', stepId: listStepId ?? sid, text, due: due || null, ...(kind ? { kind } : {}) }, {
+  const saveAsNew = () => run(() => send({ op: 'task.add', stepId: listStepId ?? sid, text, due: due || null, ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(owner ? { owner } : {}) }, {
     onSuccess: () => { ed.stop(); onGone(); },
   }));
 
@@ -80,11 +83,11 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
             e.preventDefault();
             if (deleted) { if (text.trim()) void saveAsNew(); return; }
             const leaving = listStepId != null && sid !== listStepId; // 다른 단계로 옮겨 저장하면 이 목록에서 줄이 사라진다
-            void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch: { text, due: due || null, stepId: sid, ...(kind !== orig.kind ? { kind: kind || null } : {}) } }, {
+            void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch: { text, due: due || null, stepId: sid, ...(kind !== orig.kind ? { kind: kind || null } : {}), ...(note !== orig.note ? { note: note.trim() || null } : {}), ...(owner !== orig.owner ? { owner: owner || null } : {}) } }, {
               onSuccess: () => { ed.stop(); if (leaving) onGone(); },
               onTakeLatest: (cur) => {
-                const o = { text: String(cur.text ?? ''), due: String(cur.due ?? ''), kind: (cur.kind ?? '') as TaskKind | '', sid: typeof cur.stepId === 'number' ? cur.stepId : sid };
-                setText(o.text); setDue(o.due); setKind(o.kind); setSid(o.sid); setOrig(o);
+                const o = { text: String(cur.text ?? ''), due: String(cur.due ?? ''), kind: (cur.kind ?? '') as TaskKind | '', owner: (cur.owner ?? '') as TaskOwner | '', note: String(cur.note ?? ''), sid: typeof cur.stepId === 'number' ? cur.stepId : sid };
+                setText(o.text); setDue(o.due); setKind(o.kind); setOwner(o.owner); setNote(o.note); setSid(o.sid); setOrig(o);
                 setBase(Number(cur.version) || 0);
               },
             }));
@@ -97,8 +100,10 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
                 <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
               </label>
               <KindSelect value={kind} onChange={setKind} />
+              <OwnerSelect value={owner} onChange={setOwner} />
               {!deleted && !moveOpen && <button type="button" className={`${textBtn} ml-auto`} onClick={() => setMoveOpen(true)}>다른 단계로 옮기기</button>}
             </div>
+            <NoteField value={note} onChange={setNote} />
             {!deleted && moveOpen && (
               <select className={inputCls} value={sid} onChange={(e) => setSid(Number(e.target.value))} aria-label="단계 이동">
                 {steps.slice(0, STEP_COUNT).map((s) => <option key={s.id} value={s.id}>{s.id}. {s.title}</option>)}
@@ -131,16 +136,19 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
       </label>
       <button ref={textBtnRef} type="button" aria-label={`${t.text} 수정`} className="min-w-0 flex-1 py-3 text-left"
         onClick={() => {
-          const o = { text: t.text, due: t.due ?? '', kind: (t.kind ?? '') as TaskKind | '', sid: t.stepId };
-          setText(o.text); setDue(o.due); setKind(o.kind); setSid(o.sid); setOrig(o); setBase(t.version); setMoveOpen(false); ed.start();
+          const o = { text: t.text, due: t.due ?? '', kind: (t.kind ?? '') as TaskKind | '', owner: (t.owner ?? '') as TaskOwner | '', note: t.note ?? '', sid: t.stepId };
+          setText(o.text); setDue(o.due); setKind(o.kind); setOwner(o.owner); setNote(o.note); setSid(o.sid); setOrig(o); setBase(t.version); setMoveOpen(false); ed.start();
         }}>
-        <span className={`line-clamp-2 ${rowText} ${t.done ? 'text-muted line-through' : ''}`}>{t.text}</span>
+        <span className={`block truncate ${rowText} ${t.done ? 'text-muted line-through' : ''}`}>{t.text}</span>
         {/* 보조 줄: 날짜(ink-soft) · 남은 날 · (홈) n단계 이름 + 상대가 편집 중일 때의 표시. 항목 사이는 점 없이 12px 간격. 다 없으면 줄 자체가 없다.
             「n일 지남」 빨강은 기한 지남 묶음 밖에서만(quietLate = 묶음 이름이 이미 빨강으로 말하므로 줄은 muted) */}
         <span className="mt-0.5 flex min-w-0 items-center gap-x-3 text-sm font-normal text-muted empty:hidden">
           {dl && <span className={`shrink-0 whitespace-nowrap ${t.done || quietLate ? '' : 'text-ink-soft'}`}>{dl.date}</span>}
           {dl && <span className={`shrink-0 whitespace-nowrap ${late && !quietLate ? 'text-danger-ink' : ''}`}>{dl.rel}</span>}
           {t.kind && <span className="shrink-0 whitespace-nowrap">{t.kind}</span>}
+          {t.autoFill && <span className="shrink-0 whitespace-nowrap" title="단계 · 종류를 자동으로 골랐어요. 누르면 바꿀 수 있어요">자동으로 고름</span>}
+          {t.owner && <span className="shrink-0 whitespace-nowrap">{t.owner}</span>}
+          {t.note && <span className="shrink-0" title="메모 있음"><i className="far fa-note-sticky" aria-hidden /><span className="sr-only">메모 있음</span></span>}
           {showStep && <span className="min-w-0 truncate">{t.stepId}단계{stepName ? ` ${stepName}` : ''}</span>}
           <EditBadge k={`task:${t.id}`} />
         </span>

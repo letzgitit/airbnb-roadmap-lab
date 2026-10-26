@@ -20,6 +20,13 @@ function byDue(a: TaskItem, b: TaskItem) {
   return ad === bd ? a.stepId - b.stepId || a.createdAt.localeCompare(b.createdAt) : ad.localeCompare(bd);
 }
 
+// 할 일 자세한 내용: 제목 줄 아래 두 칸 들여쓴 줄(빈 줄은 건너뜀)
+function noteLines(t: TaskItem): string[] {
+  // 메모 안의 `- [ ]` · `[x]` 도 ☐ · ☑ 로(볼트 Todoist 플러그인이 할 일로 잡지 않게)
+  return (t.note ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
+    .map((l) => `  ${l.replace(/\[ \]/g, '☐').replace(/\[[xX]\]/g, '☑')}`);
+}
+
 // 🔴 할 일 줄은 `- [ ]` 를 쓰지 않는다(볼트 Todoist 플러그인이 체크박스를 할 일로 흡수). 일반 불릿 + ☐/☑ 기호만 쓴다.
 export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title'>[], nowIso: string): string {
   const live = Object.values(doc.tasks).filter((t) => !t.deletedAt);
@@ -66,14 +73,18 @@ export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title
   const today = kst(nowIso).slice(0, 10);
   for (const t of open) {
     const late = t.due && t.due < today ? ' ⚠️지남' : '';
-    out.push(`- ☐ ${t.kind ? `[${t.kind}] ` : ''}${t.text} — ${t.stepId}단계 ${stepTitle(t.stepId)}${t.due ? ` · 마감 ${t.due}${late}` : ''}`);
+    out.push(`- ☐ ${t.kind ? `[${t.kind}] ` : ''}${t.text} — ${t.stepId}단계 ${stepTitle(t.stepId)}${t.autoFill ? ' (단계 자동)' : ''}${t.owner ? ` · ${t.owner}` : ''}${t.due ? ` · 마감 ${t.due}${late}` : ''}`);
+    out.push(...noteLines(t));
   }
   out.push('');
   out.push('<details>');
   out.push(`<summary>완료 (${done.length})</summary>`);
   out.push('');
   if (done.length === 0) out.push('- (없음)');
-  for (const t of done) out.push(`- ☑ ${t.text} — ${t.stepId}단계${t.doneBy ? ` · ${t.doneBy} ${kst(t.doneAt).slice(0, 10)}` : ''}`);
+  for (const t of done) {
+    out.push(`- ☑ ${t.text} — ${t.stepId}단계${t.owner ? ` · ${t.owner}` : ''}${t.doneBy ? ` · ${t.doneBy} ${kst(t.doneAt).slice(0, 10)}` : ''}`);
+    out.push(...noteLines(t));
+  }
   out.push('');
   out.push('</details>');
   out.push('');

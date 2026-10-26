@@ -1,13 +1,40 @@
 'use client';
 
 import { useState } from 'react';
-import { STEP_COUNT, TASK_KINDS, type TaskKind } from '@/lib/core/types';
+import { STEP_COUNT, TASK_KINDS, TASK_OWNERS, type TaskItem, type TaskKind, type TaskOwner } from '@/lib/core/types';
 import { useProgress, type DirtyScope } from '@/components/progress/ProgressProvider';
 import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, dateCls, enterSubmit, inputCls, oneLine, useBusy, useDirty, useFormEsc,
 } from '@/components/progress/bits';
 
 export interface StepRef { id: number; title: string }
+
+// 할 일 메모 · 담당 · 자동 분류 표시는 데이터(lib/core/types 의 TaskItem)에 있다. 지산판과 같은 줄 코드를 쓰려고 이름만 다시 내보낸다.
+export { TASK_OWNERS, type TaskOwner } from '@/lib/core/types';
+export type TaskWithNote = TaskItem;
+export const NOTE_MAX = 1000;
+
+/** 담당 고르기(선택). 빈 값 = 안 정함. 「같이」는 남편 · 아내 걸러 보기 둘 다에 보인다. */
+export function OwnerSelect({ value, onChange }: { value: TaskOwner | ''; onChange: (v: TaskOwner | '') => void }) {
+  return (
+    <label className={`flex items-center gap-2 ${labelCls}`}>담당
+      <select className={dateCls} value={value} onChange={(e) => onChange(e.target.value as TaskOwner | '')} aria-label="담당">
+        <option value="">안 정함</option>
+        {TASK_OWNERS.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/** 메모 칸(새 할 일 · 고치는 폼 공용). 여러 줄, 자세한 내용은 여기에 — 할 일 제목은 한 줄로 짧게. */
+export function NoteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <label className={`block ${labelCls}`}>메모
+      <AutoTextarea className={`${inputCls} mt-1`} rows={2} value={value} maxLength={NOTE_MAX} placeholder="자세한 내용(선택)"
+        onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
 
 const labelCls = 'text-sm font-normal text-ink-soft';
 
@@ -26,26 +53,29 @@ export function KindSelect({ value, onChange }: { value: TaskKind | ''; onChange
 /**
  * 새 할 일 입력: 목록 첫 줄 「＋ 할 일 추가」를 누르면 그 자리에서 펼쳐진다. Enter = 추가, Esc = 취소(쓰던 글이 있으면 확인).
  * steps 를 주면(홈) 「단계」를 고르는 칸이 생기고 기본값은 stepId(지금 단계)다. 안 주면(단계 시트) stepId 로 고정.
+ * initialDue: 마감일 칸의 처음 값(홈 타임라인에서 고른 날). 처음 값 그대로면 「쓰던 글」로 보지 않는다.
  */
-export function TaskComposer({ stepId, steps, scope, onClose }: {
-  stepId: number; steps?: StepRef[]; scope: DirtyScope; onClose: () => void;
+export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '' }: {
+  stepId: number; steps?: StepRef[]; scope: DirtyScope; onClose: () => void; initialDue?: string;
 }) {
   const { send } = useProgress();
   const [text, setText] = useState('');
-  const [due, setDue] = useState('');
+  const [due, setDue] = useState(initialDue);
+  const [note, setNote] = useState('');
+  const [owner, setOwner] = useState<TaskOwner | ''>('');
   const [kind, setKind] = useState<TaskKind | ''>('');
   const [sid, setSid] = useState(stepId);
   const { busy, run } = useBusy();
-  const dirty = text.trim() !== '' || due !== '' || kind !== '';
+  const dirty = text.trim() !== '' || due !== initialDue || kind !== '' || owner !== '' || note.trim() !== '';
   useDirty(`form:add-task:${steps ? 'home' : stepId}`, dirty, scope);
   const esc = useFormEsc(dirty, onClose);
   return (
     <form className={composerCls} onKeyDown={esc} onSubmit={(e) => {
       e.preventDefault();
       if (!text.trim()) return;
-      void run(() => send({ op: 'task.add', stepId: sid, text, due: due || null, ...(kind ? { kind } : {}) }, { onSuccess: () => { setText(''); setDue(''); setKind(''); onClose(); } }));
+      void run(() => send({ op: 'task.add', stepId: sid, text, due: due || null, ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(owner ? { owner } : {}) }, { onSuccess: () => { setText(''); setDue(initialDue); setKind(''); setOwner(''); setNote(''); onClose(); } }));
     }}>
-      <AutoTextarea className={inputCls} value={text} maxLength={200} autoFocus aria-label="새 할 일" placeholder="할 일을 적어 주세요"
+      <AutoTextarea className={inputCls} value={text} maxLength={200} autoFocus aria-label="새 할 일" placeholder="짧게 한 줄로(자세한 건 메모에)"
         onChange={(e) => setText(oneLine(e.target.value))} onKeyDown={enterSubmit} />
       {steps && (
         <label className={`block ${labelCls}`}>단계
@@ -59,7 +89,11 @@ export function TaskComposer({ stepId, steps, scope, onClose }: {
           <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
         </label>
         <KindSelect value={kind} onChange={setKind} />
-        <div className="ml-auto flex gap-2">
+        <OwnerSelect value={owner} onChange={setOwner} />
+      </div>
+      <NoteField value={note} onChange={setNote} />
+      <div className="flex justify-end">
+        <div className="flex gap-2">
           <button type="button" className={btnGhost} onClick={onClose}>취소</button>
           <button className={btnPrimary} disabled={busy || !text.trim()}>추가</button>
         </div>
