@@ -12,7 +12,7 @@ import { textBtn } from '@/components/progress/bits';
 // room3d:restore · room3d:auth(값) 로 넘기고, iframe 이 room3d:state 로 알려 주면 저장한다. 로그인 안 했으면 저장 없이 기본안.
 // iframe 쪽 출처가 null 이라 '*' 로만 보낼 수 있다 — 그래서 상태(항목 id · 문 · 시안)와 값 표만 싣는다.
 const MIN_H = 480;
-const MAX_H = 3600;   // 폭이 좁은 폰에서 시안 내용이 3000px 남짓이라 안쪽 스크롤이 안 생기게(2026-10-26 실측: 폰 약 3040 · PC 약 2480)
+const MAX_H = 5000;   // 폭이 좁은 폰에서 시안 내용이 3000px 남짓 + 가구 고르기 목록(장면 아래, 목록은 창 높이 60% 안에서 밀림)까지 안쪽 스크롤이 안 생기게
 const DEFAULT_H = 640;
 
 type State = 'checking' | 'ok' | 'anon' | 'forbidden' | 'missing' | 'error';

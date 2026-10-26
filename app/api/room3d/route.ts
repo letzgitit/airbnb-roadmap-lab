@@ -37,7 +37,8 @@ const SITE_STYLE =
   `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${DARK_VARS}}}` +
   `:root[data-theme="dark"]{${DARK_VARS}}` +
   `body{font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}` +
-  `input[type=checkbox]{accent-color:#0b7285}` +
+  // 체크 표시 · 고른 칸은 강조색이 아니라 ink(사이트에서 강조색 면은 머리글 띠 하나뿐 — DESIGN.md 2.2)
+  `input[type=checkbox]{accent-color:var(--text)}` +
   `h1{display:none}` +
   // 장면 높이: 창 높이의 64%(폰 62%)이되, 위에서 볼 땐 집 모양(가로가 세로의 약 1.4배)에 맞춰 폭의 72%를 넘지 않게 — 집이 꽉 차고 위아래 빈칸이 안 남는다.
   // 눈높이로 걸을 땐 방 안이라 빈칸이 없으니 원래 높이 그대로. cqw = .stage 폭 기준.
