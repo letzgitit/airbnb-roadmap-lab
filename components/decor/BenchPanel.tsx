@@ -523,6 +523,10 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
           </button>
         )}
       </div>
+      {/* 원문 보기: 맨 아래에 있으면 못 찾아서(2026-10-26) 사진 바로 밑(제목 위)에 주 단추로 — 사진이 세로로 길어도 폰 첫 화면에 걸리게. 사진 밖이라 좌우 화살표 · 밀기와 겹치지 않는다 */}
+      <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${btnPrimary} mt-3 w-full justify-center min-[560px]:w-auto`}>
+        원문 보기<i className="fas fa-arrow-up-right-from-square text-sm" aria-hidden /><span className="sr-only">(새 탭)</span>
+      </a>
       <h2 className="mt-3 break-words text-xl font-bold text-ink">{it.title}</h2>
       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
         <span>{it.source}</span>
@@ -530,10 +534,6 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
         {it.link && <span>{withGa(it.link.addedBy)} 올림</span>}
         {it.link && <span className="text-ink-soft">{shortDate(it.link.addedAt.slice(0, 10))}</span>}
       </p>
-      {/* 원문 보기: 맨 아래에 있으면 못 찾아서(2026-10-26) 제목 · 출처 바로 밑에 주 단추로. 사진 밖이라 좌우 화살표 · 밀기와 겹치지 않는다 */}
-      <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${btnPrimary} mt-3 w-full justify-center min-[560px]:w-auto`}>
-        원문 보기<i className="fas fa-arrow-up-right-from-square text-sm" aria-hidden /><span className="sr-only">(새 탭)</span>
-      </a>
       <div className="mt-4 flex flex-col gap-4">
         {it.link?.note && (
           <div><Label>{displayName(it.link.addedBy)}의 메모</Label><p className="mt-0.5 break-words text-base leading-relaxed text-ink-soft">{it.link.note}</p></div>
