@@ -20,8 +20,12 @@ export interface StepState {
   status: StepStatus; targetDate: string | null; note: string;
   version: number; updatedAt: string; updatedBy: string;
 }
+// 할 일 종류(선택). 없는 할 일(옛 데이터 포함)은 종류를 보이지 않는다 — 옮기는 작업 없이 그대로 읽힌다.
+export const TASK_KINDS = ['결정', '연락', '일정 확정', '구매', '예약', '서류', '공사', '확인'] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
 export interface TaskItem {
   id: string; stepId: number; text: string; due: string | null; done: boolean;
+  kind?: TaskKind | null;
   doneBy: string | null; doneAt: string | null;
   version: number; createdAt: string; createdBy: string; updatedAt: string; updatedBy: string;
   deletedAt: string | null; deletedBy: string | null;

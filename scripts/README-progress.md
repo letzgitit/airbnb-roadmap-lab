@@ -51,8 +51,9 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 {
   "by": "claude",
   "ops": [
-    { "op": "task.add", "stepId": 2, "text": "구청 담당자에게 전화하기", "due": "2026-10-25" },
+    { "op": "task.add", "stepId": 2, "text": "구청 담당자에게 전화하기", "due": "2026-10-25", "kind": "연락" },
     { "op": "task.update", "id": "t_xxxxxxxxxxxx", "baseVersion": 1, "patch": { "text": "구청 전화(오후)", "due": "2026-10-26" } },
+    { "op": "task.update", "id": "t_xxxxxxxxxxxx", "baseVersion": 2, "patch": { "kind": "서류" } },
     { "op": "task.update", "id": "t_xxxxxxxxxxxx", "patch": { "done": true } },
     { "op": "task.delete", "id": "t_xxxxxxxxxxxx" },
     { "op": "task.restore", "id": "t_xxxxxxxxxxxx" },
@@ -69,8 +70,8 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 
 | 연산 | 필수 필드 | 비고 |
 |---|---|---|
-| `task.add` | `stepId`(1~14), `text`(1~200자) | `due`: `YYYY-MM-DD` 또는 null |
-| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done`. **`done`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
+| `task.add` | `stepId`(1~14), `text`(1~200자) | `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다) |
+| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기). **`done`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
 | `task.delete` / `task.restore` | `id` | 소프트 삭제(30일 보관 후 정리) |
 | `step.update` | `stepId`, `baseVersion`, `patch` | `patch`: `status`(`todo` `doing` `done`) `targetDate` `note`(≤1000자). 아직 한 번도 안 고친 단계의 version은 0 |
 | `log.add` | `kind`(`결정` `통화` `일정` `메모`), `text`(≤1000자) | 「현황 메모/결정 기록」 |

@@ -66,7 +66,7 @@ export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title
   const today = kst(nowIso).slice(0, 10);
   for (const t of open) {
     const late = t.due && t.due < today ? ' ⚠️지남' : '';
-    out.push(`- ☐ ${t.text} — ${t.stepId}단계 ${stepTitle(t.stepId)}${t.due ? ` · 마감 ${t.due}${late}` : ''}`);
+    out.push(`- ☐ ${t.kind ? `[${t.kind}] ` : ''}${t.text} — ${t.stepId}단계 ${stepTitle(t.stepId)}${t.due ? ` · 마감 ${t.due}${late}` : ''}`);
   }
   out.push('');
   out.push('<details>');

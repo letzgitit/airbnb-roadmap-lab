@@ -127,6 +127,7 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
         due: op.due ?? null, done: false, doneBy: null, doneAt: null,
         version: 1, createdAt: iso, createdBy: actor.name, updatedAt: iso, updatedBy: actor.name,
         deletedAt: null, deletedBy: null,
+        ...(op.kind ? { kind: op.kind } : {}),
       };
       doc.tasks[t.id] = t;
       touch(doc, actor, iso, `할 일 추가: ${clip(t.text)}`);

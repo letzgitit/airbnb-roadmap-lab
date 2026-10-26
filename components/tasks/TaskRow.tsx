@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { TaskItem } from '@/lib/core/types';
+import type { TaskItem, TaskKind } from '@/lib/core/types';
 import { STEP_COUNT } from '@/lib/core/types';
 import { dueLabel, todayStr } from '@/lib/client/format';
 import { useProgress, type DirtyScope } from '@/components/progress/ProgressProvider';
@@ -9,7 +9,7 @@ import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, dateCls, EditBadge, enterSubmit, inputCls, LastEdit, leadCls, oneLine, rowCls, rowText, textBtn,
   TRASH_NOTE, TrashButton, useBusy, useDirty, useEditing, useFormEsc,
 } from '@/components/progress/bits';
-import type { StepRef } from './TaskComposer';
+import { KindSelect, type StepRef } from './TaskComposer';
 
 /**
  * 할 일 한 줄(홈 「할 일」과 단계 시트 「우리 할 일」이 같이 쓴다): [체크 44px] [글 + 보조 한 줄] [휴지통 44px].
@@ -30,15 +30,16 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
   const ed = useEditing(`task:${t.id}`);
   const [text, setText] = useState('');
   const [due, setDue] = useState('');
+  const [kind, setKind] = useState<TaskKind | ''>('');
   const [sid, setSid] = useState(t.stepId);
   const [moveOpen, setMoveOpen] = useState(false);
   const [base, setBase] = useState(t.version);
-  const [orig, setOrig] = useState({ text: '', due: '', sid: t.stepId });
+  const [orig, setOrig] = useState<{ text: string; due: string; kind: TaskKind | ''; sid: number }>({ text: '', due: '', kind: '', sid: t.stepId });
   const { busy, run } = useBusy();
   const textBtnRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const dl = dueLabel(t.due, todayStr());
-  const dirty = ed.open && (text !== orig.text || due !== orig.due || sid !== orig.sid);
+  const dirty = ed.open && (text !== orig.text || due !== orig.due || kind !== orig.kind || sid !== orig.sid);
   useDirty(`form:task:${t.id}`, dirty, scope);
   const esc = useFormEsc(dirty, ed.stop);
   const deleted = !!t.deletedAt;
@@ -65,7 +66,7 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
     onGone();
   };
   // 상대가 지운 글을 내 폼 내용 그대로 새 할 일로 올린다
-  const saveAsNew = () => run(() => send({ op: 'task.add', stepId: listStepId ?? sid, text, due: due || null }, {
+  const saveAsNew = () => run(() => send({ op: 'task.add', stepId: listStepId ?? sid, text, due: due || null, ...(kind ? { kind } : {}) }, {
     onSuccess: () => { ed.stop(); onGone(); },
   }));
 
@@ -79,11 +80,11 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
             e.preventDefault();
             if (deleted) { if (text.trim()) void saveAsNew(); return; }
             const leaving = listStepId != null && sid !== listStepId; // 다른 단계로 옮겨 저장하면 이 목록에서 줄이 사라진다
-            void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch: { text, due: due || null, stepId: sid } }, {
+            void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch: { text, due: due || null, stepId: sid, ...(kind !== orig.kind ? { kind: kind || null } : {}) } }, {
               onSuccess: () => { ed.stop(); if (leaving) onGone(); },
               onTakeLatest: (cur) => {
-                const o = { text: String(cur.text ?? ''), due: String(cur.due ?? ''), sid: typeof cur.stepId === 'number' ? cur.stepId : sid };
-                setText(o.text); setDue(o.due); setSid(o.sid); setOrig(o);
+                const o = { text: String(cur.text ?? ''), due: String(cur.due ?? ''), kind: (cur.kind ?? '') as TaskKind | '', sid: typeof cur.stepId === 'number' ? cur.stepId : sid };
+                setText(o.text); setDue(o.due); setKind(o.kind); setSid(o.sid); setOrig(o);
                 setBase(Number(cur.version) || 0);
               },
             }));
@@ -95,6 +96,7 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
               <label className="flex items-center gap-2 text-sm font-normal text-ink-soft">마감일
                 <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
               </label>
+              <KindSelect value={kind} onChange={setKind} />
               {!deleted && !moveOpen && <button type="button" className={`${textBtn} ml-auto`} onClick={() => setMoveOpen(true)}>다른 단계로 옮기기</button>}
             </div>
             {!deleted && moveOpen && (
@@ -129,8 +131,8 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
       </label>
       <button ref={textBtnRef} type="button" aria-label={`${t.text} 수정`} className="min-w-0 flex-1 py-3 text-left"
         onClick={() => {
-          const o = { text: t.text, due: t.due ?? '', sid: t.stepId };
-          setText(o.text); setDue(o.due); setSid(o.sid); setOrig(o); setBase(t.version); setMoveOpen(false); ed.start();
+          const o = { text: t.text, due: t.due ?? '', kind: (t.kind ?? '') as TaskKind | '', sid: t.stepId };
+          setText(o.text); setDue(o.due); setKind(o.kind); setSid(o.sid); setOrig(o); setBase(t.version); setMoveOpen(false); ed.start();
         }}>
         <span className={`line-clamp-2 ${rowText} ${t.done ? 'text-muted line-through' : ''}`}>{t.text}</span>
         {/* 보조 줄: 날짜(ink-soft) · 남은 날 · (홈) n단계 이름 + 상대가 편집 중일 때의 표시. 항목 사이는 점 없이 12px 간격. 다 없으면 줄 자체가 없다.
@@ -138,6 +140,7 @@ export function TaskRow({ t, steps, listStepId, showStep = false, scope, inset =
         <span className="mt-0.5 flex min-w-0 items-center gap-x-3 text-sm font-normal text-muted empty:hidden">
           {dl && <span className={`shrink-0 whitespace-nowrap ${t.done || quietLate ? '' : 'text-ink-soft'}`}>{dl.date}</span>}
           {dl && <span className={`shrink-0 whitespace-nowrap ${late && !quietLate ? 'text-danger-ink' : ''}`}>{dl.rel}</span>}
+          {t.kind && <span className="shrink-0 whitespace-nowrap">{t.kind}</span>}
           {showStep && <span className="min-w-0 truncate">{t.stepId}단계{stepName ? ` ${stepName}` : ''}</span>}
           <EditBadge k={`task:${t.id}`} />
         </span>

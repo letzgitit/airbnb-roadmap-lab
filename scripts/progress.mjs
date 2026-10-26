@@ -54,7 +54,7 @@ function normalize(raw) {
 function describeOp(op) {
   const p = op.patch ? ` ${JSON.stringify(op.patch)}` : '';
   switch (op.op) {
-    case 'task.add': return `할 일 추가 [${op.stepId}단계] "${op.text}"${op.due ? ` 마감 ${op.due}` : ''}`;
+    case 'task.add': return `할 일 추가 [${op.stepId}단계] "${op.text}"${op.due ? ` 마감 ${op.due}` : ''}${op.kind ? ` 종류 ${op.kind}` : ''}`;
     case 'log.add': return `기록 추가 [${op.kind}] "${op.text}"`;
     case 'property.add': return `집 정보 추가 ${op.label}: ${op.value}`;
     case 'money.add': return `돈 흐름 추가 ${op.date ?? '날짜 미정'} "${op.text}" ${op.amount ?? '금액 미정'}만 (${op.via})${op.estimate ? ' 추정' : ''}`;
@@ -85,7 +85,7 @@ function printGet(doc, steps) {
   console.log('\n[할 일]');
   if (!live.length) console.log('  (없음)');
   for (const t of live.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'))) {
-    console.log(`  ${t.done ? '☑' : '☐'} ${t.text}  — ${t.stepId}단계${t.due ? ` · 마감 ${t.due}` : ''}${t.done ? ` · ${t.doneBy}` : ''}  (id ${t.id} v${t.version})`);
+    console.log(`  ${t.done ? '☑' : '☐'} ${t.kind ? `[${t.kind}] ` : ''}${t.text}  — ${t.stepId}단계${t.due ? ` · 마감 ${t.due}` : ''}${t.done ? ` · ${t.doneBy}` : ''}  (id ${t.id} v${t.version})`);
   }
   const money = Object.values(doc.money ?? {}).filter((m) => !m.deletedAt).sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
   console.log(`\n[돈 흐름] 출발점 ${doc.plan ? `현금 ${doc.plan.cash ?? '-'}만 · 마통 여유 ${doc.plan.credit ?? '-'}만  (plan v${doc.plan.version})` : '(없음, plan v0)'}`);

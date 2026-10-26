@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LOG_KINDS, STEP_COUNT } from './types.ts';
+import { LOG_KINDS, STEP_COUNT, TASK_KINDS } from './types.ts';
 
 const dateStr = z.string().refine((s) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
@@ -8,6 +8,8 @@ const dateStr = z.string().refine((s) => {
 }, '날짜 형식은 YYYY-MM-DD 이어야 합니다.');
 
 const nullableDate = z.union([dateStr, z.null()]);
+// 할 일 종류: 정해진 값 하나 또는 null(종류 지우기)
+const taskKind = z.union([z.enum(TASK_KINDS), z.null()], { error: `종류는 ${TASK_KINDS.join(' · ')} 중 하나 또는 null 이어야 합니다.` });
 const text = z.string().trim().min(1, '내용을 입력하세요.').max(200, '200자 이하로 입력하세요.');
 const stepId = z.number().int().min(1).max(STEP_COUNT);
 const version = z.number().int().min(0);
@@ -26,6 +28,7 @@ export const taskPatch = z.object({
   due: nullableDate.optional(),
   stepId: stepId.optional(),
   done: z.boolean().optional(),
+  kind: taskKind.optional(),
 }).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
 
 export const logPatch = z.object({
@@ -86,7 +89,7 @@ export const opSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('guest.add'), name: personName }),
   z.object({ op: z.literal('guest.revoke'), id: gid }),
   z.object({ op: z.literal('step.update'), stepId, baseVersion: version, patch: stepPatch, force: z.boolean().optional() }),
-  z.object({ op: z.literal('task.add'), stepId, text, due: nullableDate.optional() }),
+  z.object({ op: z.literal('task.add'), stepId, text, due: nullableDate.optional(), kind: taskKind.optional() }),
   z.object({ op: z.literal('task.update'), id, baseVersion: version.optional(), patch: taskPatch, force: z.boolean().optional() }),
   z.object({ op: z.literal('task.delete'), id }),
   z.object({ op: z.literal('task.restore'), id }),
