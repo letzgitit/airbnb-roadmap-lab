@@ -79,7 +79,9 @@ export default function App({ content }: { content: Content }) {
       {loggedIn && (
         <DaySheet date={sheet?.kind === 'day' ? sheet.date : ''} open={sheet?.kind === 'day'} shown={shown} steps={tlSteps} currentId={currentId}
           fixedDay0={FIXED_DAY0} marks={FIXED_MARKS} onClose={closeSheet} beforeClose={() => guard('day')}
-          onStep={(i) => swapSheet({ kind: 'step', index: i, section: null })} />
+          onStep={(i) => swapSheet({ kind: 'step', index: i, section: null })}
+          // 다른 날로 바꾸면 쓰던 입력이 사라지므로 확인을 거친다
+          onPickDay={(d) => { void guard('day').then((ok) => { if (ok) swapSheet({ kind: 'day', date: d }); }); }} />
       )}
       <ScriptsModal scripts={scripts} open={sheet?.kind === 'scripts'} initialIndex={sheet?.kind === 'scripts' ? sheet.initialIndex : null} shown={shown} onClose={closeSheet} />
       <NoticeModal steps={steps} updates={updates} open={sheet?.kind === 'notice'} initialIndex={sheet?.kind === 'notice' ? sheet.initialIndex : null} shown={shown} onClose={closeSheet} />

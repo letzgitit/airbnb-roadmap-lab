@@ -17,9 +17,12 @@ import { TaskComposer, type StepRef, type TaskWithNote } from '@/components/task
 import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import { ShiftDates } from './ShiftDates';
-import { diffDays, pinsOf, stepRanges, toDate, type Pin, type TimelineStep } from './step-dates';
+import { DateStrip } from './DateStrip';
+import { axisOf, diffDays, pinsOf, stepRanges, toDate, type Pin, type TimelineStep } from './step-dates';
 
-// 고른 날의 할 일 창(#day-2026-10-27). 홈 타임라인에서 날짜(7일 줄 · 날짜 축)를 누르면 단계 창과 같은 시트로 뜬다.
+// 고른 날의 할 일 창(#day-2026-10-27). 홈 타임라인에서 날짜를 누르면 단계 창과 같은 시트로 뜬다.
+//   머리 바로 아래 홈과 같은 날짜 띠(DateStrip): 날짜를 누르면 창을 닫지 않고 그 날로 바뀐다(주소는 바꿔 끼움 — 뒤로 가기 한 번에 닫힌다).
+//   고른 날 = 진한 테두리, 열 때 고른 날이 띠 가운데.
 //   머리: 「10/27 (화)」 + 「오늘」/「D-3」/「2일 전」 + 그날 고정 일정 · 오른쪽 「일정 옮기기」
 //   담당 걸러 보기(전체 · 남편 · 아내, 「같이」는 둘 다) + 종류 걸러 보기(0개인 종류는 꺼 둠)
 //   ＋ 할 일 추가(마감일 = 그날) / 「기한 지남」(어느 날을 열어도 늘 맨 위) / 단계 머리 + 그날 마감 할 일(단계 번호 순, 그날 기간이
@@ -31,12 +34,14 @@ const byDue = (a: TaskItem, b: TaskItem) =>
   (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.stepId - b.stepId || a.createdAt.localeCompare(b.createdAt);
 type OwnerFilter = '' | '남편' | '아내';
 
-export function DaySheet({ date, open, shown, steps, currentId, fixedDay0, marks = [], onClose, beforeClose, onStep }: {
+export function DaySheet({ date, open, shown, steps, currentId, fixedDay0, marks = [], onClose, beforeClose, onStep, onPickDay }: {
   date: string; open: boolean; shown: boolean;
   steps: TimelineStep[]; currentId: number | null; fixedDay0?: string; marks?: Pin[];
   onClose: () => void; beforeClose: () => Promise<boolean>;
   /** 단계 창으로 바꾸기(steps 배열의 순번) */
   onStep: (index: number) => void;
+  /** 창 안 날짜 띠에서 다른 날을 골랐을 때(창은 그대로, 그 날로 바꾼다) */
+  onPickDay: (date: string) => void;
 }) {
   const sel = date;
   const today = todayStr();
@@ -47,6 +52,7 @@ export function DaySheet({ date, open, shown, steps, currentId, fixedDay0, marks
   const dayPins = pinsOf(doc, marks).filter((p) => p.date === sel);
   return (
     <Sheet open={open} shown={shown} onClose={onClose} beforeClose={beforeClose}
+      tabs={open && doc && sel ? <SheetStrip sel={sel} steps={steps} fixedDay0={fixedDay0} marks={marks} onPick={onPickDay} /> : undefined}
       eyebrow={<span className={`text-sm ${gap === 0 ? 'font-bold text-accent-ink' : 'font-normal text-muted'}`}>{rel}</span>}
       title={`${shortDate(sel)} (${DOW[selDate.getDay()]})`}
       subtitle={dayPins.length ? <span className="text-sm font-normal text-ink-soft">{dayPins.map((p) => <span key={p.label} className="mr-3"><i className="fas fa-thumbtack mr-1.5" aria-hidden />{p.label}</span>)}</span> : undefined}>
@@ -56,6 +62,15 @@ export function DaySheet({ date, open, shown, steps, currentId, fixedDay0, marks
       </LoginGate>
     </Sheet>
   );
+}
+
+// 창 머리 아래 날짜 띠(홈과 같은 DateStrip, 막대 없이). 고른 날이 띠 안에 들어오게 범위를 넓힌다
+function SheetStrip({ sel, steps, fixedDay0, marks, onPick }: { sel: string; steps: TimelineStep[]; fixedDay0?: string; marks: Pin[]; onPick: (d: string) => void }) {
+  const { doc } = useProgress();
+  if (!doc) return null;
+  const today = todayStr();
+  const { pins, first, last, beyond, dayInfo } = axisOf(steps, doc, today, { fixedDay0, marks, include: sel });
+  return <DateStrip first={first} last={last} today={today} picked={sel} pins={pins} dayInfo={dayInfo} beyond={beyond} onPick={onPick} startAt={sel} align="center" className="border-b border-line" />;
 }
 
 function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {

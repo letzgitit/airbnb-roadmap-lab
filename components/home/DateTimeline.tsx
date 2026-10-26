@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { shortDate, todayStr } from '@/lib/client/format';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { Card, cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { TYPE_COLOR } from '@/components/TimelineChart';
-import { addDays, diffDays, mondayOf, pinsOf, stepRanges, toDate, type Pin, type TimelineStep } from './step-dates';
+import { DAY, DateStrip } from './DateStrip';
+import { axisOf, type Pin, type TimelineStep } from './step-dates';
 
 export type { TimelineStep } from './step-dates';
 
@@ -29,16 +30,10 @@ export type { TimelineStep } from './step-dates';
 //   가장 이른 날이 든 주의 월요일(펼치면 전체).
 // 실제 날짜는 로그인 뒤 /api/progress 로 받은 현황에서만 계산한다(공개 HTML 에는 없다).
 
-const DAY = 30; // 하루 한 칸 폭(px)
+// 날짜 띠는 DateStrip(그날 창과 같은 컴포넌트), 범위 · 날마다의 표시 계산은 step-dates 의 axisOf.
+
 const MIN_BAR = 14; // 막대 최소 폭(px)
-const LEAD_DAYS = 1.5; // 처음 열 때 시작 날 왼쪽에 남길 칸 수
-const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--prep-bar)';
-/** 그 주(월요일)의 이름: 목요일이 든 달의 몇째 주 */
-function weekName(monday: string): string {
-  const thu = toDate(addDays(monday, 3));
-  return `${thu.getMonth() + 1}월 ${Math.ceil(thu.getDate() / 7)}주`;
-}
 
 export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks = [], legend }: {
   steps: TimelineStep[];
@@ -58,101 +53,14 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
   const [today] = useState(todayStr);
   const [picked, setPicked] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [viewW, setViewW] = useState(0);
-  const [sl, setSl] = useState(0);
-  // PC 마우스 끌기
-  const drag = useRef<{ x: number; left: number; id: number; moved: boolean } | null>(null);
-  const suppressClick = useRef(false);
-
-  const hasDoc = !!doc;
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setViewW(el.clientWidth));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [hasDoc]);
-
-  // 축 범위(아래 렌더와 같은 계산) — 처음 넘겨 둘 자리를 정하려고 효과 앞에서 구한다
-  const ranges = doc ? stepRanges(steps, doc, today, fixedDay0) : [];
-  const tasks = doc ? Object.values(doc.tasks).filter((t) => !t.deletedAt) : [];
-  const pins = pinsOf(doc, marks);
-  const targets = doc ? Object.values(doc.steps).map((s) => s.targetDate).filter((d): d is string => !!d).sort() : [];
-  const endBase = [targets[targets.length - 1] ?? ranges.map((r) => r.to).sort().pop() ?? today, today].sort().pop()!;
-  const last = addDays(mondayOf(endBase), 6);
-  const openDues = tasks.filter((t) => !t.done && t.due).map((t) => t.due!);
-  const startSrc = (showDone
-    ? [...ranges.map((r) => r.from), ...tasks.map((t) => t.due).filter((d): d is string => !!d), ...pins.map((p) => p.date), today]
-    : [...ranges.filter((r) => !r.done).map((r) => r.from), today, ...pins.map((p) => p.date), ...openDues]
-  ).filter((d) => d <= last).sort();
-  const first = mondayOf(startSrc[0] ?? today);
-  const total = diffDays(first, last) + 1;
-  const x = (iso: string) => diffDays(first, iso) * DAY;
-
-  // 처음엔 「남아 있는 일」부터: 안 끝난 할 일 마감일 중 가장 이른 날(없으면 오늘)을 왼쪽 끝 한두 칸 안쪽에(폭을 처음 잰 뒤 한 번)
-  const anchor = openDues.filter((d) => d >= first && d <= last).sort()[0] ?? today;
-  const scrolled = useRef(false);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !viewW || scrolled.current) return;
-    scrolled.current = true;
-    el.scrollLeft = Math.max(0, diffDays(first, anchor) * DAY - LEAD_DAYS * DAY);
-  }, [viewW, first, anchor]);
-
   if (!doc) return null;
 
-  const width = total * DAY;
-  const days = Array.from({ length: total }, (_, i) => addDays(first, i));
-  const weeks = days.filter((_, i) => i % 7 === 0);
-  const inAxis = (d: string) => d >= first && d <= last;
-  const axisPins = pins.filter((p) => inAxis(p.date));
-  const pinsOn = (d: string) => pins.filter((p) => p.date === d);
-  const beyond = tasks.filter((t) => !t.done && t.due && t.due > last).length + pins.filter((p) => p.date > last).length;
-
-  const dayInfo = new Map<string, { n: number; late: boolean }>();
-  tasks.forEach((t) => {
-    if (!t.due) return;
-    const c = dayInfo.get(t.due) ?? { n: 0, late: false };
-    c.n += 1;
-    if (!t.done && t.due < today) c.late = true;
-    dayInfo.set(t.due, c);
-  });
-  const lateCount = tasks.filter((t) => !t.done && t.due && t.due < today).length;
+  const { ranges, pins, first, last, openDues, beyond, dayInfo, lateCount } = axisOf(steps, doc, today, { fixedDay0, marks, showDone });
+  // 처음엔 「남아 있는 일」부터: 안 끝난 할 일 마감일 중 가장 이른 날(없으면 오늘)을 왼쪽 끝 한두 칸 안쪽에
+  const anchor = openDues.filter((d) => d >= first && d <= last).sort()[0] ?? today;
   const doneRanges = ranges.filter((r) => r.done);
   const shownRanges = ranges.filter((r) => !r.done || showDone);
-  const vw = viewW || 360;
-  const leftEdge = sl + 16;
-  const rightEdge = sl + vw - 16;
   const openDay = (d: string) => { setPicked(d); onDay(d); };
-
-  // PC 마우스로 끌어 넘기기(손가락은 기본 가로 스크롤). 끈 뒤의 클릭은 먹는다
-  const onDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    drag.current = { x: e.clientX, left: e.currentTarget.scrollLeft, id: e.pointerId, moved: false };
-  };
-  const onMove = (e: PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d || d.id !== e.pointerId) return;
-    const delta = e.clientX - d.x;
-    if (!d.moved && Math.abs(delta) > 6) { d.moved = true; e.currentTarget.setPointerCapture(e.pointerId); }
-    if (d.moved) e.currentTarget.scrollLeft = d.left - delta;
-  };
-  const onUp = (e: PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    drag.current = null;
-    if (!d || d.id !== e.pointerId || !d.moved) return;
-    suppressClick.current = true;
-    window.setTimeout(() => { suppressClick.current = false; }, 0);
-  };
-
-  // 오늘 · 고정 일정 세로선: 날짜 줄 위부터 막대 끝까지 같은 x
-  const vLines = (
-    <>
-      {axisPins.map((p) => <span key={`l${p.date}${p.label}`} className="pointer-events-none absolute inset-y-0 z-10 block w-px bg-ink-soft" style={{ left: x(p.date) + DAY / 2 }} aria-hidden />)}
-      {inAxis(today) && <span className="pointer-events-none absolute inset-y-0 z-10 block w-0.5 -translate-x-1/2 bg-accent-ink" style={{ left: x(today) + DAY / 2 }} aria-hidden />}
-    </>
-  );
 
   return (
     <Card>
@@ -170,53 +78,14 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
       )}
 
       {/* 날짜 띠 + 막대: 한 상자에서 같이 가로로 넘긴다 */}
-      <div ref={scrollRef} onScroll={(e) => setSl(e.currentTarget.scrollLeft)}
-        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-        onClickCapture={(e) => { if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); } }}
-        className="overflow-x-auto overscroll-x-contain select-none">
-        <div className="relative" style={{ width, minWidth: '100%' }}>
-          {vLines}
-          {/* 주 줄 */}
-          <div className="relative flex h-6 border-b border-line" aria-hidden>
-            {weeks.map((m, i) => (
-              <span key={m} className={`relative z-20 shrink-0 truncate px-1.5 pt-1 text-xs font-bold text-ink-soft ${i > 0 ? 'border-l border-line-strong' : ''}`} style={{ width: DAY * 7 }}>
-                {weekName(m)}
-              </span>
-            ))}
-          </div>
-          {/* 날짜 줄 */}
-          <div role="group" aria-label="날짜 고르기" className="relative flex border-b border-line">
-            {days.map((d, i) => {
-              const dt = toDate(d);
-              const isToday = d === today;
-              const on = d === picked;
-              const c = dayInfo.get(d);
-              const pin = pinsOn(d);
-              return (
-                <button key={d} type="button" aria-pressed={on} onClick={() => openDay(d)}
-                  aria-label={`${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW[dt.getDay()]}요일${isToday ? ' 오늘' : ''}${pin.length ? `, 고정 일정 ${pin.map((p) => p.label).join(', ')}` : ''}${c ? `, 마감 할 일 ${c.n}개` : ''}${c?.late ? ', 기한 지난 일 있음' : ''}`}
-                  className={`flex min-h-11 shrink-0 flex-col items-center pt-0.5 pb-1 focus-visible:-outline-offset-2 ${i % 7 === 0 && i > 0 ? 'border-l border-line-strong' : ''}`}
-                  style={{ width: DAY }}>
-                  <span className={`relative z-20 flex h-4 items-center bg-surface px-0.5 text-xs ${isToday ? 'font-bold text-accent-ink' : 'font-normal text-muted'}`}>
-                    {pin.length > 0 ? <i className="fas fa-thumbtack text-ink-soft" aria-hidden /> : isToday ? '오늘' : DOW[dt.getDay()]}
-                  </span>
-                  <span className={`relative z-20 flex size-7 items-center justify-center rounded-full bg-surface text-sm tabular-nums ${on ? 'font-bold ring-2 ring-inset ring-ink' : isToday ? 'font-bold' : 'font-semibold'} ${isToday ? 'text-accent-ink' : 'text-ink'}`}>
-                    {dt.getDate()}
-                  </span>
-                  {/* 그날 할 일 점(기한 지난 안 끝난 일이 있으면 빨강) */}
-                  <span className="relative z-20 mt-0.5 flex h-1.5 items-center">
-                    {c && <span className={`block size-1.5 rounded-full ${c.late ? 'bg-danger-ink' : 'bg-ink-soft'}`} aria-hidden />}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {beyond > 0 && (
-            <span className="pointer-events-none absolute top-1 right-1 z-20 whitespace-nowrap bg-surface px-1 text-xs font-normal text-muted">
-              {shortDate(addDays(last, 1))} 이후 {beyond}개<i className="fas fa-chevron-right ml-1 text-xs" aria-hidden />
-            </span>
-          )}
-
+      <DateStrip first={first} last={last} today={today} picked={picked} pins={pins} dayInfo={dayInfo} beyond={beyond}
+        onPick={openDay} startAt={anchor} align="lead">
+        {({ x, sl, viewW }) => {
+          const vw = viewW || 360;
+          const leftEdge = sl + 16;
+          const rightEdge = sl + vw - 16;
+          return (
+            <>
           {/* 단계 막대 */}
           <ol aria-label="단계별 기간">
             {doneRanges.length > 0 && (
@@ -266,8 +135,10 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
               );
             })}
           </ol>
-        </div>
-      </div>
+            </>
+          );
+        }}
+      </DateStrip>
 
       {lateCount > 0 && (
         <button type="button" onClick={() => openDay(today)}

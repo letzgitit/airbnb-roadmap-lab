@@ -50,3 +50,45 @@ export function pinsOf(doc: ProgressDoc | null, marks: Pin[] = []): Pin[] {
       .filter((p): p is Pin => !!p),
   ].sort((a, b) => a.date.localeCompare(b.date));
 }
+
+// 날짜 띠의 범위와 날마다의 표시(홈 타임라인과 그날 창이 같이 쓴다).
+//   끝 = 단계 목표일 중 가장 늦은 날과 오늘 중 늦은 날이 든 주의 일요일(목표일이 없으면 단계 기간 끝). 그 뒤의 할 일 · 고정 일정은 beyond 로만 센다.
+//   시작 = showDone 이 아니면 안 끝난 단계 시작 · 오늘 · 고정 일정 · 안 끝난 할 일 마감 중 가장 이른 날, showDone 이면 전체 — 가 든 주의 월요일.
+//   include: 반드시 띠 안에 들어와야 하는 날(그날 창에서 고른 날 등).
+export interface DayMark { n: number; late: boolean }
+export interface Axis {
+  ranges: StepRange[]; pins: Pin[]; first: string; last: string;
+  /** 안 끝난 할 일 마감일(정렬 안 함) */
+  openDues: string[];
+  /** 띠 끝 뒤의 안 끝난 할 일 · 고정 일정 수 */
+  beyond: number;
+  /** 날짜 → 그날 마감 할 일 수 · 기한 지난 안 끝난 일 있음 */
+  dayInfo: Map<string, DayMark>;
+  /** 기한 지난 안 끝난 할 일 수 */
+  lateCount: number;
+}
+export function axisOf(steps: TimelineStep[], doc: ProgressDoc, today: string, opts: { fixedDay0?: string; marks?: Pin[]; showDone?: boolean; include?: string } = {}): Axis {
+  const ranges = stepRanges(steps, doc, today, opts.fixedDay0);
+  const tasks = Object.values(doc.tasks).filter((t) => !t.deletedAt);
+  const pins = pinsOf(doc, opts.marks);
+  const targets = Object.values(doc.steps).map((s) => s.targetDate).filter((d): d is string => !!d).sort();
+  const endBase = [targets[targets.length - 1] ?? ranges.map((r) => r.to).sort().pop() ?? today, today, opts.include ?? today].sort().pop()!;
+  const last = addDays(mondayOf(endBase), 6);
+  const openDues = tasks.filter((t) => !t.done && t.due).map((t) => t.due!);
+  const startSrc = (opts.showDone
+    ? [...ranges.map((r) => r.from), ...tasks.map((t) => t.due).filter((d): d is string => !!d), ...pins.map((p) => p.date), today]
+    : [...ranges.filter((r) => !r.done).map((r) => r.from), today, ...pins.map((p) => p.date), ...openDues]
+  ).concat(opts.include ? [opts.include] : []).filter((d) => d <= last).sort();
+  const first = mondayOf(startSrc[0] ?? today);
+  const beyond = tasks.filter((t) => !t.done && t.due && t.due > last).length + pins.filter((p) => p.date > last).length;
+  const dayInfo = new Map<string, DayMark>();
+  tasks.forEach((t) => {
+    if (!t.due) return;
+    const c = dayInfo.get(t.due) ?? { n: 0, late: false };
+    c.n += 1;
+    if (!t.done && t.due < today) c.late = true;
+    dayInfo.set(t.due, c);
+  });
+  const lateCount = tasks.filter((t) => !t.done && t.due && t.due < today).length;
+  return { ranges, pins, first, last, openDues, beyond, dayInfo, lateCount };
+}
