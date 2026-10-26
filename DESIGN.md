@@ -137,7 +137,7 @@ Tailwind 이름을 그대로 쓰고 값만 바꿨다(`@theme`의 `--text-*`). `t
 | `PageHeader` | `components/ui/PageHeader.tsx` | 홈을 뺀 모든 페이지 맨 위 | 제목 `text-2xl` 700 + 설명은 있어도 한 줄(`text-sm` 400 `muted`) |
 | `SubNav` | `components/ui/SubNav.tsx` | 페이지 안 하위 화면(우리 집 · 꾸미기) | 링크로 된 탭. 모양은 시트의 `TabBar`와 같다(고른 것 = `ink` 700 + 3px 밑줄). 새 소식이 있으면 이름 옆 강조색 점 |
 | `TabBar` | `components/TabBar.tsx` | 시트 안 구역 바꾸기(단계 · 주의사항) | 넘치면 막대 안에서만 가로로 밀린다. 주의 계열 탭만 빨강 |
-| `SectionHeader` | `components/ui/SectionHeader.tsx` | 페이지 안 구역 제목 | 제목 `text-lg` 700 + 요약 한 줄(`text-sm` 400 `muted`, 예: 「오늘 2 · 기한 지남 1」). 오른쪽에 작은 동작 하나까지 |
+| `SectionHeader` | `components/ui/SectionHeader.tsx` | 페이지 안 구역 제목 | 제목 `text-lg` 700 + 요약 한 줄(`text-sm` 400 `muted`, 예: 「기한 지남 1 · 오늘 2」 — 급한 것 먼저). 오른쪽에 작은 동작 하나까지 |
 | `Card` | `components/ui/Card.tsx` | 목록을 담는 상자 | `bg-surface` + `border-line` + `rounded-panel`, 안의 줄은 1px 선으로 나눈다. **상자 안에 상자를 넣지 않는다** |
 | `AddButton` | `components/ui/AddButton.tsx` (`bits.tsx`의 `AddRow`도 이것) | 목록에 하나 더하기 | 모양은 한 가지: 강조색 「＋ ○○ 추가」(사진 · 링크는 「＋ ○○ 올리기」), 목록의 **첫 줄**, 44px. 누르면 그 자리에서 입력 폼이 펼쳐진다(사진만 창). 점선 상자 · 꽉 찬 단추로 만들지 않는다 |
 | `Segmented` | `components/ui/Segmented.tsx` | 목록 필터, 보기 고르기(사진 시안의 시안 고르기) | 칸 묶음 한 가지 모양. 필터면 첫 칸은 늘 「전체」(「모두」 쓰지 않음), 보기 고르기에는 「전체」 칸이 없다. 고른 칸 = `surface` 면 + `ink` 700. 2~5칸, 넘치면 줄바꿈 대신 가로로 밀린다. 6개 이상이면 `<select>` |

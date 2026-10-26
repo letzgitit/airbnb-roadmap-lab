@@ -75,10 +75,10 @@ export function TodoSection({ steps, defaultStepId }: { steps: StepRef[]; defaul
   const lateRest = dated.late.slice(LATE_SHOWN);
   const lateOpen = showAllLate || lateRest.some((t) => editing.has(t.id));
 
-  // 요약 한 줄: 오늘 n / 기한 지남 n(빨강) / 7일 안 n(점 없이 12px 간격) — 0 인 것은 빼고, 다 0 이면 「남은 할 일 n개」
+  // 요약 한 줄: 기한 지남 n(빨강) / 오늘 n / 7일 안 n(점 없이 12px 간격) — 0 인 것은 빼고, 다 0 이면 「남은 할 일 n개」
   const parts: ReactNode[] = [];
-  if (dated.today.length) parts.push(<span key="t">오늘 {dated.today.length}</span>);
   if (dated.late.length) parts.push(<span key="l" className="text-danger-ink">기한 지남 {dated.late.length}</span>);
+  if (dated.today.length) parts.push(<span key="t">오늘 {dated.today.length}</span>);
   if (dated.week.length) parts.push(<span key="w">7일 안 {dated.week.length}</span>);
   const summary = parts.length
     ? <Meta>{parts}</Meta>
