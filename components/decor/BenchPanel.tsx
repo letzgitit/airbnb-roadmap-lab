@@ -530,6 +530,10 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
         {it.link && <span>{withGa(it.link.addedBy)} 올림</span>}
         {it.link && <span className="text-ink-soft">{shortDate(it.link.addedAt.slice(0, 10))}</span>}
       </p>
+      {/* 원문 보기: 맨 아래에 있으면 못 찾아서(2026-10-26) 제목 · 출처 바로 밑에 주 단추로. 사진 밖이라 좌우 화살표 · 밀기와 겹치지 않는다 */}
+      <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${btnPrimary} mt-3 w-full justify-center min-[560px]:w-auto`}>
+        원문 보기<i className="fas fa-arrow-up-right-from-square text-sm" aria-hidden /><span className="sr-only">(새 탭)</span>
+      </a>
       <div className="mt-4 flex flex-col gap-4">
         {it.link?.note && (
           <div><Label>{displayName(it.link.addedBy)}의 메모</Label><p className="mt-0.5 break-words text-base leading-relaxed text-ink-soft">{it.link.note}</p></div>
@@ -561,9 +565,6 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
             <p className="mt-0.5 text-base leading-relaxed text-ink">{it.caution}</p>
           </div>
         )}
-        <a href={it.url} target="_blank" rel="noopener noreferrer" className={`${textBtn} self-start`}>
-          원문 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
-        </a>
       </div>
       {member && <div className="mt-4 border-t border-line pt-3"><Reactions key={it.id} itemId={it.id} title={it.title} list={reactions} onSave={onSave} dirtyRef={memoDirty} /></div>}
       {onPublic && <PublicToggle key={it.id} on={isPublic} hasImage={!!it.image} onChange={onPublic} />}
