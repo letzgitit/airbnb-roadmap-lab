@@ -112,7 +112,8 @@ function RoomSection({ room, names }: { room: RestyleRoom; names: Map<string, st
         beforeAlt={`${room.name} 지금 모습`} afterAlt={`${room.name} ${name(shot.concept)} 시안`}
         afterLabel={name(shot.concept)} roomName={room.name} />
       {room.note && <p className="mt-2 text-sm leading-relaxed text-muted">{room.note}</p>}
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* 썸네일 = 지금 + 시안 수(5개면 6장). 폰 2열 · 넓으면 3열이라 6장이 빈칸 없이 3줄 · 2줄로 떨어진다. */}
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Thumb src={photoUrl(room.original)} alt={`${room.name} 지금`} caption="지금" />
         {room.shots.map((s) => (
           <Thumb key={s.concept} src={photoUrl(s.file)} alt={`${room.name} ${name(s.concept)}`} caption={name(s.concept)} />
