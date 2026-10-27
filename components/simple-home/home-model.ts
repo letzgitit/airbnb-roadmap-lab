@@ -285,25 +285,53 @@ export function startMonth(marks: Pick<CalendarMark, 'date'>[], today: string): 
   return monthOf(near.date);
 }
 
-// ── 달력 탭: 날짜마다 할 일(2026-10-28 — 카드 이름 대신 그날 할 일 개수, 날을 누르면 그날 할 일 줄이 바로) ──
-export interface DayCount { open: number; done: number }
-/** 마감일별 할 일 개수(지우지 않은 모든 할 일 · 세부 항목 포함). open = 안 끝난 것, done = 끝낸 것 */
-export function dayCounts(doc: Pick<ProgressDoc, 'tasks'>): Map<string, DayCount> {
-  const out = new Map<string, DayCount>();
-  for (const t of Object.values(doc.tasks)) {
-    if (t.deletedAt || !t.due) continue;
-    const c = out.get(t.due) ?? { open: 0, done: 0 };
-    if (t.done) c.done += 1; else c.open += 1;
-    out.set(t.due, c);
+// ── 분야(행정 · 설비 · 운영): 블록 id · 할 일 → 분야 ──
+export const FIELD_TABS: WorkTabId[] = ['admin', 'facility', 'ops'];
+export const fieldLabel = (t: WorkTabId) => TABS.find((x) => x.id === t)?.label ?? '';
+/**
+ * 블록 메모 · 블록 사진이 쓰는 블록 id: 「<분야>.<블록>」(예: admin.move-in · facility.bath · ops.other).
+ * 「그 밖에」(other)가 설비 · 운영 두 곳에 있어 분야를 앞에 붙인다. 서버의 꼴 검사 = lib/core/cardnotes.ts CARD_ID_RE. 한 번 정하면 바꾸지 않는다(저장된 메모 · 사진이 이 이름에 붙는다).
+ */
+export const blockId = (tab: WorkTabId, cardId: string) => `${tab}.${cardId}`;
+/** 블록 id → 분야(꼴이 틀리면 null) */
+export function blockTab(id: string): WorkTabId | null {
+  const t = id.split('.')[0];
+  return (FIELD_TABS as string[]).includes(t) && id.length > t.length + 1 ? (t as WorkTabId) : null;
+}
+/** 할 일 id → 분야(세부 항목은 부모를 따라간다). 지운 할 일은 빠진다 */
+export function taskTabs(doc: Pick<ProgressDoc, 'tasks'>): Map<string, WorkTabId> {
+  const out = new Map<string, WorkTabId>();
+  for (const { tab, cards } of CARD_TABS) {
+    for (const list of Object.values(tasksByCard(doc, cards))) for (const t of list) out.set(t.id, tab);
   }
   return out;
 }
-/** 달력 칸 글자: 안 끝난 일이 있으면 「할 일 3」(지난 날이면 late), 다 끝냈으면 「다 함」, 없으면 null */
-export function dayCellText(c: DayCount | undefined, date: string, today: string): { text: string; tone: 'late' | 'open' | 'done' } | null {
-  if (!c) return null;
-  if (c.open > 0) return { text: `할 일 ${c.open}`, tone: date < today ? 'late' : 'open' };
-  if (c.done > 0) return { text: '다 함', tone: 'done' };
-  return null;
+
+// ── 달력 탭(기획 27의 6절 — 데일리 「일정 · 모집」): 날짜 밑 분야 색 점, 오늘 · 고른 날 할 일, 다가오는 일정 ──
+export interface DayDot { tab: WorkTabId; done: boolean }
+/**
+ * 마감일별 분야 점(지우지 않은 할 일 · 세부 항목 포함). 한 날에 분야마다 점 하나, 순서는 행정 · 설비 · 운영.
+ * done = 그날 그 분야 할 일을 다 끝냈다(점을 회색으로). 기한이 지났어도 안 끝났으면 색 점 그대로(데일리 「진행 중」 점처럼).
+ */
+export function dayDots(doc: Pick<ProgressDoc, 'tasks'>, tabOf: Map<string, WorkTabId>): Map<string, DayDot[]> {
+  const acc = new Map<string, Map<WorkTabId, boolean>>();
+  for (const t of Object.values(doc.tasks)) {
+    if (t.deletedAt || !t.due) continue;
+    const tab = tabOf.get(t.id);
+    if (!tab) continue;
+    const day = acc.get(t.due) ?? new Map<WorkTabId, boolean>();
+    day.set(tab, (day.get(tab) ?? true) && t.done);
+    acc.set(t.due, day);
+  }
+  const out = new Map<string, DayDot[]>();
+  for (const [d, m] of acc) out.set(d, FIELD_TABS.filter((t) => m.has(t)).map((tab) => ({ tab, done: m.get(tab)! })));
+  return out;
+}
+/** 다가오는 일정: 내일부터 days 일 뒤까지 마감인 안 끝난 할 일(세부 항목 포함, 오늘 것은 「오늘」 묶음에). 마감 이른 순 → 만든 순 */
+export const UPCOMING_DAYS = 14;
+export function upcomingTasks(doc: Pick<ProgressDoc, 'tasks'>, today: string, days = UPCOMING_DAYS, isDone: (t: TaskItem) => boolean = (t) => t.done): TaskItem[] {
+  const last = addDays(today, days);
+  return Object.values(doc.tasks).filter((t) => live(t) && !isDone(t) && !!t.due && t.due > today && t.due <= last).sort(byDue);
 }
 /**
  * 고른 날의 할 일: due = 그날 마감(끝낸 것도 — 줄에서 체크를 풀 수 있게), starting = 그날 시작(언제부터)인데 마감은 다른 날.
@@ -357,11 +385,70 @@ export function docPhotos(photos: PhotoView[]): PhotoView[] {
     return p.kind === 'pdf' || (DOC_WORDS.test(text) && !NOT_DOC.test(text));
   });
 }
-/** 단계별 묶음(단계 번호 순, 0 = 단계 없음은 맨 뒤). 묶음 안은 받은 순서 그대로 */
-export function docGroups(list: PhotoView[]): { stepId: number; items: PhotoView[] }[] {
-  const m = new Map<number, PhotoView[]>();
-  for (const p of list) m.set(p.stepId, [...(m.get(p.stepId) ?? []), p]);
-  return [...m.entries()].sort(([a], [b]) => (a === 0 ? 99 : a) - (b === 0 ? 99 : b)).map(([stepId, items]) => ({ stepId, items }));
+// ── 갤러리 › 문서: 문서 종류로 묶는다(기획 27의 5절 — 설명 · 묶음 이름의 낱말로). 위 줄부터 먼저 고른다(등기부등본은 「등기부」, 건축물대장은 「건축물대장」) ──
+export type DocKind = 'contract' | 'registry' | 'building' | 'plan' | 'office' | 'other';
+export const DOC_KINDS: { id: DocKind; label: string; re: RegExp | null }[] = [
+  { id: 'contract', label: '계약서', re: /계약/ },
+  { id: 'registry', label: '등기부', re: /등기/ },
+  { id: 'building', label: '건축물대장', re: /건축물|대장/ },
+  { id: 'plan', label: '평면도', re: /평면도|도면|배치도|설계도/ },
+  { id: 'office', label: '구청 서류', re: /구청|주민센터|세무서|신청서|신고|허가|동의서|안내문|증명|등본|확인서|민원|공문/ },
+  { id: 'other', label: '그 밖', re: null },
+];
+export function docKind(p: Pick<PhotoView, 'album' | 'caption'>): DocKind {
+  const text = `${p.caption}\n${p.album}`;
+  return DOC_KINDS.find((k) => k.re?.test(text))?.id ?? 'other';
+}
+/** 문서 종류별 묶음(DOC_KINDS 순서, 빈 묶음은 뺀다). 묶음 안은 받은 순서 그대로 */
+export function docKindGroups(list: PhotoView[]): { kind: DocKind; label: string; items: PhotoView[] }[] {
+  const m = new Map<DocKind, PhotoView[]>();
+  for (const p of list) { const k = docKind(p); m.set(k, [...(m.get(k) ?? []), p]); }
+  return DOC_KINDS.filter((k) => m.has(k.id)).map((k) => ({ kind: k.id, label: k.label, items: m.get(k.id)! }));
+}
+
+// ── 갤러리 탭 나누기: 사진(공사 전 · 공사 후 · 분야별) · 문서 · 기타 — 지우지 않은 사진은 어느 한 곳에 꼭 들어간다 ──
+export interface GalleryParts {
+  before: PhotoView[]; after: PhotoView[];
+  /** 분야별: 행정 · 설비 · 운영 블록(cardId)과 할 일 메모(taskId)에 붙인 사진 */
+  fields: Record<WorkTabId, PhotoView[]>;
+  docs: PhotoView[];
+  /** 기타: 참고 사진(0단계)과 그 밖(시안 · 다른 집 · 분야를 못 찾은 할 일 사진 등) */
+  ref: PhotoView[]; other: PhotoView[];
+}
+/**
+ * plain = 블록 · 할 일에 붙지 않은 사진(사진 저장소 기본 목록 순서), attached = 블록(cardId) · 할 일(taskId) 사진.
+ * 문서 = PDF + 서류 낱말(docPhotos) → 남은 것 중 우리 집 사진(housePhotos)이 공사 전 · 후 → 나머지 중 0단계 = 참고, 그 밖 = 기타.
+ * 붙은 사진은 블록 id 앞머리 · 할 일의 분야로 분야별 묶음에(분야를 못 찾으면 기타).
+ */
+export function galleryParts(plain: PhotoView[], attached: PhotoView[], units: string[], tabOf: Map<string, WorkTabId>): GalleryParts {
+  const live = plain.filter((p) => !p.deletedAt);
+  const docs = docPhotos(live);
+  const docSet = new Set(docs.map((p) => p.id));
+  const rest = live.filter((p) => !docSet.has(p.id));
+  const { before, after } = housePhotos(rest, units);
+  const house = new Set([...before, ...after].map((p) => p.id));
+  const ref: PhotoView[] = [];
+  const other: PhotoView[] = [];
+  for (const p of rest) if (!house.has(p.id)) (p.stepId === 0 ? ref : other).push(p);
+  const fields: Record<WorkTabId, PhotoView[]> = { admin: [], facility: [], ops: [] };
+  for (const p of attached) {
+    if (p.deletedAt) continue;
+    const tab = p.cardId ? blockTab(p.cardId) : p.taskId ? tabOf.get(p.taskId) ?? null : null;
+    if (tab) fields[tab].push(p); else other.push(p);
+  }
+  return { before, after, fields, docs, ref, other };
+}
+
+/** 갤러리 검색: 설명 · 묶음 이름 · 단계 이름 · 분야 이름(띄어쓰기 · 대소문자 무시 없이 그대로 포함) */
+export function photoMatches(p: Pick<PhotoView, 'caption' | 'album'>, q: string, extra = ''): boolean {
+  const s = q.trim().toLowerCase();
+  return !s || `${p.caption}\n${p.album}\n${extra}`.toLowerCase().includes(s);
+}
+/** 갤러리 정렬: default = 받은 순서 그대로, newest · oldest = 찍은 시각(같으면 올린 순서) */
+export function sortPhotos<T extends Pick<PhotoView, 'takenAt' | 'order'>>(list: T[], mode: 'default' | 'newest' | 'oldest'): T[] {
+  if (mode === 'newest') return [...list].sort((a, b) => b.takenAt.localeCompare(a.takenAt) || b.order - a.order);
+  if (mode === 'oldest') return [...list].sort((a, b) => a.takenAt.localeCompare(b.takenAt) || a.order - b.order);
+  return list;
 }
 
 /** 집 정보 「주소」 값에 든 호수(예: 「…101호」 → ['101']). 사진 설명에 다른 호수가 나오면 다른 집으로 본다 */

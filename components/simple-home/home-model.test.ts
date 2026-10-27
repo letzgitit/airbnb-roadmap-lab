@@ -4,12 +4,13 @@ import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
   progressText, relDay, sortCards, summarize, tasksByCard, splitBlocks, workTab, isWorkTab,
-  TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos, docGroups,
-  dayCounts, dayCellText, dayTasks,
+  TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos,
+  dayTasks, dayDots, taskTabs, upcomingTasks, blockId, blockTab, docKind, docKindGroups, galleryParts, photoMatches, sortPhotos,
 } from './home-model.ts';
+import { CARD_ID_RE } from '../../lib/core/cardnotes.ts';
 
-test('달력 날짜별 할 일: 개수 · 칸 글자 · 그날 마감 · 그날 시작(지운 것 빼고, 세부 항목 포함)', () => {
-  const tasks = Object.fromEntries([
+const dayDoc = () => ({
+  tasks: Object.fromEntries([
     T('a', 4, '전입 서류 챙기기', { due: '2026-10-28' }),
     T('bb', 4, '세부', { due: '2026-10-28', parentId: 'a', done: true }),
     T('c', 7, '도배 시작', { start: '2026-10-28', due: '2026-11-02' }),
@@ -17,20 +18,115 @@ test('달력 날짜별 할 일: 개수 · 칸 글자 · 그날 마감 · 그날 
     T('e', 7, '지난 일', { due: '2026-10-20' }),
     T('f', 7, '다 한 날', { due: '2026-10-21', done: true }),
     T('g', 7, '하루짜리', { start: '2026-10-28', due: '2026-10-28' }),
-  ].map((t: { id: string }) => [t.id, t]));
-  const doc = { tasks } as never;
-  const counts = dayCounts(doc);
-  assert.deepEqual(counts.get('2026-10-28'), { open: 2, done: 1 });
-  assert.equal(counts.get('2026-11-02')?.open, 1);
-  const today = '2026-10-28';
-  assert.deepEqual(dayCellText(counts.get('2026-10-28'), '2026-10-28', today), { text: '할 일 2', tone: 'open' });
-  assert.deepEqual(dayCellText(counts.get('2026-10-20'), '2026-10-20', today), { text: '할 일 1', tone: 'late' });
-  assert.deepEqual(dayCellText(counts.get('2026-10-21'), '2026-10-21', today), { text: '다 함', tone: 'done' });
-  assert.equal(dayCellText(undefined, '2026-10-22', today), null);
+    T('h', 11, '숙소 이름 짓기', { due: '2026-11-11' }),
+    T('i', 11, '가격 정하기', { due: '2026-11-12' }),
+    T('j', 14, '수건 사기', { due: '2026-10-29', done: true }),
+  ].map((t: { id: string }) => [t.id, t])),
+}) as never;
+
+test('달력 그날 할 일: 그날 마감 · 그날 시작(지운 것 빼고, 세부 항목 포함)', () => {
+  const doc = dayDoc();
   const day = dayTasks(doc, '2026-10-28');
   assert.deepEqual(day.due.map((t: { id: string }) => t.id), ['a', 'g', 'bb']);
   assert.deepEqual(day.starting.map((t: { id: string }) => t.id), ['c']); // 하루짜리(g)는 마감 쪽에만
-  assert.deepEqual(dayTasks(doc, '2026-10-29'), { due: [], starting: [] });
+  assert.deepEqual(dayTasks(doc, '2026-10-30'), { due: [], starting: [] });
+});
+
+test('달력 점: 날마다 분야 점 하나씩(행정 · 설비 · 운영 순), 다 끝낸 분야는 회색, 지난 날 안 끝난 일은 색 그대로', () => {
+  const doc = dayDoc();
+  const tabOf = taskTabs(doc);
+  assert.equal(tabOf.get('a'), 'admin');
+  assert.equal(tabOf.get('bb'), 'admin'); // 세부 항목은 부모 분야
+  assert.equal(tabOf.get('c'), 'facility');
+  assert.equal(tabOf.get('h'), 'ops');
+  assert.equal(tabOf.has('d'), false);     // 지운 할 일
+  const dots = dayDots(doc, tabOf);
+  assert.deepEqual(dots.get('2026-10-28'), [{ tab: 'admin', done: false }, { tab: 'facility', done: false }]); // 지운 d 는 없음
+  assert.deepEqual(dots.get('2026-10-20'), [{ tab: 'facility', done: false }]);
+  assert.deepEqual(dots.get('2026-10-21'), [{ tab: 'facility', done: true }]);
+  assert.deepEqual(dots.get('2026-10-29'), [{ tab: 'ops', done: true }]);
+  assert.equal(dots.has('2026-10-22'), false);
+});
+
+test('다가오는 일정: 내일부터 14일 안 · 안 끝난 것만 · 마감 이른 순(오늘 · 지난 · 15일 뒤는 빠짐)', () => {
+  const doc = dayDoc();
+  assert.deepEqual(upcomingTasks(doc, '2026-10-28').map((t: { id: string }) => t.id), ['c', 'h']); // 11-11 = 14일째까지, 11-12 는 빠짐
+  assert.deepEqual(upcomingTasks(doc, '2026-10-29').map((t: { id: string }) => t.id), ['c', 'h', 'i']);
+  assert.deepEqual(upcomingTasks(doc, '2026-10-28', 5).map((t: { id: string }) => t.id), ['c']); // 11-02 = 5일째
+});
+
+test('블록 id: 「분야.블록」 — 모든 일터 블록이 서버 꼴 검사를 지나고 서로 겹치지 않는다', () => {
+  const ids = [
+    ...workTab('admin').cards.map((c) => blockId('admin', c.id)),
+    ...workTab('facility').cards.map((c) => blockId('facility', c.id)),
+    ...workTab('ops').cards.map((c) => blockId('ops', c.id)),
+  ];
+  assert.equal(new Set(ids).size, ids.length);
+  for (const id of ids) assert.match(id, CARD_ID_RE);
+  assert.ok(ids.includes('facility.other') && ids.includes('ops.other'));
+  assert.equal(blockTab('admin.move-in'), 'admin');
+  assert.equal(blockTab('ops.other'), 'ops');
+  assert.equal(blockTab('money.x'), null);
+  assert.equal(blockTab('admin'), null);
+});
+
+const ph = (id: string, stepId: number, caption: string, kind = 'image', album = '', extra: Record<string, unknown> = {}) =>
+  ({ id, stepId, caption, kind, album, deletedAt: null, taskId: null, cardId: null, takenAt: '2026-10-01T00:00:00', order: 0, ...extra });
+
+test('받아 둔 서류: PDF + 서류 낱말 사진, 참고 · 다른 집은 뺀다', () => {
+  const list = [
+    ph('a', 3, '등기부 캡처'), ph('b', 5, '', 'pdf'), ph('c', 0, '건축물대장'), ph('d', 7, '거실'), ph('e', 7, '참고 도면 다른 집'),
+    ph('f', 9, '', 'image', '서류'), { ...ph('g', 3, '계약서'), deletedAt: 'x' },
+  ];
+  assert.deepEqual(docPhotos(list as never).map((p) => p.id), ['a', 'b', 'c', 'f']);
+});
+
+test('문서 종류로 가르기: 계약서 · 등기부 · 건축물대장 · 평면도 · 구청 서류 · 그 밖(위 줄부터)', () => {
+  assert.equal(docKind({ caption: '임대차 계약서 1쪽', album: '' }), 'contract');
+  assert.equal(docKind({ caption: '등기부등본', album: '' }), 'registry'); // 「등본」이 있어도 등기부가 먼저
+  assert.equal(docKind({ caption: '', album: '건축물대장' }), 'building');
+  assert.equal(docKind({ caption: '도면 캡처', album: '서류' }), 'plan');
+  assert.equal(docKind({ caption: '종로구청 안내문', album: '' }), 'office');
+  assert.equal(docKind({ caption: '전입 신고서', album: '' }), 'office');
+  assert.equal(docKind({ caption: '', album: '서류' }), 'other');
+  const groups = docKindGroups([ph('1', 3, '안내문'), ph('2', 3, '계약서'), ph('3', 3, ''), ph('4', 3, '계약서 2쪽')] as never);
+  assert.deepEqual(groups.map((g) => `${g.label}:${g.items.map((p) => p.id).join('')}`), ['계약서:24', '구청 서류:1', '그 밖:3']);
+});
+
+test('갤러리 나누기: 문서 · 공사 전/후 · 분야별(블록 · 할 일 사진) · 참고 · 그 밖 — 지우지 않은 사진은 한 곳에만', () => {
+  const doc = dayDoc();
+  const plain = [
+    ph('p1', 2, '거실'), ph('p2', 7, '', 'image', '공사 후'), ph('p3', 3, '계약서'), ph('p4', 0, '301호 참고'), ph('p5', 6, '시안 3번'),
+    ph('p6', 5, '', 'pdf'), { ...ph('p7', 2, '지운 것'), deletedAt: 'x' },
+  ];
+  const attached = [
+    ph('c1', 4, '', 'image', '', { cardId: 'admin.move-in' }), ph('c2', 7, '', 'image', '', { cardId: 'facility.bath' }),
+    ph('t1', 11, '', 'image', '', { taskId: 'h' }), ph('t2', 4, '', 'image', '', { taskId: 'zz' }),
+  ];
+  const g = galleryParts(plain as never, attached as never, ['101'], taskTabs(doc));
+  const ids = (l: { id: string }[]) => l.map((p) => p.id);
+  assert.deepEqual(ids(g.before), ['p1']);
+  assert.deepEqual(ids(g.after), ['p2']);
+  assert.deepEqual(ids(g.docs), ['p3', 'p6']);
+  assert.deepEqual(ids(g.ref), ['p4']);
+  assert.deepEqual(ids(g.other), ['p5', 't2']); // 분야를 못 찾은 할 일 사진은 그 밖
+  assert.deepEqual(ids(g.fields.admin), ['c1']);
+  assert.deepEqual(ids(g.fields.facility), ['c2']);
+  assert.deepEqual(ids(g.fields.ops), ['t1']);
+  const all = [...g.before, ...g.after, ...g.docs, ...g.ref, ...g.other, ...g.fields.admin, ...g.fields.facility, ...g.fields.ops];
+  assert.equal(all.length, 10);
+  assert.equal(new Set(ids(all)).size, 10);
+});
+
+test('갤러리 검색 · 정렬', () => {
+  assert.equal(photoMatches({ caption: '주방 수전', album: '' }, '수전'), true);
+  assert.equal(photoMatches({ caption: '주방', album: '' }, '행정', '4. 전입신고 행정'), true);
+  assert.equal(photoMatches({ caption: '주방', album: '' }, '욕실'), false);
+  assert.equal(photoMatches({ caption: '주방', album: '' }, '  '), true);
+  const list = [{ takenAt: '2026-10-02', order: 1, id: 'b' }, { takenAt: '2026-10-01', order: 2, id: 'a' }, { takenAt: '2026-10-02', order: 3, id: 'c' }];
+  assert.deepEqual(sortPhotos(list, 'default').map((p) => p.id), ['b', 'a', 'c']);
+  assert.deepEqual(sortPhotos(list, 'newest').map((p) => p.id), ['c', 'b', 'a']);
+  assert.deepEqual(sortPhotos(list, 'oldest').map((p) => p.id), ['a', 'b', 'c']);
 });
 
 test('문의 필요만 보기: 문의 할 일 + 그 세부 항목 + 그 부모만', () => {
@@ -39,17 +135,6 @@ test('문의 필요만 보기: 문의 할 일 + 그 세부 항목 + 그 부모�
     T('d', 4, '문의 위', { kind: '문의' }), T('e', 4, '그 밑', { parentId: 'd' }), T('f', 4, '종류 다름', { kind: '연락' }),
   ];
   assert.deepEqual(askOnly(list).map((t: { id: string }) => t.id), ['a', 'b', 'd', 'e']);
-});
-
-test('받아 둔 서류: PDF + 서류 낱말 사진, 참고 · 다른 집은 빼고 단계별 묶음(0단계는 뒤)', () => {
-  const ph = (id: string, stepId: number, caption: string, kind = 'image', album = '') => ({ id, stepId, caption, kind, album, deletedAt: null });
-  const list = [
-    ph('a', 3, '등기부 캡처'), ph('b', 5, '', 'pdf'), ph('c', 0, '건축물대장'), ph('d', 7, '거실'), ph('e', 7, '참고 도면 다른 집'),
-    ph('f', 9, '', 'image', '서류'), { ...ph('g', 3, '계약서'), deletedAt: 'x' },
-  ];
-  const docs = docPhotos(list as never);
-  assert.deepEqual(docs.map((p) => p.id), ['a', 'b', 'c', 'f']);
-  assert.deepEqual(docGroups(docs).map((g) => `${g.stepId}:${g.items.map((p) => p.id).join('')}`), ['3:a', '5:b', '9:f', '0:c']);
 });
 
 test('분야 탭 여섯 개: 행정 · 설비 · 운영 · 갤러리 · 연락처 · 달력(글자 탭), 일터는 앞 셋', () => {
