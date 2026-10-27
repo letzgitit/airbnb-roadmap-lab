@@ -196,7 +196,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
                 {simple && (
                   <button type="button" className="mr-auto inline-flex min-h-11 items-center gap-1.5 px-2 text-base font-bold text-danger-ink hover:underline"
                     onClick={() => { ed.stop(); void del(); }}>
-                    <i className="fas fa-trash-can" aria-hidden />지우기
+                    <i className="fas fa-trash-can" aria-hidden />이 할 일 지우기
                   </button>
                 )}
                 <button type="button" className={btnGhost} onClick={ed.stop}>취소</button>
