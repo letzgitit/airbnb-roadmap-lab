@@ -134,13 +134,13 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
               <div className="pointer-events-none absolute inset-x-0 top-8" aria-hidden>
                 {lanes.map(({ r, lane, col, span, head, tail }) => (
                   <span key={r.id} title={`${r.id}. ${r.title}`}
-                    className={`@container absolute flex h-4 items-center overflow-hidden px-1 text-xs font-normal whitespace-nowrap text-ink ${head ? 'rounded-l-control' : ''} ${tail ? 'rounded-r-control' : ''}`}
+                    className={`@container absolute flex h-4 items-center overflow-hidden px-1 text-xs font-normal whitespace-nowrap ${r.done ? 'text-muted' : 'text-ink'} ${head ? 'rounded-l-control' : ''} ${tail ? 'rounded-r-control' : ''}`}
                     style={{
                       top: lane * LANE, left: `calc(${(col / 7) * 100}% + ${head ? 2 : 0}px)`, width: `calc(${(span / 7) * 100}% - ${(head ? 2 : 0) + (tail ? 2 : 0)}px)`,
-                      backgroundColor: softOf(r.type),
-                      opacity: r.done ? 0.55 : 1,
+                      // 끝난 단계: 면만 흐리게(카드 면과 반씩), 글자는 muted 로 — 글자까지 흐리면 4.5:1 아래로 내려간다
+                      backgroundColor: r.done ? `color-mix(in srgb, ${softOf(r.type)} 50%, var(--color-surface))` : softOf(r.type),
                     }}>
-                    {head && <span className="mr-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: colorOf(r.type) }} />}
+                    {head && <span className="mr-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: colorOf(r.type), opacity: r.done ? 0.55 : 1 }} />}
                     {span < 2
                       // 한 칸: 「5단계」, 칸이 그보다 좁으면 「5.」(말줄임표 없이)
                       ? <><span className={ONE_CELL[`${head ? 'h' : 'n'}${r.id >= 10 ? 2 : 1}`]}>{r.id}.</span><span className={`hidden ${ONE_CELL_WIDE[`${head ? 'h' : 'n'}${r.id >= 10 ? 2 : 1}`]}`}>{r.id}단계</span></>
@@ -148,7 +148,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
                       : (
                         <span className="flex h-4 min-w-0 flex-1 flex-wrap content-start items-center overflow-hidden">
                           <span className="min-w-0 max-w-full truncate">{r.id}. {r.title}</span>
-                          {head && span >= 3 && <span className="ml-1 shrink-0 text-ink-soft">{guest ? dayRangeLabel(r.start, r.end) : `~${shortDate(r.to)}`}</span>}
+                          {head && span >= 3 && <span className={`ml-1 shrink-0 ${r.done ? 'text-muted' : 'text-ink-soft'}`}>{guest ? dayRangeLabel(r.start, r.end) : `~${shortDate(r.to)}`}</span>}
                         </span>
                       )}
                   </span>

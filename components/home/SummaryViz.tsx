@@ -107,7 +107,7 @@ function RoadSvg({ states, width }: { states: StepStateRow[]; width: number }) {
     progTo = (i) => `M${x0},${y} H${pts[i].x}`;
     H = 86;
   } else {
-    const x0 = 28, x1 = width - 50, y1 = 44, gap = 80, y2 = y1 + gap, ym = y1 + gap / 2, r = gap / 4;
+    const x0 = 28, x1 = width - 56, y1 = 44, gap = 80, y2 = y1 + gap, ym = y1 + gap / 2, r = gap / 4;
     step = perRow > 1 ? (x1 - x0) / (perRow - 1) : 0;
     pts = states.map((_, i) => ({ x: x0 + (i % perRow) * step, y: i < perRow ? y1 : y2 }));
     const xr = x1 + 14, xl = x0 - 4;
@@ -117,8 +117,8 @@ function RoadSvg({ states, width }: { states: StepStateRow[]; width: number }) {
     progTo = (i) => (i < perRow ? `M${x0},${y1} H${pts[i].x}` : `${turn} H${pts[i].x}`);
     H = y2 + 40;
   }
-  // 원 크기: 지금 고리(R + 6)와 옆 원(R + 2)이 닿지 않게 칸 사이 폭에 맞춰 11 ~ 14
-  const R = Math.max(11, Math.min(14, (step - 8) / 2));
+  // 원 크기: 지금 고리(R + 6)와 옆 원(R + 2) 사이가 2px 넘게 비도록 칸 사이 폭에 맞춰 11 ~ 14
+  const R = Math.max(11, Math.min(14, (step - 10) / 2));
   const nowIdx = states.findIndex((s) => s.state === 'now');
   const lastDone = states.map((s) => s.state).lastIndexOf('done');
   const progIdx = nowIdx >= 0 ? nowIdx : lastDone;
@@ -169,12 +169,12 @@ function RoadSvg({ states, width }: { states: StepStateRow[]; width: number }) {
 const MAX_STACK = 5;
 export function WeekChart({ late, days, today }: { late: WeekItem[]; days: WeekDay[]; today: string }) {
   const [ref, width] = useWidth<HTMLDivElement>();
-  const md = (iso: string) => { const d = toDate(iso); return `${d.getMonth() + 1}월 ${d.getDate()}일(${DOW[d.getDay()]})`; };
+  const md = (iso: string) => { const d = toDate(iso); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${DOW[d.getDay()]}요일`; };
   const parts = [
-    late.length > 0 ? `기한 지남 ${late.length}개` : '',
-    ...days.filter((d) => d.items.length > 0).map((d) => `${d.date === today ? '오늘' : md(d.date)} ${d.items.length}개`),
+    late.length > 0 ? `기한 지난 할 일 ${late.length}개` : '',
+    ...days.filter((d) => d.items.length > 0).map((d) => `${d.date === today ? '오늘' : md(d.date)} 할 일 ${d.items.length}개`),
   ].filter(Boolean);
-  const label = parts.length ? `날짜별 할 일 수: ${parts.join(', ')}` : '기한 지난 일도, 7일 안에 할 일도 없어요';
+  const label = parts.length ? parts.join(', ') : '기한 지난 일도, 7일 안에 할 일도 없어요';
   return (
     <div ref={ref} role="img" aria-label={label} className="px-4 pt-3 pb-3">
       {width > 0 && <WeekSvg late={late} days={days} today={today} width={width} />}
@@ -236,7 +236,7 @@ export function GuestWeeks({ days, endDate }: { days: number; endDate: string })
   while (shown.length > 1 && (1 - shown[shown.length - 1].x) * width < 52) shown.pop();
   shown.push(endMark);
   return (
-    <div role="img" aria-label={`오늘부터 약 ${days}일, ${weeks}주 남짓`}>
+    <div role="img" aria-label={`오늘부터 약 ${days}일, ${days % 7 ? `${Math.floor(days / 7)}주 남짓` : `${days / 7}주`}`}>
       <div className="mt-4 flex gap-1.5" aria-hidden>
         {Array.from({ length: weeks }, (_, w) => {
           const n = Math.min(7, days - w * 7);

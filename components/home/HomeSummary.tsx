@@ -98,8 +98,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
   const doing = s.stepStates.filter((x) => x.state === 'doing').map((x) => `${x.id}단계`);
   const roadLabel = [
     `${s.stepsTotal}단계 중 ${s.stepsDone}단계 끝`,
-    now ? `지금 ${now.id}단계 ${now.title}` : '',
-    doing.length ? `${doing.join(', ')} 하는 중` : '',
+    now ? `지금은 ${now.id}단계 ${now.title}${doing.length ? `이고, ${doing.join(', ')}도 같이 하는 중` : ''}` : doing.length ? `${doing.join(', ')} 하는 중` : '',
   ].filter(Boolean).join('. ');
 
   return (
@@ -128,7 +127,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
                     <span className="tabular-nums">{s.span}일 중 <b className="font-bold text-on-hero">{s.elapsed}일</b> 지남</span>
                   </p>
                 </>
-              ) : <p className="text-base">단계 날짜가 아직 없어요.</p>}
+              ) : <p className="text-base">단계에 날짜를 넣으면 첫 손님 날을 계산해요.</p>}
             </div>
           </div>
           {pin && (
@@ -155,7 +154,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
 
       {/* ② 지금 하는 단계 */}
       <Panel id={`${uid}-steps`} title="지금 하는 단계" className="md:col-span-2"
-        aside={<><b className="text-base font-bold text-ink tabular-nums">{s.stepsDone}/{s.stepsTotal}</b>끝</>}>
+        aside={<>{s.stepsTotal}단계 중 <b className="text-base font-bold text-ink tabular-nums">{s.stepsDone}개</b> 끝</>}>
         <StepRoad states={s.stepStates} label={roadLabel} />
         <TypeLegend className="px-4 pt-1 pb-3" />
         {s.active.length === 0 && <p className="border-t border-line px-4 py-3 text-base text-muted">모든 단계를 끝냈어요.</p>}
@@ -177,7 +176,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
                       <span className="block h-2 overflow-hidden rounded-full bg-track" aria-hidden>
                         {a.all > 0 && <span className="block h-full rounded-full" style={{ width: `${(a.done / a.all) * 100}%`, backgroundColor: `var(--type-${a.type})` }} />}
                       </span>
-                      <span className="text-sm text-muted tabular-nums">{a.all > 0 ? `할 일 ${a.done}/${a.all}` : '할 일 없음'}</span>
+                      <span className="text-sm text-muted tabular-nums">{a.all > 0 ? `할 일 ${a.done}/${a.all} 끝` : '할 일 없음'}</span>
                     </span>
                   </span>
                   <span className="text-right">
@@ -204,14 +203,14 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
         {nothingSoon && <p className="border-t border-line px-4 py-3 text-base text-muted">기한 지난 일도, 7일 안에 할 일도 없어요.</p>}
         {s.late.length > 0 && (
           <section aria-labelledby={`${uid}-late`}>
-            <h4 id={`${uid}-late`} className={`${groupCls} text-danger-ink`}>기한 지남 <span className="tabular-nums">{s.late.length}</span></h4>
+            <h4 id={`${uid}-late`} className={`${groupCls} text-danger-ink`}>기한 지남<span className="tabular-nums">{s.late.length}</span></h4>
             <ul>{s.late.map((t) => row(t, true))}</ul>
           </section>
         )}
         {/* 「오늘」은 비어도 남긴다(다른 묶음이 하나라도 있을 때) — 오늘 마감이 없다는 것도 알릴 거리 */}
         {!nothingSoon && (
           <section aria-labelledby={`${uid}-today`}>
-            <h4 id={`${uid}-today`} className={`${groupCls} text-accent-ink`}>오늘 <span className="tabular-nums">{s.today.length}</span></h4>
+            <h4 id={`${uid}-today`} className={`${groupCls} text-accent-ink`}>오늘{s.today.length > 0 && <span className="tabular-nums">{s.today.length}</span>}</h4>
             {s.today.length > 0
               ? <ul>{s.today.map((t) => row(t))}</ul>
               : <p className="px-4 pt-1 pb-3 text-base text-muted">오늘 마감인 할 일이 없어요.</p>}
@@ -221,7 +220,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
           <>
             {nextOpen && (
               <section id={`${uid}-next`} aria-labelledby={`${uid}-next-h`}>
-                <h4 id={`${uid}-next-h`} className={`${groupCls} text-ink-soft`}>다음 7일 <span className="tabular-nums">{s.next7.length}</span></h4>
+                <h4 id={`${uid}-next-h`} className={`${groupCls} text-ink-soft`}>다음 7일<span className="tabular-nums">{s.next7.length}</span></h4>
                 <ul>{s.next7.map((t) => row(t))}</ul>
               </section>
             )}
@@ -238,8 +237,8 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
         {showDecide && (
           <Panel id={`${uid}-decide`} title="정할 것">
             <p className="flex flex-wrap gap-x-4 gap-y-1 px-4 pt-2 pb-3 text-sm text-muted">
-              {s.decide.length > 0 && <span>결정 <b className="text-base font-bold text-ink tabular-nums">{s.decide.length}</b></span>}
-              {s.questions.open > 0 && <span>답 기다림 <b className="text-base font-bold text-ink tabular-nums">{s.questions.open}</b></span>}
+              {s.decide.length > 0 && <span>정할 것 <b className="text-base font-bold text-ink tabular-nums">{s.decide.length}</b></span>}
+              {s.questions.open > 0 && <span>답 기다리는 질문 <b className="text-base font-bold text-ink tabular-nums">{s.questions.open}</b></span>}
               {s.questions.unread > 0 && (
                 <span className="inline-flex items-center gap-1.5">새 답 <b className="text-base font-bold text-accent-ink tabular-nums">{s.questions.unread}</b>
                   <span className="size-2 rounded-full bg-accent-ink" aria-hidden /></span>
@@ -253,7 +252,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
             )}
             {s.decide.length > DECIDE_SHOWN && (
               <button type="button" aria-expanded={decideOpen} aria-controls={`${uid}-decide-more`} onClick={() => setMoreDecide((v) => !v)} className={moreCls}>
-                {decideOpen ? '결정 접기' : `결정 ${s.decide.length - DECIDE_SHOWN}개 더 보기`}
+                {decideOpen ? '접기' : `정할 것 ${s.decide.length - DECIDE_SHOWN}개 더 보기`}
                 <Chevron className={`text-accent-ink transition-transform ${decideOpen ? '-rotate-90' : 'rotate-90'}`} />
               </button>
             )}
@@ -279,7 +278,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
 function MoneyPanel({ id, money }: { id: string; money: NonNullable<Summary['money']> }) {
   const known = money.next.filter((r) => r.item.amount !== null);
   const allOut = known.length > 0 && known.every((r) => r.item.amount! < 0);
-  const aside = money.next.length === 0 ? '다가오는 돈 흐름 없음' : allOut && known.length === money.next.length ? `나갈 돈 ${money.next.length}건을 뺀 뒤` : `다가오는 ${money.next.length}건 뒤`;
+  const aside = money.next.length === 0 ? '예정된 돈 흐름 없음' : allOut && known.length === money.next.length ? `나갈 돈 ${money.next.length}건을 뺀 뒤` : `들어오고 나갈 돈 ${money.next.length}건을 반영하면`;
   const maxNow = Math.max(1, ...money.after.map((a) => a.now));
   return (
     <Panel id={id} title="돈" aside={aside} className="md:col-span-2">
@@ -298,13 +297,13 @@ function Account({ a, first, widthPct }: { a: MoneyAccount; first: boolean; widt
       <div className="flex items-baseline gap-2">
         <span className="text-sm text-ink-soft">{a.via === 'cash' ? '현금' : '마이너스 통장 여유'}</span>
         <span className={`ml-auto text-2xl font-bold tabular-nums tracking-tight ${short ? 'text-danger-ink' : 'text-ink'}`}>
-          {short ? '−' : ''}{manwon(a.after)}<span className="ml-1 text-sm font-normal tracking-normal text-muted">{short ? '모자람' : '남음'}</span>
+          {manwon(a.after)}<span className="ml-1 text-sm font-normal tracking-normal text-muted">{short ? '모자람' : '남음'}</span>
         </span>
       </div>
       <MoneyBar now={a.now} after={a.after} out={a.out} widthPct={widthPct} />
       <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-sm text-muted">
         <span className="tabular-nums">지금 <b className="font-bold text-ink">{a.now < 0 ? '−' : ''}{manwon(a.now)}</b> 중</span>
-        {a.rows.length === 0 && <span>다가오는 건 없음</span>}
+        {a.rows.length === 0 && <span>예정된 건 없음</span>}
         {a.rows.map(({ item }) => (
           <span key={item.id} className="tabular-nums">
             {item.date ? shortDate(item.date) : '미정'} {item.project === 'jisan' ? `${PROJECT_LABEL.jisan} ` : ''}{item.text}{' '}
