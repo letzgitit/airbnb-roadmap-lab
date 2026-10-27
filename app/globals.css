@@ -67,6 +67,11 @@
   --color-milestone: #000000;
   --color-late: #c92a2a;
   --color-on-type: #14171c;       /* 종류색 면 위 숫자 */
+  /* 분야 점(새 홈 달력 · 다가오는 일정 꼬리표 — DESIGN.md 2.3). 데일리 app.css 「달력」 묶음 --ev-* 에서 세 색을 골랐다:
+     행정 = 상담 보라, 설비 = 방송 노랑, 운영 = 모집 초록(특강 자홍은 일요일 빨강과 가까워 뺐다). 화면 색(검정 · 형광)과 따로 가는 「자료의 색」 */
+  --color-ev-admin: #9085e9;
+  --color-ev-facility: #c98500;
+  --color-ev-ops: #008300;
 
   /* 글꼴: 데일리와 같은 시스템 고딕 줄 */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Helvetica Neue', 'Malgun Gothic', '맑은 고딕', 'Noto Sans KR', sans-serif;
@@ -189,6 +194,9 @@
   --color-milestone: #ffffff;
   --color-late: #ff5a5f;
   --color-on-type: #14171c;
+  --color-ev-admin: #9085e9;      /* 데일리 --ev-* 어두운 면 값 */
+  --color-ev-facility: #eda100;
+  --color-ev-ops: #0ca30c;
   --color-white: #1c1e21;
   --color-slate-50: #222428;
   --color-slate-100: #2a2c30;

@@ -56,9 +56,11 @@ export function focusTask(id: string): boolean {
 type GuideForm = { text: string; orig: string; base: number; loading: boolean; error: string | null };
 const NO_GUIDE: GuideForm = { text: '', orig: '', base: 0, loading: false, error: null };
 
-export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, hideDate = false, onEditChange, onToggle, onGone }: {
+export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, hideDate = false, autoEdit = false, onEditChange, onToggle, onGone }: {
   t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
   depth?: 0 | 1; parentTitle?: string; simple?: boolean;
+  /** 처음 그릴 때 바로 고치는 폼을 연다(달력 「다가오는 일정」의 연필 — 폼을 닫으면 부르는 쪽이 이 줄을 치운다) */
+  autoEdit?: boolean;
   /** 쉬운 모양: 보조 줄의 「10월 28일(수)까지」를 숨긴다(달력 그날 목록처럼 머리가 이미 그 날짜를 말할 때). 남은 날 배지는 남긴다 */
   hideDate?: boolean;
   onEditChange: (id: string, open: boolean) => void; onToggle: (t: TaskItem) => void; onGone: () => void;
@@ -119,6 +121,17 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     text: String(c.text ?? ''), start: String(c.start ?? ''), due: String(c.due ?? ''), kind: (c.kind ?? '') as TaskKind | '', owner: (c.owner ?? '') as TaskOwner | '', note: String(c.note ?? ''),
     place: placeOf({ stepId: typeof c.stepId === 'number' ? c.stepId : t.stepId, parentId: typeof c.parentId === 'string' ? c.parentId : null }),
   });
+  // autoEdit: 다른 자리(달력 「다가오는 일정」의 연필)에서 고치려고 이 줄을 그릴 때 — 처음 그릴 때 한 번 바로 고치는 폼을 연다
+  useEffect(() => {
+    if (!autoEdit) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 처음 그릴 때 한 번만 폼을 연다
+    fill(formOf(t as unknown as Record<string, unknown>));
+    loadGuide();
+    setErr(null);
+    setBase(t.version);
+    ed.start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 처음 그릴 때 한 번만
+  }, []);
   const tasks = doc?.tasks ?? {};
   const kidCount = doc ? liveChildrenOf(doc, t.id).length : 0;
   // 세부 항목으로 넣을 수 있는 곳: 같은 단계의 지우지 않은 맨 위 할 일(자기 자신 제외), 마감순
