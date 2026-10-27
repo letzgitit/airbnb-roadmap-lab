@@ -345,7 +345,7 @@ function Photo({ src, source, big }: { src: string | null; source: string; big?:
     return (
       <span className={`flex w-full flex-col items-center justify-center gap-1 bg-sunken px-2 text-center text-muted ${big ? 'aspect-[4/3]' : 'aspect-square'}`}>
         <i className="far fa-image text-lg" aria-hidden />
-        <span className="break-keep text-xs">{source}</span>
+        <span className="break-keep text-sm">{source}</span>
       </span>
     );
   }
@@ -379,10 +379,10 @@ function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: Reaction
       <button type="button" onClick={() => onOpen(it.id)} className="block w-full text-left">
         <span className="block overflow-hidden rounded-control border border-line"><Photo src={it.image} source={it.link ? hostOf(it.url) : it.source} /></span>
         <span className="mt-1.5 line-clamp-2 break-words px-0.5 text-sm font-semibold text-ink">{it.title}</span>
-        {it.link && <span className="block truncate px-0.5 text-xs text-muted">{withGa(it.link.addedBy)} 올림</span>}
+        {it.link && <span className="block truncate px-0.5 text-sm text-muted">{withGa(it.link.addedBy)} 올림</span>}
       </button>
       <div className={`flex items-center gap-1 px-0.5 ${onVote ? '' : 'pt-0.5'}`}>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted">{it.source}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-muted">{it.source}</span>
         {onVote && <span role="group" aria-label="내 반응" className="-mr-1.5 flex shrink-0 items-center">
           {(['up', 'down'] as const).map((v) => {
             const on = mine?.vote === v;
@@ -397,7 +397,7 @@ function Tile({ it, reactions, onOpen, onVote }: { it: Card; reactions: Reaction
         </span>}
       </div>
       {(others.length > 0 || myMemo) && (
-        <p className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 px-0.5 text-xs text-muted">
+        <p className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 px-0.5 text-sm text-muted">
           {others.map((r, i) => (
             <span key={i} className="inline-flex items-center gap-1">
               {displayName(r.name)}
@@ -501,7 +501,7 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
     <article aria-label={it.title}>
       <div className="mb-2 flex items-center justify-between gap-3">
         <button type="button" onClick={onBack} className={textBtn}>
-          <i className="fas fa-chevron-left mr-1.5 text-xs" aria-hidden />목록으로
+          <i className="fas fa-chevron-left mr-1.5 text-sm" aria-hidden />목록으로
         </button>
         {pos && pos.n > 1 && <p className="text-sm tabular-nums text-muted" aria-live="polite"><span className="sr-only">목록에서 </span>{pos.i} / {pos.n}</p>}
       </div>
@@ -526,7 +526,7 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
             좌우 화살표는 세로 가운데, 「n / n」은 사진 위 줄이라 겹치지 않는다. 밀기(onDown)는 a · button 위에서 시작하면 잡지 않으므로 누르기가 밀기로 오인되지 않는다. */}
         <a href={it.url} target="_blank" rel="noopener noreferrer" draggable={false}
           className="absolute bottom-3 right-3 z-10 inline-flex min-h-11 items-center gap-1.5 rounded-full bg-black/60 px-4 text-sm font-bold text-snow shadow-md backdrop-blur-sm transition-colors hover:bg-black/75">
-          원문 보기<i className="fas fa-arrow-up-right-from-square text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
+          원문 보기<i className="fas fa-arrow-up-right-from-square text-sm" aria-hidden /><span className="sr-only">(새 탭)</span>
         </a>
       </div>
       <h2 className="mt-3 break-words text-xl font-bold text-ink">{it.title}</h2>
@@ -542,7 +542,7 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
         )}
         {it.link && it.link.status !== 'done' && !it.fit && (
           <p className="rounded-control bg-sunken px-3 py-2 text-sm text-ink-soft">
-            <i className="far fa-clock mr-1.5 text-xs" aria-hidden />Claude가 곧 설명을 채워요. 우리 집에 맞는 이유와 따라 할 점이 여기에 들어와요.
+            <i className="far fa-clock mr-1.5 text-sm" aria-hidden />Claude가 곧 설명을 채워요. 우리 집에 맞는 이유와 따라 할 점이 여기에 들어와요.
           </p>
         )}
         {it.fit && (
@@ -563,7 +563,7 @@ function Detail({ it, member, reactions, onSave, onBack, onDeleteLink, isPublic,
         )}
         {it.caution && (
           <div className="rounded-control border border-danger-line bg-danger-soft px-3 py-2">
-            <p className="flex items-center gap-1.5 text-sm font-bold text-danger-ink"><i className="fas fa-triangle-exclamation text-xs" aria-hidden />주의</p>
+            <p className="flex items-center gap-1.5 text-sm font-bold text-danger-ink"><i className="fas fa-triangle-exclamation text-sm" aria-hidden />주의</p>
             <p className="mt-0.5 text-base leading-relaxed text-ink">{it.caution}</p>
           </div>
         )}
@@ -679,7 +679,7 @@ function DeleteLink({ title, onDelete }: { title: string; onDelete: () => Promis
   return (
     <button type="button" disabled={busy} onClick={() => void go()}
       className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-bold text-danger-ink hover:underline disabled:opacity-50">
-      <i className="fas fa-trash-can text-xs" aria-hidden />내가 올린 링크 지우기
+      <i className="fas fa-trash-can text-sm" aria-hidden />내가 올린 링크 지우기
     </button>
   );
 }

@@ -13,7 +13,6 @@ import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import { CalendarTab } from './CalendarTab';
 import { ContactsTab } from './ContactsTab';
-import { NewsTab } from './NewsTab';
 import { PhotosTab } from './PhotosTab';
 import { ReceivedDocs } from './ReceivedDocs';
 import { TaskCard } from './TaskCard';
@@ -29,7 +28,8 @@ const read = (k: string) => { try { return localStorage.getItem(k); } catch { re
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 저장이 막혀도 이번 화면에는 적용 */ } };
 
 /**
- * 새 홈(로그인한 두 사람): 엑셀 시트처럼 맨 위 탭 일곱 개 — 서류 · 인테리어 · 사진 · 에어비앤비 · 연락처 · 뉴스 · 달력.
+ * 새 홈(로그인한 두 사람): 엑셀 시트처럼 맨 위 탭 여섯 개 — 서류 · 인테리어 · 사진 · 에어비앤비 · 연락처 · 달력(뉴스는 2026-10-28 뺌).
+ * 홈 안에서 끝난다 — 「우리 집」(/house)으로 보내는 링크를 두지 않는다(사진 전체도 사진 탭 안).
  * 탭마다 큰 덩어리 카드(마감 날짜를 크게), 펼치면 그 자리에서 체크 · 추가 · 고치기 · 지우기 · 메모.
  * 서류 · 인테리어 · 에어비앤비 탭 맨 위에는 「일주일 안에 할 일」(기한 지남 + 일주일 안 마감, 급한 순 5개).
  * 달력 탭은 카드 마감 날짜만 — 날짜를 눌러 카드를 고르면 그 탭으로 가서 그 카드를 펼친다.
@@ -71,7 +71,7 @@ export function SimpleHome({ content }: { content: Content }) {
       docs: tabCounts(tasksByCard(doc, DOC_CARDS), today).late,
       interior: tabCounts(tasksByCard(doc, INTERIOR_CARDS), today).late,
       airbnb: tabCounts(tasksByCard(doc, AIRBNB_CARDS), today).late,
-      photos: 0, contacts: 0, news: 0, calendar: 0,
+      photos: 0, contacts: 0, calendar: 0,
     } as Record<TabId, number>;
   }, [doc, today]);
 
@@ -104,7 +104,6 @@ export function SimpleHome({ content }: { content: Content }) {
         {tab === 'photos' && <PhotosTab />}
         {tab === 'airbnb' && <CardsTab key="airbnb" tab="airbnb" cards={AIRBNB_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)} />}
         {tab === 'contacts' && <ContactsTab />}
-        {tab === 'news' && <NewsTab content={content} />}
         {tab === 'calendar' && <CalendarTab steps={content.steps} today={today} onOpenCard={openCard} />}
       </div>
 
@@ -190,8 +189,8 @@ function CardsTab({ tab, cards, doc, steps, today, extra, afterFirst, focus = nu
 }
 
 /**
- * 「일주일 안에 할 일」: 그 탭의 기한 지남 + 일주일 안 마감, 급한 순 WEEK_MAX 개. 그 줄에서 바로 체크 · 고치기(같은 TaskRow 쉬운 모양, 휴지통 없음).
- * 없으면 숨긴다. 같은 할 일이 아래 카드에도 있다. 경고 말은 줄마다 한 번(「n일 지남」 · 「곧 마감」)만 — 묶음 이름에는 개수만.
+ * 「일주일 안에 할 일」: 그 탭의 기한 지남 + 일주일 안 마감, 급한 순 WEEK_MAX 개. 그 줄에서 바로 체크 · 고치기(같은 TaskRow 쉬운 모양).
+ * 없으면 숨긴다. 같은 할 일이 아래 카드에도 있다. 경고는 줄마다 남은 날 배지 한 번만 — 묶음 이름에는 개수만.
  */
 function WeekBundle({ groups, doc, steps, today }: { groups: Record<string, TaskItem[]>; doc: ProgressDoc; steps: StepRef[]; today: string }) {
   const uid = useId();
@@ -201,13 +200,13 @@ function WeekBundle({ groups, doc, steps, today }: { groups: Record<string, Task
   if (list.length === 0) return null;
   return (
     <Card as="section" aria-labelledby={`${uid}-h`}>
-      <h3 id={`${uid}-h`} className="flex flex-wrap items-baseline gap-x-2 px-4 pt-3 pb-2 text-base font-bold text-ink">
+      <h3 id={`${uid}-h`} className="flex flex-wrap items-baseline gap-x-2 px-4 pt-4 pb-3 text-lg font-bold text-ink">
         일주일 안에 할 일
         <span className="text-sm font-normal text-muted">{total > WEEK_MAX ? `${total}개 중 ${list.length}개만 보여요` : `${total}개`}</span>
       </h3>
       <ul className="border-t border-line">
         {list.map((t) => (
-          <TaskRow key={t.id} t={t} steps={steps} listStepId={null} scope="page" inset simple noTrash
+          <TaskRow key={t.id} t={t} steps={steps} listStepId={null} scope="page" inset simple
             parentTitle={t.parentId ? doc.tasks[t.parentId]?.text : undefined}
             onEditChange={reportEdit} onToggle={onToggle} onGone={() => undefined} />
         ))}

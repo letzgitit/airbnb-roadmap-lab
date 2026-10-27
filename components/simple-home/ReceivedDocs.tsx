@@ -61,18 +61,18 @@ function DocTile({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
   const [failed, setFailed] = useState(false);
   const name = p.caption || p.album || (p.kind === 'pdf' ? 'PDF' : '서류');
   const face = p.kind === 'pdf' && !p.hasImage
-    ? <span className="flex size-16 flex-col items-center justify-center gap-0.5 rounded-control bg-sunken text-ink-soft"><i className="fas fa-file-pdf text-xl" aria-hidden /><span className="text-xs font-bold">PDF</span></span>
+    ? <span className="flex size-16 flex-col items-center justify-center gap-0.5 rounded-control bg-sunken text-ink-soft"><i className="fas fa-file-pdf text-xl" aria-hidden /><span className="text-sm font-bold">PDF</span></span>
     : (
       <span className="relative block size-16 overflow-hidden rounded-control bg-sunken">
         {!failed && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={`/api/photos/${p.id}?size=thumb`} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} className="h-full w-full object-cover" />
         )}
-        {p.kind === 'pdf' && <span className="keep-light absolute left-0.5 top-0.5 rounded-control bg-ink/80 px-1 text-xs font-bold text-on-accent">PDF</span>}
+        {p.kind === 'pdf' && <span className="keep-light absolute left-0.5 top-0.5 rounded-control bg-ink/80 px-1 text-sm font-bold text-on-accent">PDF</span>}
         <span className="pointer-events-none absolute inset-0 rounded-control ring-1 ring-inset ring-ink/10" aria-hidden />
       </span>
     );
-  const label = <span className="mt-1 block truncate text-xs font-normal text-ink-soft">{name}</span>;
+  const label = <span className="mt-1 block truncate text-sm font-normal text-ink-soft">{name}</span>;
   return p.kind === 'pdf'
     ? <a href={`/api/photos/${p.id}?size=file`} target="_blank" rel="noopener" aria-label={`${name} PDF 새 창으로 열기`} className="block">{face}{label}</a>
     : <button type="button" onClick={onOpen} aria-label={`${name} 크게 보기`} className="block w-full text-left">{face}{label}</button>;

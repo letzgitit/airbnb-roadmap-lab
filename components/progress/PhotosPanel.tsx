@@ -238,7 +238,7 @@ const stepLabel = (steps: StepName[], id: number) => {
 function ThumbImg({ id }: { id: string }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  if (failed) return <span className="flex h-full w-full items-center justify-center px-1 text-center text-xs text-muted">못 불러왔어요</span>;
+  if (failed) return <span className="flex h-full w-full items-center justify-center px-1 text-center text-sm text-muted">못 불러왔어요</span>;
   return (
     <>
       {!loaded && <span className="skeleton absolute inset-0" aria-hidden />}
@@ -257,7 +257,7 @@ function Thumb({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
         ? <ThumbImg id={p.id} />
         : <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted"><i className="fas fa-file-pdf text-[28px]" aria-hidden /><span className="text-sm font-bold">PDF</span></span>}
       {/* 사진 위 「PDF」 표시: 어떤 화면 모드에서도 어두운 바탕 + 흰 글자 */}
-      {p.kind === 'pdf' && p.hasImage && <span className="keep-light absolute left-1 top-1 rounded-control bg-ink/80 px-1.5 py-0.5 text-xs font-bold text-on-accent">PDF</span>}
+      {p.kind === 'pdf' && p.hasImage && <span className="keep-light absolute left-1 top-1 rounded-control bg-ink/80 px-1.5 py-0.5 text-sm font-bold text-on-accent">PDF</span>}
       <span className="pointer-events-none absolute inset-0 rounded-control ring-1 ring-inset ring-ink/10" aria-hidden />
     </button>
   );
@@ -735,7 +735,7 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
             {/* 같은 단계 안에서 한 칸씩. 맨 앞 · 맨 뒤에서는 눌리지 않는다. 정렬 · 검색 · 거르기 중에는 숨긴다 */}
             {showMove && (
               <div className="flex w-full items-center gap-2">
-                <span className="text-xs text-slate-300">순서</span>
+                <span className="text-sm text-slate-300">순서</span>
                 <button type="button" disabled={busy || !canMove(p.id, -1)} onClick={() => void run(() => onMove(p.id, -1))} aria-label="같은 단계에서 앞자리로 옮기기" className={`${darkBtn} disabled:opacity-40`}>앞자리로</button>
                 <button type="button" disabled={busy || !canMove(p.id, 1)} onClick={() => void run(() => onMove(p.id, 1))} aria-label="같은 단계에서 뒷자리로 옮기기" className={`${darkBtn} disabled:opacity-40`}>뒷자리로</button>
               </div>

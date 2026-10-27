@@ -87,7 +87,7 @@ export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] 
 // 점: 시작 전 = 흐린 점, 진행 중 = 강조색 점, 완료 = 흐린 체크(완료는 초록을 쓰지 않는다).
 // 고르면 예전과 같은 step.update(status)를 보내므로 동시에 고친 경우의 충돌 창도 그대로 쓴다.
 function StatusMark({ s }: { s: StepStatus }) {
-  if (s === 'done') return <i className="fas fa-check w-2.5 shrink-0 text-center text-xs text-muted" aria-hidden />;
+  if (s === 'done') return <i className="fas fa-check w-2.5 shrink-0 text-center text-sm text-muted" aria-hidden />;
   return <span className={`size-2 shrink-0 rounded-full ${s === 'doing' ? 'bg-accent' : 'bg-faint'}`} aria-hidden />;
 }
 
@@ -145,7 +145,7 @@ export function StepStatusPill({ stepId }: { stepId: number }) {
         className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-control border border-line bg-surface px-3 text-base font-bold text-ink-soft transition-colors hover:bg-sunken">
         <StatusMark s={status} />
         <span>{cur.label}</span>
-        <i className="fas fa-chevron-down text-xs text-muted" aria-hidden />
+        <i className="fas fa-chevron-down text-sm text-muted" aria-hidden />
       </button>
       {open && (
         <>
@@ -200,7 +200,7 @@ export function StepInfo({ stepId }: { stepId: number }) {
           {summary.map((s, k) => <span key={k} className={k === 0 && st?.targetDate ? 'text-ink-soft' : ''}>{s}</span>)}
           <EditBadge k={`step:${stepId}`} />
         </span>
-        <i className={`fas fa-chevron-down shrink-0 text-xs text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+        <i className={`fas fa-chevron-down shrink-0 text-sm text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
       </button>
 
       {/* 접어도 지우지 않는다: 쓰던 메모와 저장 안 한 편집 보호가 끊기지 않게 */}

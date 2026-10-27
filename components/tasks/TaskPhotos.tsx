@@ -34,7 +34,7 @@ export function TaskPhotos({ taskId, stepId }: { taskId: string; stepId: number 
       <label htmlFor={`${uid}-f`}
         className={`flex size-14 shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-control border border-line-strong text-accent-ink transition-colors hover:bg-sunken ${busy ? 'pointer-events-none opacity-60' : ''}`}>
         <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-plus'} text-sm`} aria-hidden />
-        <span className="text-xs font-bold">{busy ? '올리는 중' : '사진'}</span>
+        <span className="text-sm font-bold">{busy ? '올리는 중' : '사진'}</span>
         <span className="sr-only">메모에 사진 추가</span>
       </label>
     </div>

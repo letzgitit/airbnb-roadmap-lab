@@ -214,8 +214,8 @@ function Compare({ before, after, beforeAlt, afterAlt, afterLabel, roomName, pos
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={after} alt={afterAlt} draggable={false} decoding="async" width={1600} height={900}
         className={`pointer-events-none absolute inset-0 size-full object-cover ${ease}`} style={{ clipPath: `inset(0 0 0 ${left})` }} />
-      {pos > 0 && <span aria-hidden className="pointer-events-none absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-snow">지금</span>}
-      {pos < 100 && <span aria-hidden className="pointer-events-none absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-snow">{afterLabel}</span>}
+      {pos > 0 && <span aria-hidden className="pointer-events-none absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-sm text-snow">지금</span>}
+      {pos < 100 && <span aria-hidden className="pointer-events-none absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-sm text-snow">{afterLabel}</span>}
       <span aria-hidden className={`pointer-events-none absolute inset-y-0 -ml-px w-0.5 bg-snow shadow-[0_0_0_1px_rgba(0,0,0,0.2)] ${ease}`} style={{ left }} />
       <input type="range" min={0} max={100} step={1} value={Math.round(pos)} onChange={(e) => setPos(Number(e.target.value))}
         aria-label={`${roomName} 지금과 ${afterLabel} 비교 위치`} aria-valuetext={`왼쪽 지금 ${Math.round(pos)}%, 오른쪽 ${afterLabel}`}

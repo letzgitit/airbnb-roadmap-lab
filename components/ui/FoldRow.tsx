@@ -10,7 +10,7 @@ export function FoldRow({ label, count, open, onToggle, controls, tone = 'defaul
         {label}
         {count != null && <span className="ml-1.5 font-normal text-muted">{count}개</span>}
       </span>
-      <i className={`fas fa-chevron-down text-xs text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+      <i className={`fas fa-chevron-down text-sm text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
     </button>
   );
 }

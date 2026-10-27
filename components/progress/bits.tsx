@@ -10,8 +10,8 @@ export function EditBadge({ k }: { k: string }) {
   const m = editingBy(k);
   if (!m) return null;
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-sunken px-2 py-0.5 text-xs font-bold text-ink-soft">
-      <i className="fas fa-pen text-xs" aria-hidden /> {withGa(m.byName)} 편집 중
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-sunken px-2 py-0.5 text-sm font-bold text-ink-soft">
+      <i className="fas fa-pen text-sm" aria-hidden /> {withGa(m.byName)} 편집 중
     </span>
   );
 }

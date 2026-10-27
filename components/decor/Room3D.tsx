@@ -300,7 +300,7 @@ export function Room3D() {
       </div>
       <p className="mt-2 flex justify-end">
         <a href={src} target="_blank" rel="noopener" className={textBtn}>
-          새 창으로 크게 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-xs" aria-hidden /><span className="sr-only">(새 탭)</span>
+          새 창으로 크게 보기<i className="fas fa-arrow-up-right-from-square ml-1.5 text-sm" aria-hidden /><span className="sr-only">(새 탭)</span>
         </a>
       </p>
     </div>

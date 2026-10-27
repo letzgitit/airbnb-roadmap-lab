@@ -2,69 +2,18 @@
 //   지우기만 하면 되는 TS 문법만 쓰고, @/ 경로는 type import 에만 쓴다.
 // 데이터 구조(ProgressDoc)는 바꾸지 않는다. 카드는 단계 번호 또는 할 일 제목의 낱말로 고른다.
 import type { PhotoView } from '@/lib/core/photos';
-import type { ProgressDoc, PropertyItem, QuestionItem, RefItem, TaskItem, TaskKind, UpdateItem } from '@/lib/core/types';
+import type { ProgressDoc, PropertyItem, QuestionItem, TaskItem, TaskKind } from '@/lib/core/types';
 
-export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts' | 'news' | 'calendar';
+// 「뉴스」 탭은 2026-10-28 뺐다(규정 소식은 예전 화면 · 단계 창에 그대로 있다)
+export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts' | 'calendar';
 export const TABS: { id: TabId; label: string }[] = [
   { id: 'docs', label: '서류' },
   { id: 'interior', label: '인테리어' },
   { id: 'photos', label: '사진' },
   { id: 'airbnb', label: '에어비앤비' },
   { id: 'contacts', label: '연락처' },
-  { id: 'news', label: '뉴스' },
   { id: 'calendar', label: '달력' },
 ];
-
-// ── 뉴스: 사이트에 이미 있는 두 자료(민박업 규정 소식 content/updates.json · 단계별 참고 자료 refs — 고정 + 6시간마다 자동 수집)를 한 목록으로 ──
-/** status = 그 날짜의 뜻을 쉬운 말로(규정 소식만, 예: 「국회에 법안이 올라감」) */
-export interface NewsItem { key: string; title: string; date: string; dateText: string; status?: string; source: string; url: string; kind: string }
-
-// 사이트가 직접 쓴 글(규정 소식 · 고정 참고 자료)의 표시만 바꾼다. 원본 데이터 · 외부 기사 제목은 그대로.
-const STATUS_WORD: Record<string, string> = {
-  시행: '이때부터 시행', 적용: '이때부터 적용', 시작: '이때 시작', 발의: '국회에 법안이 올라감',
-  건의: '정부에 고쳐 달라고 요청함', 게시: '안내문이 올라옴', 발표: '정부가 발표함',
-};
-export const plainStatus = (word: string | undefined) => (word ? STATUS_WORD[word] ?? word : undefined);
-// 출처는 기관 이름만 짧게(앞에서부터 처음 맞는 것)
-const SOURCE_SHORT: [RegExp, string][] = [
-  [/국가법령정보센터|법제처/, '법제처'], [/국회/, '국회'], [/서울시|서울특별시/, '서울시'], [/문화체육관광부|문체부/, '문화체육관광부'],
-  [/행정안전부|행안부/, '행정안전부'], [/법무부/, '법무부'], [/국토교통부|국토부/, '국토교통부'], [/에어비앤비/, '에어비앤비'],
-];
-export function shortSource(src: string): string {
-  for (const [re, name] of SOURCE_SHORT) if (re.test(src)) return name;
-  const gu = /([가-힣]+구청)/.exec(src);
-  if (gu) return gu[1];
-  return src.split(/[\s(「]/)[0] || src;
-}
-// 구청 공지 · 정책으로 보는 낱말(출처 · 제목). 규정 소식은 모두, 참고 자료는 종류가 「공지」이거나 이 낱말이 있으면
-const POLICY = /구청|구 ?보건소|시청|서울시|법무부|국토|문화체육|문체부|관광공사|법령|법안|국회|정부|정책|규정|시행|개정|조례|등록 ?안내|민원/;
-function newsDate(d: string): string {
-  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(d);
-  if (!m) return d;
-  return m[3] ? `${m[1]}년 ${Number(m[2])}월 ${Number(m[3])}일` : `${m[1]}년 ${Number(m[2])}월`;
-}
-/** 구청 · 정책 묶음(먼저)과 그 밖의 기사 · 영상. 각 묶음은 날짜 최근 순, 같은 주소는 한 번만 */
-export function newsGroups(updates: UpdateItem[], refs: RefItem[]): { policy: NewsItem[]; other: NewsItem[] } {
-  const seen = new Set<string>();
-  const policy: NewsItem[] = [];
-  const other: NewsItem[] = [];
-  const push = (to: NewsItem[], it: NewsItem) => {
-    const k = it.url.replace(/[?#].*$/, '').replace(/\/$/, '') || it.key;
-    if (seen.has(k)) return;
-    seen.add(k);
-    to.push(it);
-  };
-  updates.forEach((u, i) => push(policy, {
-    key: `u${i}`, title: u.title, date: u.date, dateText: newsDate(u.date), status: plainStatus(u.dateWord), source: shortSource(u.source), url: u.url, kind: '규정',
-  }));
-  refs.forEach((r, i) => {
-    // 자동 수집(auto)은 외부 글이라 출처도 받은 그대로
-    const it = { key: `r${i}`, title: r.title, date: r.date, dateText: newsDate(r.date), source: r.auto ? r.source : shortSource(r.source), url: r.url, kind: r.kind };
-    push(r.kind === '공지' || POLICY.test(`${r.source} ${r.title}`) ? policy : other, it);
-  });
-  const recent = (a: NewsItem, b: NewsItem) => b.date.localeCompare(a.date);
-  return { policy: policy.sort(recent), other: other.sort(recent) };
-}
 
 /**
  * 카드 하나.
@@ -76,7 +25,7 @@ export function newsGroups(updates: UpdateItem[], refs: RefItem[]): { policy: Ne
  * - kind: 이 할 일 종류면 (앞 카드 낱말에 안 걸렸을 때) 이 카드로.
  * - fixedWords: 고정 일정(집 정보 「고정 · 」 줄) 설명에 이 낱말이 있으면 그 날을 카드 마감으로.
  * - sub: 카드 제목 밑 한 줄 설명.
- * - short: 달력 칸에 쓰는 짧은 이름(없으면 title).
+ * - short: 달력 칸에 쓰는 짧은 이름(없으면 title). 칸에서는 띄어쓰기 자리에서만 줄을 바꾸므로(keep-all) 한 토막을 네 글자 안으로 띄어 쓴다.
  */
 export interface CardDef {
   id: string; title: string; steps: number[]; addStep: number;
@@ -85,11 +34,11 @@ export interface CardDef {
 
 // ── 서류: 단계로 고른다 ──
 export const DOC_CARDS: CardDef[] = [
-  { id: 'move-in', title: '전입신고', steps: [4], addStep: 4, fixedWords: ['전입'] },
+  { id: 'move-in', title: '전입신고', short: '전입 신고', steps: [4], addStep: 4, fixedWords: ['전입'] },
   { id: 'register', title: '외도민 등록 서류', short: '등록 서류', steps: [5, 9], addStep: 9, fixedWords: ['등록 신청', '신청', '접수'], sub: '구청에 내는 서류' },
   { id: 'safety', title: '안전 설비', steps: [8], addStep: 8, sub: '소화기 · 화재감지기 등 꼭 살 것' },
   { id: 'inspect', title: '현장 실사', steps: [12], addStep: 12, sub: '구청에서 집을 보러 오는 날' },
-  { id: 'biz', title: '사업자 등록', short: '사업자등록', steps: [13], addStep: 13, sub: '세무서에 하는 신고' },
+  { id: 'biz', title: '사업자 등록', short: '사업자 등록', steps: [13], addStep: 13, sub: '세무서에 하는 신고' },
 ];
 /** 서류 탭 맨 아래 「끝난 일」로 접어 두는 단계(집 고르기 · 구청 확인 · 계약) */
 export const DONE_STEPS = [1, 2, 3];

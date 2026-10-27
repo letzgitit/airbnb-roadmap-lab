@@ -31,7 +31,7 @@ const HEIGHT_SCRIPT = `<script>(function(){var b=document.body,r=document.docume
 const LIGHT_VARS =
   '--bg:#f3f6fa;--surface:#fff;--surface-2:#edf1f6;--chip:#edf1f6;--scene-bg:#edf1f6;--line:#e3e8ef;--text:#171b22;--muted:#566275;--accent:#007684;--accent-ink:#fff;--link:#006f7c;--warn:#d0302f;--pad-bg:rgba(255,255,255,.82);--pad-ink:#171b22;--raised:#fff;color-scheme:light';
 const DARK_VARS =
-  '--bg:#121315;--surface:#1b1c1f;--surface-2:#232529;--chip:#232529;--scene-bg:#232529;--line:#2f3236;--text:#eeeff1;--muted:#9a9fa8;--accent:#00808f;--accent-ink:#fff;--link:#62c6d2;--warn:#ff6f6a;--pad-bg:rgba(27,28,31,.82);--pad-ink:#eeeff1;--raised:#2e3035;color-scheme:dark';
+  '--bg:#121315;--surface:#1b1c1f;--surface-2:#232529;--chip:#232529;--scene-bg:#232529;--line:#2f3236;--text:#eeeff1;--muted:#a8adb5;--accent:#00808f;--accent-ink:#fff;--link:#62c6d2;--warn:#ff6f6a;--pad-bg:rgba(27,28,31,.82);--pad-ink:#eeeff1;--raised:#2e3035;color-scheme:dark';
 // --raised = 칸 묶음에서 고른 칸(어두운 화면에서도 묶음 바탕보다 밝게 떠 보이게)
 // --link = 어두운 바탕 위 글자 단추(상태 줄 「저장」)도 4.5:1 넘게. color-scheme = 안 고른 체크박스 · 고르기 칸도 어두운 화면 모양으로
 const SITE_STYLE =

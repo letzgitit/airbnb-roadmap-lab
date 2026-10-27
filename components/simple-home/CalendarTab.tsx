@@ -54,7 +54,7 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
           <button type="button" className={`${textBtn} mx-0 px-3 ${month === thisMonth ? 'invisible' : ''}`} onClick={() => setMonth(thisMonth)}>오늘</button>
         </div>
         <div className="grid grid-cols-7 border-b border-line" aria-hidden>
-          {DOW.map((d) => <span key={d} className="py-1 text-center text-xs font-normal text-muted">{d}</span>)}
+          {DOW.map((d) => <span key={d} className="py-1.5 text-center text-sm font-normal text-muted">{d}</span>)}
         </div>
         <div role="group" aria-label={`${mo}월 달력`}>
           {weeks.map((week) => (
@@ -77,9 +77,9 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
                     <span className="flex min-w-0 flex-col gap-0.5 px-0.5 pb-1.5" aria-hidden>
                       {list.slice(0, PER_CELL).map((m) => (
                         <span key={`${m.tab}-${m.cardId}`}
-                          className={`line-clamp-2 block break-words text-xs leading-tight ${m.late ? 'font-bold text-danger-ink' : m.finished ? 'font-normal text-muted line-through' : 'font-semibold text-ink'}`}>
+                          className={`line-clamp-2 block break-keep text-[12px] leading-tight ${m.late ? 'font-bold text-danger-ink' : m.finished ? 'font-normal text-muted line-through' : 'font-semibold text-ink'}`}>
                           {m.short}
-                          {list.length > PER_CELL && <span className="font-normal text-muted no-underline"> +{list.length - PER_CELL}</span>}
+                          {list.length > PER_CELL && <span className="whitespace-nowrap font-normal text-muted no-underline"> +{list.length - PER_CELL}</span>}
                         </span>
                       ))}
                     </span>

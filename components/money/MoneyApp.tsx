@@ -12,7 +12,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { todayStr } from '@/lib/client/format';
 import { PROJECT_LABEL, VIA_LABEL, manwon, moneyRows, splitMark, type PlanItem, type PlanPayload } from '@/lib/plan';
 
-// 「돈 · 다른 집」: 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길. 로그인 확인은 LoginGate(페이지)가 하고,
+// 「자금 계획」(메뉴 「자금」, 2026-10-28 전 이름 「돈 · 다른 집」): 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길. 로그인 확인은 LoginGate(페이지)가 하고,
 // 여기선 로그인이 끝난 뒤에만 /api/plan 을 부른다. 외도민 할 일은 홈 「할 일」에 있다.
 
 type State =
@@ -60,7 +60,7 @@ export function MoneyApp() {
 
   return (
     <>
-      <PageHeader title="돈 · 다른 집" />
+      <PageHeader title="자금 계획" />
       {state.kind === 'loading' && <p className="py-4 text-base text-muted" role="status">불러오는 중…</p>}
       {state.kind === 'error' && (
         <p className="flex flex-wrap items-center gap-x-3 py-2 text-base text-ink-soft">
@@ -111,7 +111,7 @@ function MoneySection({ data }: { data: PlanPayload }) {
                           {out ? '−' : '+'}{manwon(item.amount)}
                         </span>
                       )}
-                      <span className="block text-xs text-muted">{VIA_LABEL[item.via]}</span>
+                      <span className="block text-sm text-muted">{VIA_LABEL[item.via]}</span>
                     </span>
                   </div>
                   {sub.length > 0 && <p className="mt-0.5 flex flex-wrap gap-x-3 pl-15 text-sm text-muted">{sub.map((s, k) => <span key={k}>{s}</span>)}</p>}

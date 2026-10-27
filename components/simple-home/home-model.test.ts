@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
-  newsGroups, progressText, relDay, shortSource, sortCards, summarize, tasksByCard,
+  progressText, relDay, sortCards, summarize, tasksByCard,
   TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos, docGroups,
 } from './home-model.ts';
 
@@ -26,9 +26,8 @@ test('받아 둔 서류: PDF + 서류 낱말 사진, 참고 · 다른 집은 빼
   assert.deepEqual(docGroups(docs).map((g) => `${g.stepId}:${g.items.map((p) => p.id).join('')}`), ['3:a', '5:b', '9:f', '0:c']);
 });
 
-test('탭 일곱 개, 달력이 맨 끝', () => {
-  assert.equal(TABS.length, 7);
-  assert.equal(TABS[6].id, 'calendar');
+test('탭 여섯 개(뉴스 없음), 달력이 맨 끝', () => {
+  assert.deepEqual(TABS.map((t) => t.label), ['서류', '인테리어', '사진', '에어비앤비', '연락처', '달력']);
 });
 
 test('이번 주 꼭 할 일: 기한 지남 + 6일 뒤까지, 마감 이른 순 5개, 끝낸 일 · 날짜 없는 일은 빠짐', () => {
@@ -62,11 +61,17 @@ test('달력: 카드 마감 날짜만(카드 머리와 같은 값), 짧은 이�
   const brief = marks.map((m) => `${m.date} ${m.tab} ${m.short}${m.late ? ' 지남' : ''}${m.finished ? ' 끝' : ''}`);
   assert.deepEqual(brief, [
     '2026-10-20 interior 도배 지남',
-    '2026-10-27 docs 전입신고 끝',
+    '2026-10-27 docs 전입 신고 끝',
     '2026-11-09 docs 등록 서류',
     '2026-11-12 interior 욕실',
     '2026-11-12 airbnb 숙소 이름',
   ]);
+});
+
+test('달력 짧은 이름: 띄어쓰기 토막마다 네 글자 이하(칸에서 글자 중간에 줄이 안 바뀌게)', () => {
+  for (const c of [...DOC_CARDS, ...INTERIOR_CARDS, ...AIRBNB_CARDS]) {
+    for (const part of (c.short ?? c.title).split(' ')) assert.ok(part.length <= 4, `${c.id}: ${part}`);
+  }
 });
 
 test('달력을 처음 열 달: 이번 달에 마감 없으면 가장 가까운 마감이 있는 달', () => {
@@ -161,30 +166,6 @@ test('카드 순서: 마감 이른 순 → 날짜 없음 → 다 끝냄', () => 
   // 기한 지난 일이 있는 카드가 마감이 늦어도 맨 앞(청록 「가장 급한 일」), 다 끝낸 카드는 그래도 뒤
   const late = { ...sums, c: { ...sums.c, late: 1 }, b: { ...sums.b, late: 2 } };
   assert.deepEqual(sortCards(cards, late).map((c) => c.id), ['c', 'd', 'a', 'e', 'b']);
-});
-
-test('뉴스: 규정 소식 · 공지 · 구청 낱말은 「구청 · 정책」, 나머지는 기사 · 영상, 최근 순 · 같은 주소 한 번', () => {
-  const u = [{ date: '2026-09', dateWord: '게시', title: '등록 안내문', text: '', source: '가나구청', url: 'https://a.example/1' }];
-  const r = [
-    { title: '비자 운영', summary: '', source: '법무부', date: '2026-07-07', url: 'https://b.example/2', kind: '공지' },
-    { title: '숙박 기사', summary: '', source: '신문', date: '2026-10-01', url: 'https://c.example/3', kind: '기사' },
-    { title: '구청 설명회', summary: '', source: '방송', date: '2026-10-05', url: 'https://d.example/4', kind: '영상' },
-    { title: '겹침', summary: '', source: '신문', date: '2026-10-02', url: 'https://a.example/1/', kind: '기사' },
-  ];
-  const g = newsGroups(u as never, r as never);
-  assert.deepEqual(g.policy.map((n) => n.title), ['구청 설명회', '등록 안내문', '비자 운영']);
-  assert.deepEqual(g.other.map((n) => n.title), ['숙박 기사']);
-  assert.equal(g.policy[1].dateText, '2026년 9월');
-  assert.equal(g.policy[1].status, '안내문이 올라옴');
-});
-
-test('뉴스 출처 짧게', () => {
-  assert.equal(shortSource('국가법령정보센터 공중위생관리법 개정이유'), '법제처');
-  assert.equal(shortSource('국회 의안정보시스템 의안 2221123'), '국회');
-  assert.equal(shortSource('서울시 보도자료(2026.10.1, 기획조정실)'), '서울시');
-  assert.equal(shortSource('가나구청 민원서식 「신규 등록」'), '가나구청');
-  assert.equal(shortSource('에어비앤비 뉴스룸(2025.8.18)'), '에어비앤비');
-  assert.equal(shortSource('행정안전부 보도자료(2026.8.3)'), '행정안전부');
 });
 
 test('남은 날 말과 색', () => {
