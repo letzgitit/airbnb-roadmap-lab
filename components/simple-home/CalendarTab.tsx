@@ -26,14 +26,12 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 export const FIELD_DOT: Record<WorkTabId, string> = { admin: 'bg-ev-admin', facility: 'bg-ev-facility', ops: 'bg-ev-ops' };
 // 일요일 빨강 · 토요일 파랑(데일리 --cal-sun · --cal-sat = 위험 빨강 · 안내 파랑). 지난 날 · 다른 달은 회색과 반씩 섞는다
 const SUN = 'text-danger-ink', SAT = 'text-info-ink';
-const SUN_DIM = 'text-[color-mix(in_srgb,var(--color-danger-ink),var(--color-muted))]';
-const SAT_DIM = 'text-[color-mix(in_srgb,var(--color-info-ink),var(--color-muted))]';
 
 /**
  * 달력 탭(기획 27의 6절 — 데일리 「일정 · 모집」 그대로). 흰 블록 하나에 위에서 아래로:
  * - 달 머리: ‹ 「2026년 10월」 › + 오른쪽 「오늘」(이번 달 · 오늘을 보고 있으면 없음).
  * - 요일 줄 일 · 월 · 화 · 수 · 목 · 금 · 토(13, 일요일 빨강 · 토요일 파랑), 주마다 옅은 선.
- * - 날 칸(48px): 숫자 15 + 32px 동그라미 — 오늘 = 검정 동그라미 · 흰 숫자, 고른 날 = 회색 동그라미, 지난 날 · 다른 달 = 회색 숫자.
+ * - 날 칸(56px): 숫자 16 + 36px 동그라미 — 오늘 = 검정 동그라미 · 흰 숫자, 고른 날 = 회색 동그라미, 앞으로 할 일이 있는 날 = 굵게. 다른 달 날은 비워 둔다.
  *   숫자 밑 분야 색 점(그날 마감 할 일의 분야 — 행정 · 설비 · 운영 셋까지, 그 분야를 다 끝냈으면 회색 점). 칸 안에 글자는 없다.
  * - 「오늘」(또는 고른 날 「10월 30일 (금)」) 묶음: 그날 마감 · 그날 시작 할 일 줄(TaskRow 쉬운 모양 — 체크 · 설명서 · 연필 · 휴지통). 없으면 「오늘은 할 일이 없어요」.
  *   날을 누르면 이 자리가 그날 할 일로 바로 바뀐다(한 번 더 누르게 하지 않는다).
@@ -86,23 +84,27 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
             <div key={week[0]} className="grid grid-cols-7 border-b border-line">
               {week.map((d, i) => {
                 const inMonth = d.slice(0, 7) === month.slice(0, 7);
+                // 다른 달 날은 비워 둔다(데일리처럼 — 그 달 날만 보인다)
+                if (!inMonth) return <span key={d} aria-hidden className="h-14" />;
                 const isToday = d === today;
                 const on = d === picked;
-                const dim = !inMonth || d < today;
                 const list = dots.get(d) ?? [];
+                const dim = d < today;
+                const busy = !dim && list.some((x) => !x.done);
                 const { wd } = dateParts(d);
                 const say = list.length ? `, ${list.map((x) => `${fieldLabel(x.tab)}${x.done ? ' 완료' : ''}`).join(', ')} 할 일` : '';
                 const label = `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일 ${wd}요일${isToday ? ', 오늘' : ''}${say}`;
-                const tint = i === 0 ? (dim ? SUN_DIM : SUN) : i === 6 ? (dim ? SAT_DIM : SAT) : dim ? 'text-muted' : 'text-ink-soft';
-                const circle = isToday ? 'bg-ink font-bold text-surface' : on ? `bg-strong font-semibold ${tint}` : `${tint} ${dim ? 'font-normal' : 'font-semibold'}`;
+                // 글자색: 일 빨강 · 토 파랑 · 나머지 본문색(지난 날도 같은 색 — 데일리). 앞으로 할 일이 있는 날은 굵게
+                const tint = i === 0 ? SUN : i === 6 ? SAT : busy ? 'text-ink' : 'text-ink-soft';
+                const circle = isToday ? 'bg-ink font-bold text-surface' : on ? `bg-strong font-bold ${tint}` : `${tint} ${busy ? 'font-bold' : 'font-normal'}`;
                 return (
                   <button key={d} type="button" aria-pressed={on} aria-label={label} aria-controls={`${uid}-day`} onClick={() => pick(d)}
-                    className="group relative flex h-12 min-w-0 justify-center pt-1 focus-visible:-outline-offset-2">
-                    <span className={`flex size-8 items-center justify-center rounded-full text-cta tabular-nums transition-colors ${circle} ${!isToday && !on ? 'group-hover:bg-sunken' : ''}`}>
+                    className="group relative flex h-14 min-w-0 justify-center pt-1.5 focus-visible:-outline-offset-2">
+                    <span className={`flex size-9 items-center justify-center rounded-full text-base tabular-nums transition-colors ${circle} ${!isToday && !on ? 'group-hover:bg-sunken' : ''}`}>
                       {Number(d.slice(8))}
                     </span>
                     {list.length > 0 && (
-                      <span className="pointer-events-none absolute inset-x-0 bottom-1.5 flex justify-center gap-[3px]" aria-hidden>
+                      <span className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-[3px]" aria-hidden>
                         {list.map((x) => <i key={x.tab} className={`block size-1.5 rounded-full ${x.done ? 'bg-muted' : FIELD_DOT[x.tab]}`} />)}
                       </span>
                     )}
@@ -125,7 +127,7 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
 /** 묶음 머리(데일리 .grp-h): 이름 14/700 `sub` + 오른쪽 「n건」 13 `muted` */
 function GroupHead({ id, name, count }: { id: string; name: string; count: number }) {
   return (
-    <h3 id={id} className="flex items-baseline justify-between gap-3 px-5 pb-0.5 pt-6 text-meta font-normal text-muted">
+    <h3 id={id} className="mx-5 flex items-baseline justify-between gap-3 border-b border-line pb-2 pt-6 text-meta font-normal text-muted">
       <b className="min-w-0 truncate text-sm font-bold text-sub">{name}</b>
       {count > 0 && <span className="tabular-nums">{count}건</span>}
     </h3>
