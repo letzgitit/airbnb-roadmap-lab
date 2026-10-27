@@ -22,6 +22,7 @@
     "react-dom": "19.3.1",
     "server-only": "0.0.1",
     "sharp": "0.35.5",
+    "wanted-sans": "1.0.3",
     "zod": "4.6.7"
   },
   "devDependencies": {

@@ -1,0 +1,32 @@
+// 선 아이콘(시안 B — 에어비앤비 앱처럼 가는 선 24px). 위 탭 · 아래 메뉴 · 할 일 줄 단추 · 머리글에 쓴다.
+// 장식이라 늘 aria-hidden — 이름은 단추 · 링크 쪽 글자나 aria-label 이 말한다. 굵기는 stroke(기본 1.8), 크기는 className(size-6 등).
+const PATHS = {
+  // 위 탭
+  doc: ['M7 3h7l4 4v14H7z', 'M14 3v4h4M9.5 12h5M9.5 15.5h5'],
+  sofa: ['M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3', 'M3.5 12a1.5 1.5 0 0 1 3 0v2h11v-2a1.5 1.5 0 0 1 3 0v5h-17z', 'M6 17v2M18 17v2'],
+  camera: ['M4 8h3l1.5-2h7L17 8h3v11H4z', 'M15.2 13a3.2 3.2 0 1 1-6.4 0a3.2 3.2 0 1 1 6.4 0'],
+  bed: ['M3 19v-6.5A1.5 1.5 0 0 1 4.5 11h15a1.5 1.5 0 0 1 1.5 1.5V19', 'M5 11V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4', 'M8 11V9.5A1 1 0 0 1 9 8.5h2a1 1 0 0 1 1 1V11M12 11V9.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V11', 'M3 16h18'],
+  phone: ['M6.5 3.5h3l1.5 4-2 1.5a10 10 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4.5 5.5a2 2 0 0 1 2-2Z'],
+  calendar: ['M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', 'M4 10h16M9 3v4M15 3v4'],
+  // 아래 메뉴
+  home: ['M4 11 12 4l8 7v9h-5v-6H9v6H4z'],
+  layout: ['M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M4 10h16M10 10v10'],
+  wallet: ['M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4z', 'M4 7l11-3v3M16 13.5h1.5'],
+  // 단추
+  pen: ['M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z', 'M14.5 7.5l3 3'],
+  trash: ['M4 7h16', 'M10 11v6M14 11v6', 'M6 7l1 13h10l1-13', 'M9 7V4h6v3'],
+  gear: ['M12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6z', 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'],
+  plus: ['M12 5v14M5 12h14'],
+  chevron: ['m9 6 6 6-6 6'],
+  check: ['m5 12.5 4.5 4.5L19 7.5'],
+} as const;
+
+export type LineIconName = keyof typeof PATHS;
+
+export function LineIcon({ name, className = 'size-6', stroke = 1.8 }: { name: LineIconName; className?: string; stroke?: number }) {
+  return (
+    <svg className={`shrink-0 ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {PATHS[name].map((d) => <path key={d} d={d} />)}
+    </svg>
+  );
+}

@@ -7,6 +7,7 @@ import {
 } from '@/components/progress/bits';
 import { AddButton } from '@/components/ui/AddButton';
 import { Card, cardRowCls } from '@/components/ui/Card';
+import { LineIcon } from '@/components/ui/LineIcon';
 import { CONTACT_PREFIX, contacts, contactToProperty, telOf, type Contact } from './home-model';
 
 // 이름은 집 정보 항목 이름(40자)에서 「연락처 · 」을 뺀 만큼
@@ -26,8 +27,8 @@ export function ContactsTab() {
   if (!doc) return null;
   const list = contacts(doc.property);
   return (
-    <Card as="section" aria-label="연락처">
-      <div className={composing ? 'border-b border-line px-3' : 'border-b border-line'}>
+    <Card as="section" aria-label="연락처" className="mt-5">
+      <div className={composing ? 'border-b border-line px-3' : 'border-b border-line pl-1.5'}>
         {composing ? <ContactForm onClose={close} /> : <AddButton buttonRef={addRef} label="연락처 추가" onClick={() => setComposing(true)} />}
       </div>
       {/* 머리 줄: 줄(li)과 같은 왼쪽 여백 · 같은 칸 폭. 「전화」는 번호 단추의 안쪽 여백(8px)만큼 들여 번호 아이콘과 맞춘다 */}
@@ -97,10 +98,10 @@ function ContactRow({ c }: { c: Contact }) {
   };
   if (ed.open) return <li className={`${cardRowCls} px-3`}><ContactForm c={c} onClose={ed.stop} /></li>;
   return (
-    <li className={`flex items-center border-b border-line pl-4 last:border-b-0 ${cols} md:gap-x-4`}>
+    <li className={`flex items-center border-b border-line pl-5 pr-1 last:border-b-0 ${cols} md:gap-x-4`}>
       {/* 폰: [이름 / 무슨 일] [전화] [휴지통] · 넓은 화면: 이름 | 무슨 일 | 전화 | 휴지통 */}
       <button type="button" aria-label={`${c.name} 고치기`} onClick={ed.start}
-        className="min-w-0 flex-1 py-3 text-left md:col-span-2 md:grid md:grid-cols-subgrid md:items-center md:gap-x-4">
+        className="min-w-0 flex-1 py-4 text-left md:col-span-2 md:grid md:grid-cols-subgrid md:items-center md:gap-x-4">
         <span className="flex flex-wrap items-center gap-x-3">
           <span className="break-words text-base font-semibold text-ink">{c.name}</span>
           <EditBadge k={`prop:${c.item.id}`} />
@@ -109,8 +110,8 @@ function ContactRow({ c }: { c: Contact }) {
       </button>
       {c.phone ? (
         <a href={telOf(c.phone)} aria-label={`${c.name}에게 전화 걸기 ${c.phone}`}
-          className="ml-2 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-control px-2 text-base font-bold tabular-nums text-accent-ink transition-colors hover:bg-sunken md:ml-0 md:justify-self-start">
-          <i className="fas fa-phone text-sm" aria-hidden />{c.phone}
+          className="ml-2 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-control px-2 text-base font-semibold tabular-nums text-ink underline underline-offset-[3px] transition-colors hover:bg-sunken md:ml-0 md:justify-self-start">
+          <LineIcon name="phone" className="size-4.5" />{c.phone}
         </a>
       ) : <span className="ml-2 shrink-0 px-2 text-sm text-muted md:ml-0">번호 없음</span>}
       <TrashButton label={`${c.name} 삭제`} onClick={() => void del()} />

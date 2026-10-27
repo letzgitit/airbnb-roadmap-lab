@@ -4,15 +4,18 @@
 import type { PhotoView } from '@/lib/core/photos';
 import type { ProgressDoc, PropertyItem, QuestionItem, TaskItem, TaskKind } from '@/lib/core/types';
 
-// 「뉴스」 탭은 2026-10-28 뺐다(규정 소식은 예전 화면 · 단계 창에 그대로 있다)
+// 「뉴스」 탭은 2026-10-28 뺐다(규정 소식은 예전 화면 · 단계 창에 그대로 있다).
+// icon = 탭 위 선 아이콘 이름(components/ui/LineIcon). 뜻이 바로 통하는 물건으로: 서류 = 문서, 인테리어 = 소파, 사진 · 문서 = 카메라,
+// 에어비앤비 = 침대(숙소 — 예전 열쇠는 뜻이 안 통했다), 연락처 = 전화, 달력 = 달력.
+// 「사진」 탭은 2026-10-28 「사진 · 문서」로(안에 하위 탭 「사진」 「문서」 — 받아 둔 서류가 「문서」로 옮겨 왔다)
 export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts' | 'calendar';
-export const TABS: { id: TabId; label: string }[] = [
-  { id: 'docs', label: '서류' },
-  { id: 'interior', label: '인테리어' },
-  { id: 'photos', label: '사진' },
-  { id: 'airbnb', label: '에어비앤비' },
-  { id: 'contacts', label: '연락처' },
-  { id: 'calendar', label: '달력' },
+export const TABS: { id: TabId; label: string; icon: 'doc' | 'sofa' | 'camera' | 'bed' | 'phone' | 'calendar' }[] = [
+  { id: 'docs', label: '서류', icon: 'doc' },
+  { id: 'interior', label: '인테리어', icon: 'sofa' },
+  { id: 'photos', label: '사진 · 문서', icon: 'camera' },
+  { id: 'airbnb', label: '에어비앤비', icon: 'bed' },
+  { id: 'contacts', label: '연락처', icon: 'phone' },
+  { id: 'calendar', label: '달력', icon: 'calendar' },
 ];
 
 /**
@@ -173,7 +176,7 @@ export function summarize(card: CardDef, tasks: TaskItem[], doc: Pick<ProgressDo
 
 /**
  * 카드 순서: 기한 지난 일이 있는 안 끝난 카드 → 그 밖의 안 끝난 카드 중 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드
- * (각 묶음 안에서는 마감 이른 순, 같으면 정의 순서). 맨 앞 카드가 청록 「가장 급한 일」이 된다.
+ * (각 묶음 안에서는 마감 이른 순, 같으면 정의 순서). 맨 앞 카드가 「가장 급한 일」(옅은 회색 큰 카드)이 된다.
  */
 export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'> & { late?: number }>): CardDef[] {
   const rank = (c: CardDef) => {

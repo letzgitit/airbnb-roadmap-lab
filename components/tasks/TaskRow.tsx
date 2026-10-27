@@ -12,10 +12,12 @@ import {
 } from '@/components/progress/bits';
 import { callNumber, phonesIn, telHref } from './phone';
 import { START_AFTER_DUE, taskErrorMessage } from './task-errors';
-import { PHASE_WORD, placeOf, placePatch, placeStep, spanDate, taskPhase } from './task-view';
+import { longDate, PHASE_WORD, placeOf, placePatch, placeStep, spanDate, taskPhase } from './task-view';
 import { KindSelect, NoteField, OwnerSelect, SimpleWhenFields, type StepRef, type TaskOwner, type TaskWithNote } from './TaskComposer';
 import { TaskPhotos } from './TaskPhotos';
 import { usePhotos } from '@/components/progress/PhotosPanel';
+import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { LineIcon } from '@/components/ui/LineIcon';
 
 /**
  * 할 일 한 줄(홈 「할 일」과 단계 시트 「우리 할 일」이 같이 쓴다): [체크 44px] [글 + 보조 한 줄] [휴지통 44px].
@@ -32,10 +34,11 @@ import { usePhotos } from '@/components/progress/PhotosPanel';
  * - quietLate: 홈 「기한 지남」 묶음 안의 줄. 묶음 이름이 이미 빨강이라 날짜 보조 줄은 muted 로 둔다.
  * - depth: 1 = 부모 바로 밑의 세부 항목 줄(앞 칸을 24px 들여 쓰고 글자를 한 단계 작게).
  * - parentTitle: 부모가 이 목록에 없는 세부 항목이면 부모 제목(보조 줄에 「‘부모 제목’의 세부 항목」).
- * - simple: 새 홈(한눈에 보기)의 쉬운 모양. 제목을 누르면 메모만 펼치고 접는다 — 고치기는 오른쪽 연필 단추(44px)로만.
- *   고치는 폼은 제목 · 언제부터(선택) · 언제까지 · 문의 필요(종류 「문의」) · 메모만(종류 · 담당 · 넣을 곳은 숨김, 값은 그대로).
- *   보조 줄: 날짜 · 남은 날 배지(지남 빨강 면 · 3일 안 진한 면 · 그 밖 옅은 면) · 「지금 할 때」(시작일 ~ 마감 사이, muted 400) · 「문의 필요」 배지.
- *   쉬운 모양 줄에는 휴지통이 없다 — 지우기는 고치는 폼 안 「지우기」.
+ * - simple: 새 홈(한눈에 보기)의 쉬운 모양(시안 B). [동그란 체크 24] [제목 16/600 + 오른쪽 남은 날 배지] / [보조 줄 14 muted + 오른쪽 전화 · 연필 · 휴지통].
+ *   단추 셋은 제목 줄이 아니라 날짜 줄 오른쪽에 둔다(제목 폭을 줄이지 않게). 누르는 칸은 44px, 아이콘은 20px 선 아이콘.
+ *   제목을 누르면 메모만 펼치고 접는다 — 고치기는 연필, 지우기는 휴지통(확인 창 없이 바로 지우고 8초 「되돌리기」 알림).
+ *   고치는 폼은 제목 · 언제부터(선택) · 언제까지 · 문의 필요(종류 「문의」) · 메모만(종류 · 담당 · 넣을 곳은 숨김, 값은 그대로). 폼 안 「이 할 일 지우기」는 확인 창을 띄운다.
+ *   보조 줄: 「10월 27일(화)까지」 · 「문의 필요」 안내 배지 · 「지금 할 때」. 남은 날 배지: 지남 = 경고(빨강 글자 옅은 면) · 3일 안 = 주의(노랑) · 그 밖 = 회색.
  */
 type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; place: string };
 
@@ -101,6 +104,13 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     if (!ok) return;
     void send({ op: 'task.delete', id: t.id }).then((r) => {
       if (r.ok) toast('할 일을 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'task.restore', id: t.id }) } });
+    });
+    onGone();
+  };
+  // 쉬운 모양 줄의 휴지통: 확인 창 없이 바로 지우고 8초 「되돌리기」(같은 지우기 · 되살리기 길)
+  const quickDel = () => {
+    void send({ op: 'task.delete', id: t.id }).then((r) => {
+      if (r.ok) toast(kidCount > 0 ? `할 일과 세부 항목 ${kidCount}개를 삭제했어요.` : '할 일을 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'task.restore', id: t.id }) } });
     });
     onGone();
   };
@@ -214,54 +224,71 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const call = callNumber(t.note);
   const startEdit = () => { fill(formOf(t as unknown as Record<string, unknown>)); setErr(null); setBase(t.version); ed.start(); };
   if (simple) {
-    // 보조 줄: 날짜(ink-soft) · 남은 날 배지(기한 지남 = 빨강 면 흰 글자 · 3일 안 = 진한 면 · 그 밖 = 옅은 회색 면) · 「지금 할 때」(muted 400) · 「문의 필요」 배지.
-    // 누르지 못하는 표시라 청록을 쓰지 않는다. 「곧 마감」은 진한 배지가 말하므로 글자로 다시 쓰지 않는다. 담당은 쉬운 모양에서 보이지 않는다(값은 그대로).
+    // 남은 날 배지(제목 줄 오른쪽): 기한 지남 = 경고 · 3일 안 = 주의 · 그 밖 = 회색. 누르지 못하는 표시라 빨강 면 · 검정 면을 쓰지 않는다.
+    // 보조 줄: 「10월 27일(화)까지」 · 「문의 필요」 안내 배지 · 「지금 할 때」. 담당은 쉬운 모양에서 보이지 않는다(값은 그대로).
     const phase = taskPhase(t, todayStr());
-    const badgeTone = late ? 'bg-danger text-on-accent' : phase === 'soon' ? 'bg-ink text-surface' : 'bg-sunken text-ink-soft';
+    const tone: BadgeTone = late ? 'danger' : phase === 'soon' ? 'warn' : 'neutral';
     const noteLines = (t.note ?? '').trim();
     const firstLine = noteLines.split('\n')[0];
     const photoN = taskPhotos.filter((p) => p.taskId === t.id).length;
     const more = noteLines.includes('\n') || firstLine.length > 40 || photoN > 0;
     const hasMemo = !!noteLines || photoN > 0;
     const ask = t.kind === '문의';
-    // 제목 16px(세부 항목은 16px 400). 「문의 필요」 배지는 제목 앞에 — 보조 줄에는 많아야 셋(날짜 · 남은 날 · 지금 할 때)만
-    const titleCls = `block break-words leading-relaxed ${depth ? 'text-base font-normal text-ink' : rowText} ${t.done ? 'text-muted line-through' : ''}`;
-    const askBadge = ask && !t.done && (
-      <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap rounded-control border border-line-strong bg-surface px-1.5 align-[1px] text-sm font-bold text-ink">
-        <i className="fas fa-circle-question" aria-hidden />문의 필요
-      </span>
-    );
+    const dateWord = spanDate(t.start, t.due) ?? (t.due ? `${longDate(t.due)}까지` : null);
+    // 제목 16/600(세부 항목은 16/500)
+    const titleCls = `block break-words text-base ${depth ? 'font-medium' : 'font-semibold'} ${t.done ? 'text-muted line-through' : 'text-ink'}`;
     const sub = (
-      <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm font-normal text-muted empty:hidden">
-        {dateText && <span className={`whitespace-nowrap tabular-nums ${t.done ? '' : 'text-ink-soft'}`}>{dateText}</span>}
-        {dl && !t.done && <span className={`whitespace-nowrap rounded-control px-2 py-0.5 text-sm font-bold tabular-nums ${badgeTone}`}>{dl.rel}</span>}
-        {phase === 'prep' && <span className="whitespace-nowrap font-normal text-muted">{PHASE_WORD.prep}</span>}
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm font-normal text-muted">
+        {dateWord && <span className="whitespace-nowrap tabular-nums">{dateWord}</span>}
+        {ask && !t.done && <Badge tone="info" className="py-0.5">문의 필요</Badge>}
+        {phase === 'prep' && <span className="whitespace-nowrap">{PHASE_WORD.prep}</span>}
         {parentTitle && <span className="min-w-0 truncate">‘{parentTitle}’의 세부 항목</span>}
         <EditBadge k={`task:${t.id}`} />
       </span>
     );
+    const iconBtn = 'flex size-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-strong';
     return (
-      <li className={`${rowCls} flex-wrap`}>
-        <label className={`${leadCls} cursor-pointer ${depth ? 'ml-6' : ''}`}>
-          <input type="checkbox" className="size-5 cursor-pointer" checked={t.done} aria-label={`${t.text} 완료`}
+      <li className={`flex flex-wrap items-start gap-x-2.5 border-b border-line py-3.5 last:border-b-0 ${depth ? 'pl-6' : ''}`}>
+        {/* 동그란 체크(24px, 누르는 칸 44px): 빈 동그라미 → 고르면 검정(다크 흰색) 면 + 체크 */}
+        <label className="relative -my-2.5 -ml-2.5 flex size-11 shrink-0 cursor-pointer items-center justify-center">
+          <input type="checkbox" checked={t.done} aria-label={`${t.text} 완료`}
+            className="peer size-6 cursor-pointer appearance-none rounded-full border-[1.5px] border-faint transition-colors checked:border-ink checked:bg-ink"
             onChange={(e) => { onToggle(t); void send({ op: 'task.update', id: t.id, patch: { done: e.target.checked } }); }} />
+          <LineIcon name="check" stroke={2.6} className="pointer-events-none absolute size-4 text-surface opacity-0 peer-checked:opacity-100" />
         </label>
         <div className="min-w-0 flex-1">
-          {/* 제목을 누르면 메모만 펼치고 접는다(고치기는 오른쪽 연필 단추). 메모도 사진도 없으면 누르는 것이 아니다 */}
-          {hasMemo ? (
-            <button type="button" aria-expanded={noteOpen} className="block w-full py-3 text-left" onClick={() => setNoteOpen((v) => !v)}>
-              <span className={titleCls}>{askBadge}{t.text}</span>
-              {sub}
-              <span className="sr-only">{noteOpen ? '메모 접기' : '메모 펼치기'}</span>
-            </button>
-          ) : (
-            <div className="py-3"><span className={titleCls}>{askBadge}{t.text}</span>{sub}</div>
-          )}
+          {/* 첫 줄: 제목 + 오른쪽 남은 날 배지. 제목을 누르면 메모만 펼치고 접는다(메모도 사진도 없으면 누르는 것이 아니다) */}
+          <div className="flex items-start gap-2">
+            {hasMemo ? (
+              <button type="button" aria-expanded={noteOpen} className="min-w-0 flex-1 text-left" onClick={() => setNoteOpen((v) => !v)}>
+                <span className={titleCls}>{t.text}</span>
+                <span className="sr-only">{noteOpen ? '메모 접기' : '메모 펼치기'}</span>
+              </button>
+            ) : <span className={`min-w-0 flex-1 ${titleCls}`}>{t.text}</span>}
+            {dl && !t.done && <Badge tone={tone} className="-mt-0.5 shrink-0">{dl.rel}</Badge>}
+          </div>
+          {/* 둘째 줄: 보조 글자 + 오른쪽 단추(전화 · 고치기 · 지우기). 단추 칸은 44px 이고 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않는다 */}
+          <div className="mt-1 flex items-center gap-2">
+            {sub}
+            <span className="-my-2.5 -mr-2.5 flex shrink-0 items-center text-ink-soft">
+              {call && (
+                <a href={telHref(call)} aria-label={`${t.text} 전화 걸기 ${call}`} className={iconBtn}>
+                  <LineIcon name="phone" className="size-5" />
+                </a>
+              )}
+              <button ref={textBtnRef} type="button" aria-label={`${t.text} 고치기`} onClick={startEdit} className={iconBtn}>
+                <LineIcon name="pen" className="size-5" />
+              </button>
+              <button type="button" aria-label={`${t.text} 삭제`} onClick={quickDel} className={`${iconBtn} hover:text-danger-ink active:text-danger-ink`}>
+                <LineIcon name="trash" className="size-5" />
+              </button>
+            </span>
+          </div>
           {/* 메모: 접힌 채 첫 줄만 14px muted(사진이 있으면 「사진 n」). 누르면 아래(줄 폭 그대로)에 펼친다.
               메모도 사진도 없는 할 일은 고치는 폼에서 사진을 붙인다 */}
           {hasMemo && !noteOpen && (
               <button type="button" aria-expanded="false" aria-label={`메모 펼치기: ${firstLine || `사진 ${photoN}장`}`} onClick={() => setNoteOpen(true)}
-                className="-mt-2 flex min-h-11 w-full items-center gap-1.5 pb-1 text-left text-sm font-normal text-muted">
+                className="-mb-2 flex min-h-11 w-full items-center gap-1.5 text-left text-sm font-normal text-muted">
                 <i className={`${noteLines ? 'far fa-note-sticky' : 'far fa-image'} shrink-0`} aria-hidden />
                 {noteLines && <span className="min-w-0 truncate">{firstLine}</span>}
                 {photoN > 0 && <span className="shrink-0 whitespace-nowrap">{noteLines && <i className="far fa-image mr-1" aria-hidden />}사진 {photoN}</span>}
@@ -269,22 +296,10 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               </button>
           )}
         </div>
-        {call && (
-          <a href={telHref(call)} aria-label={`${t.text} 전화 걸기 ${call}`}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full text-accent-ink transition-colors hover:bg-sunken">
-            <i className="fas fa-phone" aria-hidden />
-          </a>
-        )}
-        <button ref={textBtnRef} type="button" aria-label={`${t.text} 고치기`} onClick={startEdit}
-          className="flex size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-sunken">
-          <i className="fas fa-pen text-base" aria-hidden />
-        </button>
-        {/* 휴지통은 줄에 두지 않는다(제목 칸이 좁아지지 않게) — 지우기는 연필 → 고치는 폼 안 「지우기」 */}
-        <span className="w-2 shrink-0" aria-hidden />
-        {/* 펼친 메모는 단추 줄 밑에 줄 폭 그대로(체크 칸만큼 들여): 16px · 행간 1.7 · 문단마다 간격 · 한 줄 최대 약 36em,
+        {/* 펼친 메모는 줄 폭 그대로(체크 칸만큼 들여): 16px · 행간 1.7 · 문단마다 간격 · 한 줄 최대 약 36em,
             낱말 · 전화번호는 중간에 끊지 않는다(break-keep). 메모 사진 · 「사진 추가」, 속 전화번호는 바로 건다 */}
         {hasMemo && noteOpen && (
-          <div className={`w-full pb-3 pr-4 ${depth ? 'pl-[68px]' : 'pl-11'}`}>
+          <div className="w-full pl-[44px] pr-2 pt-2">
             {noteLines && (
               <div className="max-w-[36em] space-y-2 break-keep text-base font-normal leading-[1.7] text-ink-soft [overflow-wrap:anywhere]">
                 {noteLines.split(/\n+/).map((para, i) => <p key={i} className="whitespace-pre-wrap">{para}</p>)}

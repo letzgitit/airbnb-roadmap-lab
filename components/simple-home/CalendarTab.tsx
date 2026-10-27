@@ -6,8 +6,9 @@ import { useProgress } from '@/components/progress/ProgressProvider';
 import { firstGuest } from '@/components/home/summary-data';
 import { FIXED_DAY0, toTimelineSteps } from '@/components/home/timeline-config';
 import { textBtn } from '@/components/ui/buttonCls';
-import { Card, cardRowCls } from '@/components/ui/Card';
+import { Card, cardRowCls, softCardCls } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/IconButton';
+import { longDate } from '@/components/tasks/task-view';
 import { addMonths, calendarMarks, dateParts, monthOf, monthWeeks, startMonth, type CalendarMark, type TabId } from './home-model';
 
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
@@ -15,12 +16,12 @@ const DOW = ['월', '화', '수', '목', '금', '토', '일'];
 const PER_CELL = 1;
 
 /**
- * 달력 탭: 맨 위 「첫 손님까지」 청록 띠(예전 홈 첫 손님 카드와 같은 계산 · 같은 면) → 한 달 달력.
+ * 달력 탭: 맨 위 「첫 손님까지」 옅은 회색 카드(예전 홈 첫 손님 카드와 같은 계산) → 한 달 달력.
  * 처음 여는 달 = 이번 달, 이번 달에 마감이 없으면 가장 가까운 마감이 있는 달(startMonth).
  * 칸에는 서류 · 인테리어 · 에어비앤비 카드의 마감 날짜만 — 카드 짧은 이름 하나(칸 폭에 안 들어가면 두 줄까지, 잘라 내지 않음),
  * 더 있으면 「에어컨 +1」. 기한 지남 = 빨강, 다 한 카드 = 흐린 글자.
  * 마감이 있는 날을 누르면 달력 밑에 그날 마감인 카드 목록(화면 안으로 끌어옴) → 누르면 그 탭으로 가서 그 카드를 펼친다(onOpenCard).
- * 오늘 숫자 = 강조색(「지금」), 고른 날 = ink 2px 고리(예전 홈 달력과 같은 모양).
+ * 오늘 숫자 = 검정 동그라미 면 + 흰 숫자(다크는 반대), 고른 날 = ink 2px 고리.
  */
 export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today: string; onOpenCard: (tab: TabId, cardId: string) => void }) {
   const { doc } = useProgress();
@@ -43,13 +44,13 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
   const pickedList = picked ? byDay.get(picked) ?? [] : [];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5 pt-5">
       <GuestLine guest={guest} />
 
       <Card as="section" aria-label="마감 달력">
         <div className="flex items-center gap-1 border-b border-line px-2">
           <IconButton label="이전 달" icon="fa-chevron-left" onClick={() => setMonth((v) => addMonths(v, -1))} />
-          <h3 className="min-w-0 flex-1 text-center text-base font-bold text-ink" aria-live="polite">{y}년 {mo}월</h3>
+          <h3 className="min-w-0 flex-1 text-center text-lg font-semibold text-ink" aria-live="polite">{y}년 {mo}월</h3>
           <IconButton label="다음 달" icon="fa-chevron-right" onClick={() => setMonth((v) => addMonths(v, 1))} />
           <button type="button" className={`${textBtn} mx-0 px-3 ${month === thisMonth ? 'invisible' : ''}`} onClick={() => setMonth(thisMonth)}>오늘</button>
         </div>
@@ -70,7 +71,7 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
                 const body = (
                   <>
                     <span className="flex h-8 items-center justify-center">
-                      <span className={`flex size-7 items-center justify-center rounded-full text-sm tabular-nums ${on ? 'ring-2 ring-inset ring-ink' : ''} ${isToday ? 'font-bold text-accent-ink' : inMonth ? 'font-semibold text-ink' : 'font-normal text-muted'}`}>
+                      <span className={`flex size-7 items-center justify-center rounded-full text-sm tabular-nums ${on ? 'ring-2 ring-inset ring-ink' : ''} ${isToday ? 'bg-ink font-bold text-surface' : inMonth ? 'font-semibold text-ink' : 'font-normal text-muted'}`}>
                         {Number(d.slice(8))}
                       </span>
                     </span>
@@ -131,20 +132,20 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
 }
 
 /**
- * 맨 위 띠: 「첫 손님까지 D-35 · 12/2 (수) 무렵」. 예전 홈 첫 손님 카드와 같은 청록 면(hero) — 달력 탭에서 청록 면은 이 한 곳(DESIGN 2.2).
- * 달력 탭에는 「가장 급한 일」 카드가 없어서 한 화면에 한 곳이 지켜진다.
+ * 맨 위 옅은 회색 카드(시안 B 「가장 급한 일」과 같은 면): 「첫 손님까지」 · 큰 「D-35」 · 「12월 2일(수) 무렵」.
  */
 function GuestLine({ guest }: { guest: ReturnType<typeof firstGuest> | null }) {
   if (!guest?.finish || guest.dday === null) {
     return <p className="text-base font-normal text-muted">단계에 날짜를 넣으면 첫 손님 날을 계산해요.</p>;
   }
-  const { md, wd } = dateParts(guest.finish.date);
   const n = guest.dday;
   return (
-    <p className="flex flex-wrap items-baseline gap-x-3 rounded-panel bg-hero px-4 py-3 text-on-hero">
-      <span className="text-base font-bold">첫 손님까지</span>
-      <span className="text-2xl font-bold tabular-nums">{n > 0 ? `D-${n}` : n === 0 ? '오늘' : `${-n}일 지남`}</span>
-      <span className="text-sm font-normal text-hero-sub tabular-nums">{md} ({wd}){guest.finish.estimate ? ' 무렵' : ''}</span>
-    </p>
+    <div className={`${softCardCls} flex flex-wrap items-end justify-between gap-x-3 px-5 py-4.5`}>
+      <p>
+        <span className="block text-sm font-semibold text-muted">첫 손님까지</span>
+        <span className="mt-1 block text-display font-bold tracking-[-0.015em] text-ink tabular-nums">{n > 0 ? `D-${n}` : n === 0 ? '오늘' : `${-n}일 지남`}</span>
+      </p>
+      <p className="pb-1 text-base text-ink-soft tabular-nums">{longDate(guest.finish.date)}{guest.finish.estimate ? ' 무렵' : ''}</p>
+    </div>
   );
 }

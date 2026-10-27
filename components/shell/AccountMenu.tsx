@@ -53,7 +53,7 @@ export function AccountMenu({ canSignOut }: { canSignOut: boolean }) {
 
   return (
     <div ref={wrapRef} className="relative shrink-0">
-      <IconButton buttonRef={btnRef} label="설정" icon="fa-gear" variant="onAccent" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined}
+      <IconButton buttonRef={btnRef} label="설정" icon="gear" variant="outline" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined}
         onClick={() => setOpen((v) => !v)} onKeyDown={(e) => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); setOpen(true); } }} />
       {open && (
         <div id={menuId} role="menu" aria-label="설정" onKeyDown={onMenuKey}

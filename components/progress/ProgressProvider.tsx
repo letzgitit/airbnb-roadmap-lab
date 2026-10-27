@@ -307,7 +307,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       {/* 폰에선 아래 탭 · 단계 창 아래 단추 줄(이전/다음 단계)을 가리지 않게 88px + 홈 막대 안전 영역 위에, PC 는 아래 24px */}
       <div className="pointer-events-none fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-[90] flex w-[calc(100%-32px)] max-w-md -translate-x-1/2 flex-col gap-2 md:bottom-6" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto flex min-h-14 items-center justify-between gap-3 rounded-panel py-1.5 pl-4 pr-2 text-base font-bold shadow-xl ${t.kind === 'error' ? 'bg-danger text-on-accent' : 'bg-ink text-surface'}`}>
+          <div key={t.id} className={`pointer-events-auto flex min-h-14 items-center justify-between gap-3 rounded-control py-1.5 pl-4 pr-2 text-base font-semibold shadow-xl ${t.kind === 'error' ? 'bg-danger text-snow' : 'bg-ink text-surface'}`}>
             <span className="py-1.5">{t.msg}</span>
             {t.action && <button type="button" className="min-h-11 min-w-11 shrink-0 rounded-control px-3 font-bold text-inherit underline underline-offset-2 hover:opacity-80" onClick={() => { t.action?.run(); setToasts((x) => x.filter((y) => y.id !== t.id)); }}>{t.action.label}</button>}
           </div>

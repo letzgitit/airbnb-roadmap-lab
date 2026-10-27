@@ -26,19 +26,20 @@ const HEADERS = {
 // 그래서 부모가 자기 창 높이를 알려 주면(room3d:vh, 부모 창에서 온 것만) --pvh(창 높이의 1%)로 바꿔 쓴다. 새 창으로 열면 알림이 없어 원래 1vh 그대로.
 const HEIGHT_SCRIPT = `<script>(function(){var b=document.body,r=document.documentElement,last=0;function p(){try{parent.postMessage({type:'room3d:height',h:Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height))+2},'*')}catch(e){}}addEventListener('message',function(e){var d=e.data;if(e.source!==parent||parent===window||!d||d.type!=='room3d:vh'||typeof d.h!=='number'||!isFinite(d.h)||d.h<200)return;var h=Math.round(d.h);if(h===last)return;last=h;r.style.setProperty('--pvh',h/100+'px')});addEventListener('load',p);if(window.ResizeObserver)new ResizeObserver(p).observe(b);p();})();</script>`;
 
-// 시안의 크림 · 오커 · 테라코타 · 둘째 서체를 사이트 값(DESIGN.md 토큰 — app/globals.css 팔레트 v2 의 사본, 그쪽을 바꾸면 같이 바꾼다)으로 덮는다. 시안의 :root 와 같은 선택자를 뒤에 두어 이긴다.
+// 시안의 크림 · 오커 · 테라코타 · 둘째 서체를 사이트 값(DESIGN.md 토큰 — app/globals.css 시안 B 값의 사본, 그쪽을 바꾸면 같이 바꾼다)으로 덮는다. 시안의 :root 와 같은 선택자를 뒤에 두어 이긴다.
 // 장면 위 이름표(.lbl)는 늘 흰 바탕이라 밝은 값으로 고정한다. 제목(h1)은 하위 탭 「3D 시안」과 겹쳐 숨긴다.
+// 「누르는 것」 색(--accent)은 사이트처럼 검정(다크는 흰 면 + 어두운 글자). 빨강은 쓰지 않는다(빨강은 한 화면 주 단추 하나뿐).
 const LIGHT_VARS =
-  '--bg:#f3f6fa;--surface:#fff;--surface-2:#edf1f6;--chip:#edf1f6;--scene-bg:#edf1f6;--line:#e3e8ef;--text:#171b22;--muted:#566275;--accent:#007684;--accent-ink:#fff;--link:#006f7c;--warn:#d0302f;--pad-bg:rgba(255,255,255,.82);--pad-ink:#171b22;--raised:#fff;color-scheme:light';
+  '--bg:#ffffff;--surface:#fff;--surface-2:#f7f7f7;--chip:#f2f2f2;--scene-bg:#f7f7f7;--line:#dddddd;--text:#222222;--muted:#6a6a6a;--accent:#222222;--accent-ink:#fff;--link:#222222;--warn:#c13515;--pad-bg:rgba(255,255,255,.86);--pad-ink:#222222;--raised:#fff;color-scheme:light';
 const DARK_VARS =
-  '--bg:#121315;--surface:#1b1c1f;--surface-2:#232529;--chip:#232529;--scene-bg:#232529;--line:#2f3236;--text:#eeeff1;--muted:#a8adb5;--accent:#00808f;--accent-ink:#fff;--link:#62c6d2;--warn:#ff6f6a;--pad-bg:rgba(27,28,31,.82);--pad-ink:#eeeff1;--raised:#2e3035;color-scheme:dark';
+  '--bg:#121212;--surface:#121212;--surface-2:#1c1c1c;--chip:#262626;--scene-bg:#1c1c1c;--line:#3a3a3a;--text:#f7f7f7;--muted:#b0b0b0;--accent:#f7f7f7;--accent-ink:#121212;--link:#f7f7f7;--warn:#ffb4a3;--pad-bg:rgba(28,28,28,.86);--pad-ink:#f7f7f7;--raised:#2e2e2e;color-scheme:dark';
 // --raised = 칸 묶음에서 고른 칸(어두운 화면에서도 묶음 바탕보다 밝게 떠 보이게)
 // --link = 어두운 바탕 위 글자 단추(상태 줄 「저장」)도 4.5:1 넘게. color-scheme = 안 고른 체크박스 · 고르기 칸도 어두운 화면 모양으로
 const SITE_STYLE =
   `<style>:root{${LIGHT_VARS}}` +
   `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${DARK_VARS}}}` +
   `:root[data-theme="dark"]{${DARK_VARS}}` +
-  `body{font-family:'Pretendard Variable','Pretendard',-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}` +
+  `body{font-family:'Wanted Sans Variable','Wanted Sans','Pretendard Variable','Pretendard',-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}` +
   // 체크박스는 사이트와 같은 강조색(DESIGN.md 2.2 · globals.css)
   `input[type=checkbox]{accent-color:var(--accent)}` +
   `h1{display:none}` +
@@ -47,11 +48,11 @@ const SITE_STYLE =
   `.stage{container-type:inline-size}` +
   `#view{height:min(calc(var(--pvh,1vh)*64),72cqw);min-height:220px}#view.walk{height:calc(var(--pvh,1vh)*64);min-height:380px}` +
   `@media (max-width:600px){#view{height:min(calc(var(--pvh,1vh)*62),72cqw)}#view.walk{height:calc(var(--pvh,1vh)*62);min-height:360px}}` +
-  `.lbl{color:#171b22}.lbl small{color:#566275}.lbl.issue{background:#fff0f0;color:#d0302f;border-color:#d0302f}</style>`;
+  `.lbl{color:#222222}.lbl small{color:#6a6a6a}.lbl.issue{background:#fff0ee;color:#c13515;border-color:#c13515}</style>`;
 
 const note = (title: string) =>
   `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${title}</title></head>` +
-  `<body style="margin:0;font:15px/1.6 system-ui,sans-serif;padding:24px 16px;color:#171b22;background:#f3f6fa"><p>${title}</p></body></html>`;
+  `<body style="margin:0;font:16px/1.6 system-ui,sans-serif;padding:24px 16px;color:#222222;background:#ffffff"><p>${title}</p></body></html>`;
 
 async function handle(req: Request, head: boolean): Promise<Response> {
   let html: string;

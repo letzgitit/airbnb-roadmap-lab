@@ -4,13 +4,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import { displayName, relTime, withGa } from '@/lib/client/format';
 import { useProgress, type DirtyScope } from './ProgressProvider';
 import { AddButton } from '@/components/ui/AddButton';
+import { LineIcon } from '@/components/ui/LineIcon';
 
 export function EditBadge({ k }: { k: string }) {
   const { editingBy } = useProgress();
   const m = editingBy(k);
   if (!m) return null;
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-sunken px-2 py-0.5 text-sm font-bold text-ink-soft">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-strong px-2.5 py-0.5 text-sm font-semibold text-ink-soft">
       <i className="fas fa-pen text-sm" aria-hidden /> {withGa(m.byName)} 편집 중
     </span>
   );
@@ -30,7 +31,7 @@ export function useEditing(k: string) {
 
 // 입력칸(inputCls · dateCls · composerCls)과 단추(btnPrimary · btnGhost · btnDanger · textBtn) 모양은 components/ui/buttonCls.ts 에 있다.
 // 확인 창(ProgressProvider)도 같은 모양을 쓰는데 이 파일은 ProgressProvider 를 불러 쓰므로, 고리가 생기지 않게 그쪽에 두고 여기서 다시 내보낸다.
-export { inputCls, dateCls, composerCls, btnPrimary, btnGhost, btnDanger, textBtn } from '@/components/ui/buttonCls';
+export { inputCls, dateCls, composerCls, btnPrimary, btnGhost, btnOutline, btnDanger, btnBrand, textBtn } from '@/components/ui/buttonCls';
 
 // ── 한 줄 모양: 우리 할 일 · 집 정보 · 기록 · 추천 할 일이 모두 같은 틀 ──
 //   [앞 44px 조작] [글: 15px 본문 + 있으면 13px 보조 한 줄] [뒤 44px 아이콘 단추(휴지통)]
@@ -43,12 +44,12 @@ export const clipLabel = (s: string, n = 30) => (s.length > n ? `${s.slice(0, n)
 // 「삭제」 확인 창 아래에 한 줄로 붙는 안내(서버가 30일 보관한다 — lib/core/engine.ts TRASH_KEEP_MS)
 export const TRASH_NOTE = '지운 것은 30일 동안 목록 맨 아래에서 되살릴 수 있어요.';
 
-// 줄 끝의 휴지통: 평소엔 회색(muted), 누르는 순간 · 마우스를 올리면 빨강. 누르면 바로 지우지 않고 확인 창을 띄운다.
+// 줄 끝의 휴지통(선 아이콘 20px): 평소엔 회색(muted), 누르는 순간 · 마우스를 올리면 빨강. 확인 창을 띄울지는 onClick 이 정한다.
 export function TrashButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button type="button" aria-label={label} disabled={disabled} onClick={onClick}
       className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-danger-ink focus-visible:text-danger-ink active:text-danger-ink disabled:opacity-40">
-      <i className="fas fa-trash-can text-base" aria-hidden />
+      <LineIcon name="trash" className="size-5" />
     </button>
   );
 }

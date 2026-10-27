@@ -5,16 +5,21 @@ import type { TaskItem } from '@/lib/core/types';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { TaskComposer, type StepRef } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
-import { treeRows } from '@/components/tasks/task-view';
+import { longDate, treeRows, SOON_DAYS } from '@/components/tasks/task-view';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import { AddButton } from '@/components/ui/AddButton';
-import { Card, cardRowCls } from '@/components/ui/Card';
+import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { btnBrand, btnOutline } from '@/components/ui/buttonCls';
+import { cardCls, cardRowCls, softCardCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
-import { SOON_DAYS } from '@/components/tasks/task-view';
-import { byDue, dateParts, daysBetween, prepareAdd, progressSr, progressText, relDay, type CardDef, type CardSummary } from './home-model';
+import { LineIcon } from '@/components/ui/LineIcon';
+import { byDue, daysBetween, prepareAdd, progressSr, progressText, relDay, type CardDef, type CardSummary } from './home-model';
 
 /**
- * 큰 덩어리 카드 하나: 머리(제목 · 「3개 중 1개 끝」 · 오른쪽에 큰 마감 날짜)를 누르면 펼쳐지고, 펼치면 할 일 목록.
+ * 큰 덩어리 카드 하나(시안 B).
+ * - 보통 카드: 흰 면 + 1px 테두리 + 20 모서리. 머리(제목 20/600 · 마감 「11월 9일(월)까지」 · 오른쪽 남은 날 배지 + 「1/4」)를 누르면 펼쳐진다.
+ * - 가장 급한 카드(hero, 탭마다 하나): 옅은 회색 카드 — 「가장 급한 일」 · 제목 26/700 · 마감 + 배지 · 큰 「1/4」 · 검정 진행 막대 ·
+ *   포인트 빨강 「남은 일 보기」(한 화면에 빨강은 이 단추 하나). 펼치면 그 카드 안에 목록, 맨 밑 테두리 단추 「접기」.
  * 목록 = 첫 줄 「＋ 할 일 추가」 → 안 끝난 일(마감 이른 순, 세부 항목은 부모 밑) → 「끝낸 일 n개」(접음).
  * 할 일 줄은 홈 · 단계 창과 같은 TaskRow(쉬운 모양 simple) — 쓰기는 기존 /api/progress/mutate 그대로(Todoist 동기화도 같은 길).
  */
@@ -23,7 +28,7 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
   open: boolean; onToggleOpen: () => void;
   /** 달력에서 이 카드로 올 때 찾아 내려오는 id */
   anchorId?: string;
-  /** 그 탭에서 가장 급한 카드 하나: 머리를 청록 면(hero) + 흰 글자로(DESIGN.md 2.2 · 8.1.2) */
+  /** 그 탭에서 가장 급한 카드 하나: 옅은 회색 큰 카드 + 빨강 「남은 일 보기」(DESIGN.md 8.1.2) */
   hero?: boolean;
 }) {
   const { doc } = useProgress();
@@ -44,87 +49,90 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
     <TaskRow key={r.item.id} t={r.item} steps={steps} listStepId={null} scope="page" inset simple depth={r.depth} parentTitle={r.parentTitle}
       onEditChange={reportEdit} onToggle={onToggle} onGone={() => undefined} />
   );
+  // 목록: 카드 안 가로 여백(20) 안쪽에 줄을 둔다. 옅은 카드 위에서는 줄 사이 선을 한 단계 진하게(line-strong)
+  const list = open && (
+    <ul id={`${uid}-list`} className={`border-t ${hero ? 'mt-5 border-line-strong [&>li]:border-line-strong' : 'mx-5 border-line'}`}>
+      <li className={composing ? `${cardRowCls} py-1` : cardRowCls}>
+        {composing
+          ? <TaskComposer stepId={card.addStep} scope="page" simple prepare={prepare} dirtyKey={`form:add-task:card:${card.id}:${card.addStep}`} onClose={closeComposer} />
+          : <span className="-mx-2.5 block"><AddButton buttonRef={addRef} label="할 일 추가" onClick={() => setComposing(true)} /></span>}
+      </li>
+      {openRows.length === 0 && (
+        <li className={`${cardRowCls} py-3.5 text-base text-muted`}>{doneRows.length > 0 ? '남은 할 일이 없어요.' : '아직 할 일이 없어요.'}</li>
+      )}
+      {openRows.map(row)}
+      {doneRows.length > 0 && (
+        <li className={cardRowCls}>
+          <span className="-mx-4 block"><FoldRow label="끝낸 일" count={doneRows.length} open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
+          {showDone && <ul id={`${uid}-done`} className="border-t border-line">{doneRows.map(row)}</ul>}
+        </li>
+      )}
+    </ul>
+  );
+
+  if (hero) {
+    const pct = summary.total ? Math.round((summary.done / summary.total) * 100) : 0;
+    return (
+      <section aria-labelledby={`${uid}-t`} id={anchorId} className={`${softCardCls} scroll-mt-36 px-5 pb-5 pt-5.5`}>
+        <p className="text-sm font-semibold text-muted">가장 급한 일</p>
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h3 id={`${uid}-t`} className="mt-1.5 text-title font-bold tracking-[-0.015em] text-ink">{card.title}</h3>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-ink-soft">
+              <span>{summary.deadline ? `${longDate(summary.deadline)}까지` : '날짜 미정'}</span>
+              <StateBadge summary={summary} today={today} />
+            </p>
+          </div>
+          {summary.total > 0 && (
+            <p className="shrink-0 text-base font-medium text-muted tabular-nums" aria-hidden>
+              <b className="text-display font-bold tracking-[-0.02em] text-ink">{summary.done}</b>/{summary.total}
+            </p>
+          )}
+        </div>
+        <span className="sr-only">{progressSr(summary)}</span>
+        {summary.total > 0 && (
+          <div className="mt-4 h-1 overflow-hidden rounded-full bg-track" aria-hidden><div className="h-full bg-ink" style={{ width: `${pct}%` }} /></div>
+        )}
+        {list}
+        {/* 펼치기 단추: 접힌 동안 = 빨강 「남은 일 보기」(한 화면 빨강 한 곳), 펼친 동안 = 테두리 「접기」 */}
+        <button type="button" aria-expanded={open} aria-controls={`${uid}-list`} onClick={onToggleOpen}
+          className={open ? `${btnOutline} mt-4 w-full` : `${btnBrand} mt-4.5`}>
+          {open ? '접기' : summary.finished ? '할 일 보기' : '남은 일 보기'}
+        </button>
+      </section>
+    );
+  }
 
   return (
-    <Card as="section" aria-labelledby={`${uid}-t`} id={anchorId} className="scroll-mt-32">
+    <section aria-labelledby={`${uid}-t`} id={anchorId} className={`${cardCls} scroll-mt-36`}>
       <h3>
-      <button type="button" aria-expanded={open} aria-controls={`${uid}-list`} onClick={onToggleOpen}
-        className={`flex w-full items-center gap-3 py-4 pl-4 pr-2 text-left transition-colors ${hero ? 'bg-hero text-on-hero hover:bg-accent-hover' : 'hover:bg-sunken/60'}`}>
-        <span className="min-w-0 flex-1">
-          {hero && <span className="mb-1 block text-sm font-bold text-hero-sub">가장 급한 일</span>}
-          <span id={`${uid}-t`} className={`block text-lg font-bold ${hero ? 'text-on-hero' : 'text-ink'}`}>{card.title}</span>
-          {card.sub && <span className={`mt-0.5 block text-sm font-normal ${hero ? 'text-hero-sub' : 'text-ink-soft'}`}>{card.sub}</span>}
-          <span className={`mt-1 flex flex-wrap items-center gap-x-3 text-sm font-normal ${hero ? 'text-hero-sub' : 'text-muted'}`}>
-            {/* 「일주일 안에 할 일 n개」는 탭 맨 위 같은 이름의 묶음이 말하므로 카드 머리에는 다시 쓰지 않는다 */}
-            {/* 진행: 「3/9」 굵고 크게(화면 읽기 프로그램에는 「9개 중 3개 했어요」) */}
-            <span className={`text-lg font-bold tabular-nums ${hero ? 'text-on-hero' : 'text-ink'}`} aria-hidden>{progressText(summary)}</span>
+        <button type="button" aria-expanded={open} aria-controls={`${uid}-list`} onClick={onToggleOpen}
+          className="flex w-full items-center gap-3 py-4.5 pl-5 pr-3 text-left transition-colors hover:bg-sunken">
+          <span className="min-w-0 flex-1">
+            <span id={`${uid}-t`} className="block text-xl font-semibold tracking-[-0.01em] text-ink">{card.title}</span>
+            {card.sub && <span className="mt-0.5 block text-sm font-normal text-muted">{card.sub}</span>}
+            <span className="mt-1.5 block text-base text-ink-soft">{summary.deadline ? `${longDate(summary.deadline)}까지` : '날짜 미정'}</span>
+          </span>
+          <span className="flex shrink-0 flex-col items-end gap-1.5">
+            <StateBadge summary={summary} today={today} />
+            <span className={`text-base tabular-nums ${summary.total ? 'font-semibold text-ink' : 'font-normal text-muted'}`} aria-hidden>{progressText(summary)}</span>
             <span className="sr-only">{progressSr(summary)}</span>
           </span>
-        </span>
-        <Deadline summary={summary} today={today} hero={hero} />
-        <span className={`flex size-11 shrink-0 items-center justify-center ${hero ? 'text-on-hero' : 'text-muted'}`} aria-hidden>
-          <i className={`fas fa-chevron-down text-sm transition-transform ${open ? 'rotate-180' : ''}`} />
-        </span>
-      </button>
+          <LineIcon name="chevron" className={`size-5 text-faint transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
+        </button>
       </h3>
-      {open && (
-        <ul id={`${uid}-list`} className="border-t border-line">
-          <li className={composing ? `${cardRowCls} px-3` : cardRowCls}>
-            {composing
-              ? <TaskComposer stepId={card.addStep} scope="page" simple prepare={prepare} dirtyKey={`form:add-task:card:${card.id}:${card.addStep}`} onClose={closeComposer} />
-              : <AddButton buttonRef={addRef} label="할 일 추가" onClick={() => setComposing(true)} />}
-          </li>
-          {openRows.length === 0 && (
-            <li className={`${cardRowCls} px-4 py-3 text-base text-muted`}>{doneRows.length > 0 ? '남은 할 일이 없어요.' : '아직 할 일이 없어요.'}</li>
-          )}
-          {openRows.map(row)}
-          {doneRows.length > 0 && (
-            <li className={cardRowCls}>
-              <FoldRow label="끝낸 일" count={doneRows.length} open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} />
-              {showDone && <ul id={`${uid}-done`} className="border-t border-line">{doneRows.map(row)}</ul>}
-            </li>
-          )}
-        </ul>
-      )}
-    </Card>
+      {list}
+      {open && <div className="h-2" aria-hidden />}
+    </section>
   );
 }
 
-/** 카드 오른쪽 큰 마감 날짜: 「11/9 (월)」 + 「D-13」(마감이 지났으면 날짜 빨강). 기한 지난 일이 있으면 「기한 지난 일 n개」. 다 끝냈으면 「끝」 */
-function Deadline({ summary, today, hero }: { summary: CardSummary; today: string; hero: boolean }) {
-  if (summary.finished) {
-    return (
-      <span className={`flex shrink-0 flex-col items-end ${hero ? 'text-on-hero' : 'text-muted'}`}>
-        <i className="fas fa-check text-xl" aria-hidden />
-        <span className="text-sm font-bold">다 했어요</span>
-      </span>
-    );
-  }
-  // 기한 지난 일이 있으면 날짜 밑 「D-13」 대신 「기한 지난 일 n개」(카드에서 이 한 곳만 빨강으로 말한다).
-  // 청록 머리(hero) 위에서는 빨강 글자가 안 읽혀서 흰 글자 + 경고 아이콘.
-  // 배지 모양: 청록 머리 위 = 흰 면 + 빨강 글자 + 경고 아이콘, 그 밖 = 빨강 면 + 흰 글자
-  const lateLine = summary.late > 0
-    ? <span className={`${badgeCls} ${hero ? 'bg-on-hero text-danger' : 'bg-danger text-on-accent'}`}><i className="fas fa-triangle-exclamation mr-1.5" aria-hidden />기한 지난 일 {summary.late}개</span>
-    : null;
-  if (!summary.deadline) {
-    return (
-      <span className="flex shrink-0 flex-col items-end text-right">
-        <span className={`text-sm font-normal ${hero ? 'text-hero-sub' : 'text-muted'}`}>날짜 미정</span>
-        {lateLine}
-      </span>
-    );
-  }
-  const { md, wd } = dateParts(summary.deadline);
+/** 카드 상태 배지 하나: 다 했으면 「다 했어요」, 기한 지난 일이 있으면 「기한 지난 일 n개」(경고), 아니면 마감까지 남은 날(3일 안 주의 · 그 밖 회색) */
+function StateBadge({ summary, today }: { summary: CardSummary; today: string }) {
+  if (summary.finished) return <Badge tone="neutral"><LineIcon name="check" className="size-4" stroke={2.4} />다 했어요</Badge>;
+  if (summary.late > 0) return <Badge tone="danger">기한 지난 일 {summary.late}개</Badge>;
+  if (!summary.deadline) return null;
   const rel = relDay(summary.deadline, today);
-  const near = daysBetween(today, summary.deadline) <= SOON_DAYS;
-  const dateTone = hero ? 'text-on-hero' : rel.tone === 'late' ? 'text-danger-ink' : 'text-ink';
-  // D-n 배지: 청록 머리 위 = 흰 면 + 청록 글자, 그 밖 = 지남 빨강 면 · 3일 안 진한 면 · 그 밖 옅은 회색 면(할 일 줄 배지와 같은 규칙)
-  const badge = hero ? 'bg-on-hero text-hero' : rel.tone === 'late' ? 'bg-danger text-on-accent' : near ? 'bg-ink text-surface' : 'bg-sunken text-ink-soft';
-  return (
-    <span className="flex shrink-0 flex-col items-end gap-1 text-right">
-      <span className={`text-[1.875rem] font-bold leading-9 tabular-nums ${dateTone}`}>{md}<span className={`ml-1 text-base font-normal ${hero ? 'text-hero-sub' : 'text-ink-soft'}`}>({wd})</span></span>
-      {lateLine ?? <span className={`${badgeCls} ${badge}`}>{rel.text}</span>}
-    </span>
-  );
+  const tone: BadgeTone = rel.tone === 'late' ? 'danger' : daysBetween(today, summary.deadline) <= SOON_DAYS ? 'warn' : 'neutral';
+  return <Badge tone={tone}>{rel.text}</Badge>;
 }
-const badgeCls = 'rounded-control px-2 py-0.5 text-sm font-bold tabular-nums whitespace-nowrap';

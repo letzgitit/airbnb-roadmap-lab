@@ -27,6 +27,13 @@ export function taskPhase(t: Pick<TaskItem, 'done' | 'due'> & { start?: string |
 }
 export const PHASE_WORD = { soon: '곧 마감', prep: '지금 할 때' } as const;
 
+const WD = ['일', '월', '화', '수', '목', '금', '토'];
+/** 긴 날짜(새 홈 쉬운 모양 · 시안 B): 「10월 27일(화)」 */
+export function longDate(iso: string): string {
+  const [, m, d] = iso.split('-');
+  return `${Number(m)}월 ${Number(d)}일(${WD[new Date(`${iso}T00:00:00`).getDay()]})`;
+}
+
 /** 보조 줄 날짜: 시작일이 마감일과 다르면 「10/28~10/30」, 시작일만 있으면 「10/28~」. 그 밖은 null(기존 마감일 표시 그대로) */
 export function spanDate(start: string | null | undefined, due: string | null | undefined): string | null {
   if (!start || start === due) return null;

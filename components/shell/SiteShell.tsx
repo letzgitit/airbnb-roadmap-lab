@@ -49,8 +49,8 @@ function Frame({ children }: { children: ReactNode }) {
           </p>
         </div>
       )}
-      {/* 폰에서 아래 탭이 보이면 탭(56px) + 홈 막대 안전 영역 + 16px 만큼 본문 아래를 비운다 */}
-      <main id="main" className={`mx-auto w-full max-w-content px-safe pt-4 ${items.length > 0 ? 'pb-[calc(56px+env(safe-area-inset-bottom)+16px)] md:pb-12' : 'pb-12'}`}>
+      {/* 폰에서 아래 메뉴가 보이면 메뉴(60px) + 홈 막대 안전 영역 + 24px 만큼 본문 아래를 비운다 */}
+      <main id="main" className={`mx-auto w-full max-w-content px-safe pt-4 ${items.length > 0 ? 'pb-[calc(60px+env(safe-area-inset-bottom)+24px)] md:pb-12' : 'pb-12'}`}>
         {children}
       </main>
       {items.length > 0 && <BottomTabs items={items} />}

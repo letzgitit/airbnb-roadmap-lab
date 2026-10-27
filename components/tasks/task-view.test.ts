@@ -1,7 +1,7 @@
 // 할 일 줄 · 폼 계산 확인(node --test, 새 의존성 없이). 값은 모두 가짜다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { placeOf, placePatch, placeStep, shiftLabel, shiftPatch, spanDate, taskPhase, treeRows } from './task-view.ts';
+import { longDate, placeOf, placePatch, placeStep, shiftLabel, shiftPatch, spanDate, taskPhase, treeRows } from './task-view.ts';
 
 test('할 일 줄의 때: 지남 › 곧 마감(3일 안) › 준비할 때(시작일 ~ 마감)', () => {
   const today = '2026-10-28';
@@ -22,6 +22,11 @@ test('보조 줄 날짜: 시작일이 있을 때만 범위', () => {
   assert.equal(spanDate('2026-10-30', '2026-10-30'), null);
   assert.equal(spanDate(null, '2026-10-30'), null);
   assert.equal(spanDate(undefined, null), null);
+});
+
+test('긴 날짜: 「10월 27일(화)」', () => {
+  assert.equal(longDate('2026-10-27'), '10월 27일(화)');
+  assert.equal(longDate('2026-11-02'), '11월 2일(월)');
 });
 
 test('부모 바로 뒤에 세부 항목, 부모가 목록에 없으면 부모 제목을 붙인다', () => {

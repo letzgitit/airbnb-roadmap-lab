@@ -26,8 +26,9 @@ test('받아 둔 서류: PDF + 서류 낱말 사진, 참고 · 다른 집은 빼
   assert.deepEqual(docGroups(docs).map((g) => `${g.stepId}:${g.items.map((p) => p.id).join('')}`), ['3:a', '5:b', '9:f', '0:c']);
 });
 
-test('탭 여섯 개(뉴스 없음), 달력이 맨 끝', () => {
-  assert.deepEqual(TABS.map((t) => t.label), ['서류', '인테리어', '사진', '에어비앤비', '연락처', '달력']);
+test('탭 여섯 개(뉴스 없음), 달력이 맨 끝, 에어비앤비는 침대 아이콘', () => {
+  assert.deepEqual(TABS.map((t) => t.label), ['서류', '인테리어', '사진 · 문서', '에어비앤비', '연락처', '달력']);
+  assert.deepEqual(TABS.map((t) => t.icon), ['doc', 'sofa', 'camera', 'bed', 'phone', 'calendar']);
 });
 
 test('이번 주 꼭 할 일: 기한 지남 + 6일 뒤까지, 마감 이른 순 5개, 끝낸 일 · 날짜 없는 일은 빠짐', () => {
@@ -163,7 +164,7 @@ test('카드 순서: 마감 이른 순 → 날짜 없음 → 다 끝냄', () => 
     d: { deadline: '2026-11-06', finished: false }, e: { deadline: null, finished: false },
   };
   assert.deepEqual(sortCards(cards, sums).map((c) => c.id), ['d', 'c', 'a', 'e', 'b']);
-  // 기한 지난 일이 있는 카드가 마감이 늦어도 맨 앞(청록 「가장 급한 일」), 다 끝낸 카드는 그래도 뒤
+  // 기한 지난 일이 있는 카드가 마감이 늦어도 맨 앞(「가장 급한 일」), 다 끝낸 카드는 그래도 뒤
   const late = { ...sums, c: { ...sums.c, late: 1 }, b: { ...sums.b, late: 2 } };
   assert.deepEqual(sortCards(cards, late).map((c) => c.id), ['c', 'd', 'a', 'e', 'b']);
 });
