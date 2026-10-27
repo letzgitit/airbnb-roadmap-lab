@@ -22,7 +22,7 @@ export function HomeSwitch({ content, signedIn = false }: { content: Content; si
   const ready = status === 'ready' && !!doc;
   useEffect(() => { if (ready && view === 'detail') router.replace(VIEW_HREF.detail); }, [ready, view, router]);
   if (ready && view === 'detail') return null;
-  if (ready) return <SimpleHome content={content} />;
+  if (ready) return <SimpleHome />;
   if (status === 'loading' && signedIn) return <SimpleHomeSkeleton />;
   return <App content={content} />;
 }

@@ -51,6 +51,10 @@ interface Ctx {
   taskPhotos: PhotoView[];
   /** 할 일 메모에 사진 올리기(여러 장 차례로). 끝나면 목록을 다시 받는다 */
   uploadToTask: (taskId: string, stepId: number, files: File[]) => Promise<void>;
+  /** 새 홈 단계 블록 사진(cardId 있음, 지우지 않은 것, 올린 순). 블록 몸통 · 갤러리 분야 묶음이 쓴다 */
+  cardPhotos: PhotoView[];
+  /** 단계 블록에 사진 올리기(여러 장 차례로, 단계 = 그 블록의 「＋ 할 일」 단계). 끝나면 목록을 다시 받는다 */
+  uploadToCard: (cardId: string, stepId: number, files: File[]) => Promise<void>;
   /** 사진 탭에 보이는 줄(거르기 · 검색 · 정렬 적용). 사진 탭에서 연 크게 보기의 앞뒤 넘기기도 이 순서 */
   shown: PhotoView[];
   sort: SortMode; setSort: (s: SortMode) => void;
@@ -63,8 +67,8 @@ interface Ctx {
   reload: () => Promise<void>;
   /** 크게 보기. stepId 를 주면 그 단계 사진 안에서만 넘긴다(단계 창 사진 줄). ids 를 주면 그 사진들 안에서만(새 홈 사진 탭 — 순서 옮기기 없음) */
   view: (id: string, stepId?: number, ids?: string[]) => void;
-  /** 올리기 창. album 을 주면 그 묶음 이름으로 올린다(새 홈 「공사 후」 칸) */
-  upload: (stepId?: number, album?: string) => void;
+  /** 올리기 창. album 을 주면 그 묶음 이름으로 올린다(새 홈 「공사 후」 칸). doc = 「글씨 많은 문서」를 켠 채로 연다(갤러리 › 문서) */
+  upload: (stepId?: number, album?: string, opts?: { doc?: boolean }) => void;
   patch: (id: string, method: 'PATCH' | 'DELETE', body?: Record<string, unknown>) => Promise<boolean>;
 }
 const C = createContext<Ctx | null>(null);
@@ -79,12 +83,14 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
   const { toast, confirm, doc } = useProgress();
   const [data, setData] = useState<Data | null>(null);
   const [taskPhotos, setTaskPhotos] = useState<PhotoView[]>([]);
+  const [cardPhotos, setCardPhotos] = useState<PhotoView[]>([]);
   const [state, setState] = useState<Ctx['state']>('idle');
   const [viewId, setViewId] = useState<string | null>(null);
   const [viewStep, setViewStep] = useState<number | null>(null);
   const [viewIds, setViewIds] = useState<string[] | null>(null);
   const [uploadStep, setUploadStep] = useState<number | null>(null);
   const [uploadAlbum, setUploadAlbum] = useState('');
+  const [uploadDoc, setUploadDoc] = useState(false);
   const started = useRef(false);
 
   const reload = useCallback(async () => {
@@ -94,10 +100,13 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
       const res = await busyFetch('/api/photos', { cache: 'no-store' });
       if (res.status === 401 || res.status === 403) { setData(null); setState('anon'); return; }
       if (!res.ok) { setState('error'); return; }
-      // 할 일 메모 사진(taskId 있음)은 사진 화면 · 단계 창 · 「삭제한 사진」에 섞지 않고 따로 둔다(그 할 일 메모 밑에만 보인다)
+      // 할 일 메모 사진(taskId 있음)은 사진 화면 · 단계 창 · 「삭제한 사진」에 섞지 않고 따로 둔다(그 할 일 메모 밑 · 갤러리 분야 묶음에만 보인다).
+      // 블록 사진(cardId 있음)도 사진 화면 · 단계 창에는 섞지 않는다. 지운 블록 사진은 「삭제한 사진」에서 되살릴 수 있게 남긴다
       const j = (await res.json()) as Data;
-      setData({ photos: j.photos.filter((p) => !p.taskId), trash: j.trash.filter((p) => !p.taskId) });
+      const plain = (p: PhotoView) => !p.taskId && !p.cardId;
+      setData({ photos: j.photos.filter(plain), trash: j.trash.filter((p) => !p.taskId) });
       setTaskPhotos(j.photos.filter((p) => !!p.taskId).sort((a, b) => a.order - b.order));
+      setCardPhotos(j.photos.filter((p) => !!p.cardId).sort((a, b) => a.order - b.order));
       setState('idle');
     } catch { setState('error'); }
   }, []);
@@ -141,12 +150,12 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
 
   // 크게 보기에서 넘기는 목록: 고른 사진 묶음(새 홈 사진 탭) → 한 단계(단계 창) → 사진 탭에 보이는 줄
   const viewList = useMemo(() => {
-    if (viewIds) { const by = new Map([...ordered, ...taskPhotos].map((p) => [p.id, p])); return viewIds.map((id) => by.get(id)).filter((p): p is PhotoView => !!p); }
+    if (viewIds) { const by = new Map([...ordered, ...taskPhotos, ...cardPhotos].map((p) => [p.id, p])); return viewIds.map((id) => by.get(id)).filter((p): p is PhotoView => !!p); }
     return viewStep === null ? shown : ordered.filter((p) => p.stepId === viewStep);
-  }, [shown, ordered, taskPhotos, viewStep, viewIds]);
+  }, [shown, ordered, taskPhotos, cardPhotos, viewStep, viewIds]);
 
-  // 할 일 메모 사진 올리기: 사진 올리기 창과 같은 길(큰 사진은 미리 줄이고 한 장씩), 단계 = 그 할 일 단계, taskId 표시
-  const uploadToTask = useCallback(async (taskId: string, stepId: number, files: File[]) => {
+  // 할 일 메모 · 단계 블록 사진 올리기: 사진 올리기 창과 같은 길(큰 사진은 미리 줄이고 한 장씩), 단계 = 그 할 일 · 블록 단계, taskId · cardId 표시
+  const uploadAttached = useCallback(async (to: { taskId: string } | { cardId: string }, stepId: number, files: File[]) => {
     let okN = 0;
     for (const f of files) {
       try {
@@ -154,7 +163,7 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
         const fd = new FormData();
         fd.append('file', await shrinkIfLarge(f), 'photo.jpg');
         fd.append('stepId', String(stepId));
-        fd.append('taskId', taskId);
+        if ('taskId' in to) fd.append('taskId', to.taskId); else fd.append('cardId', to.cardId);
         const res = await busyFetch('/api/photos', { method: 'POST', headers: { 'x-photos-upload': '1' }, body: fd }, { slow: true });
         const j = await res.json().catch(() => null);
         if (!res.ok) throw new Error(typeof j?.message === 'string' ? j.message : '올리지 못했어요.');
@@ -166,6 +175,8 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
     await reload();
     if (okN > 0) toast(`사진 ${okN}장을 붙였어요.`);
   }, [reload, toast]);
+  const uploadToTask = useCallback((taskId: string, stepId: number, files: File[]) => uploadAttached({ taskId }, stepId, files), [uploadAttached]);
+  const uploadToCard = useCallback((cardId: string, stepId: number, files: File[]) => uploadAttached({ cardId }, stepId, files), [uploadAttached]);
 
   // 같은 단계 사진을 기본 순서로 놓고 한 칸 옮긴 뒤, 그 단계 사진들의 position 을 그 순서대로 다시 매겨 한 번에 저장한다
   const canMove = useCallback((id: string, dir: -1 | 1) => {
@@ -195,7 +206,8 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
   }, [ordered, canMove, reload, toast]);
   const viewIndex = viewId ? viewList.findIndex((p) => p.id === viewId) : -1;
   const remove = useCallback(async (p: PhotoView) => {
-    // 할 일 메모 사진은 「삭제한 사진」 목록에 안 나오므로 되살리기는 알림의 「되돌리기」로만
+    // 할 일 메모 사진은 「삭제한 사진」 목록에 안 나오므로 되살리기는 알림의 「되돌리기」로만.
+    // 블록 사진은 「삭제한 사진」(30일)에도 남고, 알림의 「되돌리기」로도 바로 되살린다
     const ok = await confirm({ title: '이 사진을 지울까요?', body: p.caption || p.album || undefined, note: p.taskId ? undefined : PHOTO_TRASH_NOTE, confirmLabel: '삭제', danger: true });
     if (!ok) return;
     // 지운 뒤에는 다음 사진(마지막이면 앞 사진)을 보여 준다
@@ -203,17 +215,17 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
     const next = viewList[i + 1] ?? viewList[i - 1] ?? null;
     if (await patch(p.id, 'DELETE')) {
       setViewId(next?.id ?? null);
-      if (p.taskId) toast('사진을 지웠어요.', { ms: 8000, action: { label: '되돌리기', run: () => void patch(p.id, 'PATCH', { restore: true }) } });
+      if (p.taskId || p.cardId) toast('사진을 지웠어요.', { ms: 8000, action: { label: '되돌리기', run: () => void patch(p.id, 'PATCH', { restore: true }) } });
       else toast('사진을 지웠어요.');
     }
   }, [confirm, viewList, patch, toast]);
 
   const value = useMemo<Ctx>(() => ({
-    steps, data, state, ordered, taskPhotos, uploadToTask, shown, sort, setSort, kind, setKind, query, setQuery, move, canMove, ensure, reload,
+    steps, data, state, ordered, taskPhotos, uploadToTask, cardPhotos, uploadToCard, shown, sort, setSort, kind, setKind, query, setQuery, move, canMove, ensure, reload,
     view: (id, stepId, ids) => { setViewStep(stepId ?? null); setViewIds(ids ?? null); setViewId(id); },
-    upload: (stepId, album) => { setUploadAlbum(album ?? ''); setUploadStep(stepId ?? defaultStep); },
+    upload: (stepId, album, opts) => { setUploadAlbum(album ?? ''); setUploadDoc(!!opts?.doc); setUploadStep(stepId ?? defaultStep); },
     patch,
-  }), [steps, data, state, ordered, taskPhotos, uploadToTask, shown, sort, setSort, kind, setKind, query, move, canMove, ensure, reload, defaultStep, patch]);
+  }), [steps, data, state, ordered, taskPhotos, uploadToTask, cardPhotos, uploadToCard, shown, sort, setSort, kind, setKind, query, move, canMove, ensure, reload, defaultStep, patch]);
 
   return (
     <C.Provider value={value}>
@@ -222,7 +234,7 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
         <Lightbox list={viewList} index={viewIndex} steps={steps} onIndex={(i) => setViewId(viewList[i]?.id ?? null)} onClose={() => setViewId(null)}
           onSave={(p, body) => patch(p.id, 'PATCH', body)} onDelete={remove} onMove={move} canMove={canMove} showMove={!viewIds && (viewStep !== null || (sort === 'default' && !query.trim() && kind === 'all'))} />
       )}
-      {uploadStep !== null && <UploadDialog steps={steps} initialStep={uploadStep} album={uploadAlbum} onDone={() => void reload()} onClose={() => setUploadStep(null)} />}
+      {uploadStep !== null && <UploadDialog steps={steps} initialStep={uploadStep} album={uploadAlbum} initialDoc={uploadDoc} onDone={() => void reload()} onClose={() => setUploadStep(null)} />}
     </C.Provider>
   );
 }
@@ -263,20 +275,49 @@ function Thumb({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
   );
 }
 
-// ── 우리 집 › 사진 화면 ──
-const NO_GROUP = -1;   // 최신순 · 오래된순의 「단계 묶음 없음」 표시(제목 줄 없음)
-/** noUpload: 첫 줄 「＋ 사진 올리기」를 뺀다(새 홈 「모든 사진」 — 올리기는 위 공사 전 · 후 두 곳만) */
-export function PhotosPanel({ active, noUpload = false }: { active: boolean; noUpload?: boolean }) {
-  const { steps, data, state, shown, sort, setSort, kind, setKind, query, setQuery, ensure, reload, view, upload, patch } = usePhotos();
-  const [trashOpen, setTrashOpen] = useState(false);
-  const trashId = useId();
-  // 검색칸: 입력하는 대로(0.2초 쉬었다가) 거른다. 한글 조합 중에는 거르지 않고, 조합이 끝나면 바로 거른다.
+/**
+ * 사진 검색칸 + 정렬(기본 순서 · 최신순 · 오래된순) 한 줄. 값은 PhotosProvider 의 query · sort(정렬은 이 브라우저에 기억).
+ * 입력하는 대로(0.2초 쉬었다가) 거른다. 한글 조합 중에는 거르지 않고, 조합이 끝나면 바로 거른다. 우리 집 › 사진 · 새 홈 갤러리 맨 위가 같이 쓴다.
+ */
+export function PhotoSearchFields({ placeholder = '설명 · 앨범 · 단계', label = '사진 검색(설명 · 앨범 · 단계 이름)' }: { placeholder?: string; label?: string }) {
+  const { sort, setSort, query, setQuery } = usePhotos();
   const [text, setText] = useState(query);
   const composing = useRef(false);
   useEffect(() => {
     const t = setTimeout(() => { if (!composing.current) setQuery(text.trim()); }, 200);
     return () => clearTimeout(t);
   }, [text, setQuery]);
+  return (
+    <div className="flex gap-2">
+      <div className="relative min-w-0 flex-1">
+        <i className="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-faint" aria-hidden />
+        <input type="search" value={text} aria-label={label} placeholder={placeholder} autoComplete="off"
+          onChange={(e) => setText(e.target.value)}
+          onCompositionStart={() => { composing.current = true; }}
+          onCompositionEnd={(e) => { composing.current = false; setQuery(e.currentTarget.value.trim()); }}
+          className="min-h-11 w-full rounded-control border border-line-strong bg-surface pl-9 pr-11 text-base font-semibold text-ink placeholder:font-normal placeholder:text-muted focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink [&::-webkit-search-cancel-button]:hidden" />
+        {text && (
+          <button type="button" aria-label="검색어 지우기" onClick={() => { setText(''); setQuery(''); }}
+            className="absolute right-0 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:text-ink">
+            <i className="fas fa-times" aria-hidden />
+          </button>
+        )}
+      </div>
+      <select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
+        className="min-h-11 shrink-0 rounded-control border border-line-strong bg-surface px-3 text-base font-semibold text-ink focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink">
+        <option value="default">기본 순서</option>
+        <option value="newest">최신순</option>
+        <option value="oldest">오래된순</option>
+      </select>
+    </div>
+  );
+}
+
+// ── 우리 집 › 사진 화면 ──
+const NO_GROUP = -1;   // 최신순 · 오래된순의 「단계 묶음 없음」 표시(제목 줄 없음)
+/** noUpload: 첫 줄 「＋ 사진 올리기」를 뺀다(새 홈 「모든 사진」 — 올리기는 위 공사 전 · 후 두 곳만) */
+export function PhotosPanel({ active, noUpload = false }: { active: boolean; noUpload?: boolean }) {
+  const { steps, data, state, shown, sort, kind, setKind, query, ensure, reload, view, upload } = usePhotos();
   const filtering = query !== '' || kind !== 'all';
   useEffect(() => { if (active) ensure(); }, [active, ensure]);
 
@@ -310,28 +351,7 @@ export function PhotosPanel({ active, noUpload = false }: { active: boolean; noU
             <p className="text-sm text-muted" aria-live="polite">
               {filtering ? `${shown.length}장 (전체 ${data.photos.length}장)` : `${shown.length}장`}
             </p>
-            <div className="flex gap-2">
-              <div className="relative min-w-0 flex-1">
-                <i className="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-faint" aria-hidden />
-                <input type="search" value={text} aria-label="사진 검색(설명 · 앨범 · 단계 이름)" placeholder="설명 · 앨범 · 단계" autoComplete="off"
-                  onChange={(e) => setText(e.target.value)}
-                  onCompositionStart={() => { composing.current = true; }}
-                  onCompositionEnd={(e) => { composing.current = false; setQuery(e.currentTarget.value.trim()); }}
-                  className="min-h-11 w-full rounded-control border border-line-strong bg-surface pl-9 pr-11 text-lg font-semibold text-ink placeholder:font-normal placeholder:text-faint focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink [&::-webkit-search-cancel-button]:hidden" />
-                {text && (
-                  <button type="button" aria-label="검색어 지우기" onClick={() => { setText(''); setQuery(''); }}
-                    className="absolute right-0 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:text-ink">
-                    <i className="fas fa-times" aria-hidden />
-                  </button>
-                )}
-              </div>
-              <select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
-                className="min-h-11 shrink-0 rounded-control border border-line-strong bg-surface px-3 text-lg font-semibold text-ink focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink">
-                <option value="default">기본 순서</option>
-                <option value="newest">최신순</option>
-                <option value="oldest">오래된순</option>
-              </select>
-            </div>
+            <PhotoSearchFields />
             <Segmented<KindFilter> label="보기 거르기" value={kind} onChange={setKind}
               options={[{ value: 'all', label: '전체' }, { value: 'image', label: '사진' }, { value: 'doc', label: '문서' }]} />
           </div>
@@ -392,33 +412,42 @@ export function PhotosPanel({ active, noUpload = false }: { active: boolean; noU
       </Card>
 
       {/* 맨 아래 「삭제한 사진 n개」(기본 접힘) — 할 일 · 집 정보 · 기록의 「삭제한 ○○」와 같은 모양 */}
-      {data && data.trash.length > 0 && (
-        <Card as="section" aria-label="삭제한 사진" className="mt-8">
-          <FoldRow label="삭제한 사진" count={data.trash.length} open={trashOpen} onToggle={() => setTrashOpen((v) => !v)} controls={trashId} />
-          {trashOpen && (
-            <div id={trashId} className="border-t border-line">
-              <p className="px-4 pt-3 text-sm text-muted">지운 지 30일이 지나면 완전히 사라져요.</p>
-              <ul>
-                {data.trash.map((p) => (
-                  <li key={p.id} className={`${cardRowCls} flex items-center gap-3 px-4 py-3`}>
-                    <span className="relative size-12 shrink-0 overflow-hidden rounded-control bg-sunken">
-                      {p.hasImage && <ThumbImg id={p.id} />}
-                      <span className="pointer-events-none absolute inset-0 rounded-control ring-1 ring-inset ring-ink/10" aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm text-muted">{stepLabel(steps, p.stepId)}</div>
-                      <div className="truncate text-base font-semibold text-ink-soft">{p.caption || p.album || (p.kind === 'pdf' ? 'PDF' : '사진')}</div>
-                      <div className="flex flex-wrap gap-x-2 text-sm text-muted"><span>{p.deletedBy ? `${withGa(p.deletedBy)} 삭제` : '삭제'}</span><span>{relTime(p.deletedAt)}</span></div>
-                    </div>
-                    <button type="button" className={btnGhost} onClick={() => void patch(p.id, 'PATCH', { restore: true })}>되살리기</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </Card>
-      )}
+      <PhotoTrash className="mt-8" />
     </>
+  );
+}
+
+/** 「삭제한 사진 n개」 접는 상자(지운 게 없으면 그리지 않는다). 우리 집 › 사진 · 새 홈 갤러리 맨 아래가 같이 쓴다 */
+export function PhotoTrash({ className = '' }: { className?: string }) {
+  const { steps, data, patch } = usePhotos();
+  const [trashOpen, setTrashOpen] = useState(false);
+  const trashId = useId();
+  if (!data || data.trash.length === 0) return null;
+  return (
+    <Card as="section" aria-label="삭제한 사진" className={className}>
+      <FoldRow label="삭제한 사진" count={data.trash.length} open={trashOpen} onToggle={() => setTrashOpen((v) => !v)} controls={trashId} />
+      {trashOpen && (
+        <div id={trashId} className="border-t border-line">
+          <p className="px-4 pt-3 text-sm text-muted">지운 지 30일이 지나면 완전히 사라져요.</p>
+          <ul>
+            {data.trash.map((p) => (
+              <li key={p.id} className={`${cardRowCls} flex items-center gap-3 px-4 py-3`}>
+                <span className="relative size-12 shrink-0 overflow-hidden rounded-control bg-sunken">
+                  {p.hasImage && <ThumbImg id={p.id} />}
+                  <span className="pointer-events-none absolute inset-0 rounded-control ring-1 ring-inset ring-ink/10" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm text-muted">{stepLabel(steps, p.stepId)}</div>
+                  <div className="truncate text-base font-semibold text-ink-soft">{p.caption || p.album || (p.kind === 'pdf' ? 'PDF' : '사진')}</div>
+                  <div className="flex flex-wrap gap-x-2 text-sm text-muted"><span>{p.deletedBy ? `${withGa(p.deletedBy)} 삭제` : '삭제'}</span><span>{relTime(p.deletedAt)}</span></div>
+                </div>
+                <button type="button" className={btnGhost} onClick={() => void patch(p.id, 'PATCH', { restore: true })}>되살리기</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -492,13 +521,13 @@ function StepSelect({ steps, value, onChange, id }: { steps: StepName[]; value: 
 }
 
 // ── 사진 올리기 창 ──
-function UploadDialog({ steps, initialStep, album = '', onDone, onClose }: { steps: StepName[]; initialStep: number; album?: string; onDone: () => void; onClose: () => void }) {
+function UploadDialog({ steps, initialStep, album = '', initialDoc = false, onDone, onClose }: { steps: StepName[]; initialStep: number; album?: string; initialDoc?: boolean; onDone: () => void; onClose: () => void }) {
   const uid = useId();
   const { toast, confirmDiscard } = useProgress();
   const [files, setFiles] = useState<File[]>([]);
   const [stepId, setStepId] = useState(initialStep);
   const [caption, setCaption] = useState('');
-  const [doc, setDoc] = useState(false);
+  const [doc, setDoc] = useState(initialDoc);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const { busy, run } = useBusy();

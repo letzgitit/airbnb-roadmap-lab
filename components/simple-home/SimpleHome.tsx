@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { Content, ProgressDoc, TaskItem } from '@/lib/core/types';
+import type { ProgressDoc, TaskItem } from '@/lib/core/types';
 import { usePhotos } from '@/components/progress/PhotosPanel';
 import { todayStr } from '@/lib/client/format';
 import { useProgress } from '@/components/progress/ProgressProvider';
@@ -18,7 +18,7 @@ import { ContactsTab } from './ContactsTab';
 import { PhotosTab, type PhotoSub } from './PhotosTab';
 import { BlockHead, blockCls, StepBlock } from './StepBlock';
 import {
-  CARD_TABS, TABS, askOnly, contacts, daysBetween, isAsk, isWorkTab, relDay, splitBlocks, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
+  CARD_TABS, TABS, askOnly, blockId, contacts, daysBetween, isAsk, isWorkTab, relDay, splitBlocks, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
   type CardDef, type TabId, type WorkTabId,
 } from './home-model';
 
@@ -91,7 +91,7 @@ export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
  * - 맨 아래 「간단히 보기 | 자세히 보기」 고르개(자세히 = /classic, 기기에 기억).
  * 홈 안에서 끝난다 — 「우리 집」(/house)으로 보내는 링크를 두지 않는다.
  */
-export function SimpleHome({ content }: { content: Content }) {
+export function SimpleHome() {
   const { doc } = useProgress();
   const { steps } = useSite();
   const { ensure } = usePhotos();
@@ -99,7 +99,7 @@ export function SimpleHome({ content }: { content: Content }) {
   // 할 일 사진 · 갤러리 개수를 보이려고 사진 목록도 처음에 한 번 받는다
   useEffect(() => { ensure(); }, [ensure]);
   const [tab, setTab] = useState<TabId>(savedTab);
-  const [photoSub, setPhotoSub] = useState<PhotoSub>(() => (read(PHOTO_SUB_KEY) === 'docs' ? 'docs' : 'photos'));
+  const [photoSub, setPhotoSub] = useState<PhotoSub>(() => { const v = read(PHOTO_SUB_KEY); return v === 'docs' || v === 'etc' ? v : 'photos'; });
   const pickSub = (s: PhotoSub) => { setPhotoSub(s); write(PHOTO_SUB_KEY, s); };
   // 「이번 주 할 일」에서 고른 할 일: 그 탭으로 가서(접힌 「완료한 단계」 안이면 펼쳐) 그 줄로 내려간다. 탭을 손으로 바꾸면 잊는다
   const [reveal, setReveal] = useState<{ id: string; tab: WorkTabId; n: number } | null>(null);
@@ -136,14 +136,16 @@ export function SimpleHome({ content }: { content: Content }) {
         <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-${tab}`} className="min-w-0">
           {isWorkTab(tab) ? (
             <WorkTab key={tab} tab={tab} groups={work[tab]} doc={doc} steps={steps} today={today}
-              week={<WeekBlock title={weekTitle} items={weekFor([tab])} today={today} onPick={goTask} className="lg:hidden" />}
+              weekItems={weekFor([tab])} weekTitle={weekTitle} onPickWeek={goTask}
               reveal={reveal?.tab === tab ? reveal : null} />
+          ) : tab === 'contacts' ? (
+            <div className="px-safe pb-2 md:px-0"><ContactsTab /></div>
           ) : (
-            <div className="px-safe pb-2 md:px-0">
+            // 갤러리 · 달력은 일터 탭처럼 흰 블록을 쌓는다(폰은 화면 끝까지)
+            <>
               {tab === 'gallery' && <PhotosTab sub={photoSub} onSub={pickSub} />}
-              {tab === 'contacts' && <ContactsTab />}
-              {tab === 'calendar' && <CalendarTab steps={content.steps} rowSteps={steps} today={today} />}
-            </div>
+              {tab === 'calendar' && <CalendarTab rowSteps={steps} today={today} />}
+            </>
           )}
         </div>
         {/* 곁 칸(PC): 위에 붙어 따라온다(분야 탭 줄 아래) */}
@@ -161,11 +163,13 @@ export function SimpleHome({ content }: { content: Content }) {
 }
 
 /**
- * 일터 탭 하나(행정 · 설비 · 운영): [문의 필요만 보기] → 이번 주 할 일(폰 · 태블릿) → 「완료한 단계 n」(접음) → 단계 블록들(마감 이른 순).
+ * 일터 탭 하나(행정 · 설비 · 운영): 이번 주 할 일(폰 · 태블릿 — 머리 오른쪽에 「문의 필요만 보기」) → 「완료한 단계 n」(접음) → 단계 블록들(마감 이른 순).
  * 블록 사이는 바탕 회색 8px(데일리 --gap). 행정의 1~3단계와 다 끝낸 블록은 「완료한 단계」 안에 접어 둔다.
+ * 「문의 필요만 보기」는 따로 한 줄(회색 띠)을 쓰지 않고 「이번 주 할 일」 머리 오른쪽 작은 글자 단추. 그 블록이 없으면(또는 PC — 이번 주는 곁 칸) 첫 블록 위 오른쪽.
  */
-function WorkTab({ tab, groups, doc, steps, today, week, reveal }: {
-  tab: WorkTabId; groups: Record<string, TaskItem[]>; doc: ProgressDoc; steps: StepRef[]; today: string; week: React.ReactNode;
+function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickWeek, reveal }: {
+  tab: WorkTabId; groups: Record<string, TaskItem[]>; doc: ProgressDoc; steps: StepRef[]; today: string;
+  weekItems: WeekItem[]; weekTitle: string; onPickWeek: (id: string, tab: WorkTabId) => void;
   reveal: { id: string; n: number } | null;
 }) {
   const uid = useId();
@@ -181,7 +185,7 @@ function WorkTab({ tab, groups, doc, steps, today, week, reveal }: {
   const askCount = Object.values(groups).flat().filter((t) => isAsk(t) && !t.done).length;
   const titleOf = (c: CardDef) => (c.stepTitle ? steps.find((s) => s.id === c.stepTitle)?.title ?? c.title : c.title);
   const block = (c: CardDef, list = groups[c.id]) => (
-    <StepBlock key={c.id} card={c} cards={cards} title={titleOf(c)} tasks={list} summary={sums[c.id]} steps={steps} today={today} />
+    <StepBlock key={c.id} blockId={blockId(tab, c.id)} card={c} cards={cards} title={titleOf(c)} tasks={list} summary={sums[c.id]} steps={steps} today={today} />
   );
 
   // 이번 주 할 일에서 고른 할 일로: 줄이 없으면(접힌 「완료한 단계」 안 · 문의 거르기에 가림) 펼친 뒤 다시
@@ -203,16 +207,19 @@ function WorkTab({ tab, groups, doc, steps, today, week, reveal }: {
     const shown = [...open, ...done].filter((c) => askOnly(groups[c.id]).length > 0);
     return (
       <div className="flex flex-col gap-2">
-        <AskToggle on count={askCount} onToggle={() => setAskOn(false)} />
+        <AskRow><AskToggle on count={askCount} onToggle={() => setAskOn(false)} /></AskRow>
         {shown.length === 0 && <p className={`${blockCls} px-5 py-4 text-base text-muted`}>문의할 일이 없어요.</p>}
         {shown.map((c) => block(c, askOnly(groups[c.id])))}
       </div>
     );
   }
+  const ask = askCount > 0 ? <AskToggle on={false} count={askCount} onToggle={() => setAskOn(true)} /> : null;
+  const hasWeek = weekItems.length > 0;
   return (
     <div className="flex flex-col gap-2">
-      {askCount > 0 && <AskToggle on={false} count={askCount} onToggle={() => setAskOn(true)} />}
-      {week}
+      {/* 이번 주 블록이 있으면 그 머리 오른쪽(폰 · 태블릿). PC 는 이번 주가 곁 칸이라 첫 블록 위 오른쪽 */}
+      {ask && <AskRow className={hasWeek ? 'hidden lg:flex' : ''}>{ask}</AskRow>}
+      <WeekBlock title={weekTitle} items={weekItems} today={today} onPick={onPickWeek} headRight={ask} className="lg:hidden" />
       {done.length > 0 && (
         <div className={blockCls}>
           <span className="block px-1"><FoldRow label="완료한 단계" count={done.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
@@ -224,34 +231,44 @@ function WorkTab({ tab, groups, doc, steps, today, week, reveal }: {
   );
 }
 
-/** 「문의 필요만 보기 n」 거르기(문의 할 일이 있을 때만): 블록 위 오른쪽 작은 글자 단추. 켜면 굵게 + 아래 2px 검정 선(데일리 고르개 꼴) */
+/** 「문의 필요만 보기」를 블록 밖에 둘 때의 자리(첫 블록 위 오른쪽 — 띠 없이 단추만) */
+function AskRow({ className = '', children }: { className?: string; children: React.ReactNode }) {
+  return <div className={`-mb-1 flex justify-end px-2 md:px-0 ${className}`}>{children}</div>;
+}
+
+/** 「문의 필요만 보기 n」 거르기(문의 할 일이 있을 때만): 작은 글자 단추(14). 켜면 굵게 + 아래 2px 검정 선(데일리 고르개 꼴) */
 function AskToggle({ on, count, onToggle }: { on: boolean; count: number; onToggle: () => void }) {
   return (
-    <div className="flex justify-end px-2 md:px-0">
-      <button type="button" aria-pressed={on} onClick={onToggle}
-        className={`inline-flex min-h-11 items-center gap-1 px-3 text-sm transition-colors ${on ? 'font-bold text-ink shadow-[inset_0_-2px_0_var(--color-ink)]' : 'font-semibold text-ink-soft hover:text-ink'}`}>
-        문의 필요만 보기<span className="font-normal text-muted tabular-nums">{count}</span>
-      </button>
-    </div>
+    <button type="button" aria-pressed={on} onClick={onToggle}
+      className={`-mr-3 inline-flex min-h-11 items-center gap-1 px-3 text-sm transition-colors ${on ? 'font-bold text-ink shadow-[inset_0_-2px_0_var(--color-ink)]' : 'font-semibold text-ink-soft hover:text-ink'}`}>
+      문의 필요만 보기<span className="font-normal text-muted tabular-nums">{count}</span>
+    </button>
   );
 }
 
+type WeekItem = { task: TaskItem; tab: WorkTabId };
+/** 「이번 주 할 일」에 처음 보이는 줄 수(넘으면 「n개 더 보기」로 펼친다) */
+const WEEK_SHOWN = 5;
+
 /**
- * 「이번 주 할 일 n」 블록: 기한 지남 + 7일 안 마감만, 줄은 간단히 [남은 날 꼬리표] 제목(메모 · 단추 없음).
+ * 「이번 주 할 일 n」 블록: 기한 지남 + 7일 안 마감만, 줄은 간단히 [남은 날 꼬리표] 제목(메모 · 단추 없음). 5개까지 보이고 넘으면 「n개 더 보기」.
  * 누르면 아래 블록의 그 할 일 줄로 내려가 메모를 펼치고 잠깐 형광으로 칠한다(다른 탭이면 그 탭으로). 없으면 블록째 숨긴다.
- * showTab = 여러 탭을 모았을 때 줄 끝에 「행정」 같은 탭 이름(13 메타).
+ * showTab = 여러 탭을 모았을 때 줄 끝에 「행정」 같은 탭 이름(13 메타). headRight = 머리 오른쪽 작은 단추(「문의 필요만 보기」).
  */
-function WeekBlock({ title, items, today, onPick, showTab = false, className = '' }: {
-  title: string; items: { task: TaskItem; tab: WorkTabId }[]; today: string; onPick: (id: string, tab: WorkTabId) => void; showTab?: boolean; className?: string;
+function WeekBlock({ title, items, today, onPick, showTab = false, headRight, className = '' }: {
+  title: string; items: WeekItem[]; today: string; onPick: (id: string, tab: WorkTabId) => void; showTab?: boolean; headRight?: React.ReactNode; className?: string;
 }) {
   const uid = useId();
+  const [all, setAll] = useState(false);
   if (items.length === 0) return null;
   const label = (t: WorkTabId) => CARD_TABS.find((c) => c.tab === t)?.label ?? '';
+  const shown = all ? items : items.slice(0, WEEK_SHOWN);
+  const rest = items.length - WEEK_SHOWN;
   return (
     <section aria-labelledby={`${uid}-h`} className={`${blockCls} ${className}`}>
-      <BlockHead id={`${uid}-h`} title={title} count={items.length} />
-      <ul className="border-t border-line px-5">
-        {items.map(({ task, tab }) => {
+      <BlockHead id={`${uid}-h`} title={title} count={items.length} right={headRight} />
+      <ul id={`${uid}-l`} className="border-t border-line px-5">
+        {shown.map(({ task, tab }) => {
           const rel = relDay(task.due!, today);
           const tone: BadgeTone = rel.tone === 'late' ? 'danger' : daysBetween(today, task.due!) <= SOON_DAYS ? 'warn' : 'neutral';
           return (
@@ -266,6 +283,12 @@ function WeekBlock({ title, items, today, onPick, showTab = false, className = '
           );
         })}
       </ul>
+      {/* 5개를 넘으면 「n개 더 보기」(접는 줄 꼴 — 펼치면 「접기」) */}
+      {rest > 0 && (
+        <span className="block border-t border-line px-1">
+          <FoldRow label={all ? '접기' : `${rest}개 더 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={`${uid}-l`} />
+        </span>
+      )}
     </section>
   );
 }
