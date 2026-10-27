@@ -8,15 +8,20 @@ import { Segmented } from '@/components/ui/Segmented';
 import { ToggleChips } from '@/components/ui/ToggleChips';
 import { TYPE_DOT, TYPE_LABEL, TYPE_ORDER } from '@/components/TimelineChart';
 import type { TimelineType } from '@/lib/timeline';
+import type { UpdateItem } from '@/lib/core/types';
+import { HomeSummary } from './HomeSummary';
 import { MonthCalendar } from './MonthCalendar';
 import { StepBars } from './StepBars';
 import { axisOf, PUBLIC_DOC, type Pin, type TimelineStep } from './step-dates';
 
 export type { TimelineStep } from './step-dates';
 
-// 홈 「단계」의 날짜 화면. 로그인한 사람과 로그인 안 한 사람이 같은 컴포넌트 · 같은 모양을 본다.
+// 홈 「진행」의 화면. 로그인한 사람과 로그인 안 한 사람이 같은 컴포넌트 · 같은 모양을 본다.
 //
-// [ 단계 | 달력 ]  보기 고르기(Segmented)
+// [ 요약 | 단계 | 달력 ]  보기 고르기(Segmented)
+// 요약 탭 = HomeSummary(카드 여러 장 — 상자 밖에 그대로 쌓는다). 거르기 칩 · 고정 일정 줄 · 「기한 지남 n개」는 그리지 않는다
+//   (요약은 늘 전체. 칩 값은 기억해 두었다가 단계 · 달력으로 돌아가면 다시 적용된다).
+// 단계 · 달력 탭:
 // ┌ 상자 ──────────────────────────────────────────────
 // │ 단계 종류 거르기 칩(준비 · 계약 · 중요 · 설비 · 행정 · 운영, 여러 개 켜기 · 다 끄면 전체) — 두 탭에 같이 적용
 // │ 「고정 일정」 줄(핀 + 날짜 · 이름, 누르면 그날 창)
@@ -25,18 +30,19 @@ export type { TimelineStep } from './step-dates';
 // └──────────────────────────────────────────────
 // 로그인 전(guest): 현황(할 일 · 목표일 · 고정 일정 · 단계 상태)을 받지 않으므로 빈 현황(PUBLIC_DOC)으로 그린다 — 단계 기간은
 //   공개 일정 날수를 오늘부터 센 것이고(기간 글자는 「13~14일째」), 날짜는 누를 수 없다(그날 창 · 편집 없음). 개인 내용은 애초에 없다.
-// 고른 탭 · 칩은 이 브라우저에만 기억한다(localStorage, 못 쓰면 기본값).
-type View = 'steps' | 'month';
+// 고른 탭 · 칩은 이 브라우저에만 기억한다(localStorage, 못 쓰면 기본값 — 로그인 = 요약, 로그인 전 = 단계).
+// 요약 안 할 일 폼에 저장 안 한 글이 있으면 탭을 바꾸기 전에 확인 창(안 그러면 쓰던 글이 사라진다).
+type View = 'summary' | 'steps' | 'month';
 const VIEW_KEY = 'home:view';
 const TYPES_KEY = 'home:types';
 const recall = <T,>(key: string, ok: (v: unknown) => v is T, fallback: T): T => {
   try { const raw = localStorage.getItem(key); const v = raw == null ? null : JSON.parse(raw); return ok(v) ? v : fallback; } catch { return fallback; }
 };
 const remember = (key: string, v: unknown) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* 저장 못 해도 화면은 그대로 */ } };
-const isView = (v: unknown): v is View => v === 'steps' || v === 'month';
+const isView = (v: unknown): v is View => v === 'summary' || v === 'steps' || v === 'month';
 const isTypes = (v: unknown): v is TimelineType[] => Array.isArray(v) && v.every((x) => (TYPE_ORDER as string[]).includes(x));
 
-export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks = [], guest = false }: {
+export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks = [], guest = false, updates = [], onNotice }: {
   steps: TimelineStep[];
   currentId: number | null;
   /** 단계 창 열기(steps 배열의 순번) */
@@ -49,17 +55,24 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
   marks?: Pin[];
   /** 로그인 전: 현황 없이 공개 일정만 */
   guest?: boolean;
+  /** 로그인 전 요약의 「최근 바뀐 규정」(공개 콘텐츠)과 주의사항 창 열기 */
+  updates?: UpdateItem[];
+  onNotice?: (idx: number | null) => void;
 }) {
   const progress = useProgress();
   const doc = guest ? PUBLIC_DOC : progress.doc;
   const [today] = useState(todayStr);
   const [picked, setPicked] = useState<string | null>(null);
   // 이 컴포넌트는 브라우저에서만 그려진다(GuideSection 이 현황을 확인한 뒤) — 처음 값을 바로 localStorage 에서 읽어도 화면이 어긋나지 않는다
-  const [view, setView] = useState<View>(() => recall(VIEW_KEY, isView, 'steps'));
+  const [view, setView] = useState<View>(() => recall(VIEW_KEY, isView, guest ? 'steps' : 'summary'));
   const [types, setTypes] = useState<TimelineType[]>(() => recall(TYPES_KEY, isTypes, []));
   if (!doc) return null;
 
-  const pickView = (v: View) => { setView(v); remember(VIEW_KEY, v); };
+  const pickView = async (v: View) => {
+    if (v === view) return;
+    if (view === 'summary' && progress.hasDirty('page') && !(await progress.confirmDiscard())) return;
+    setView(v); remember(VIEW_KEY, v);
+  };
   const pickTypes = (v: TimelineType[]) => { setTypes(v); remember(TYPES_KEY, v); };
   const openDay = onDay && !guest ? (d: string) => { setPicked(d); onDay(d); } : undefined;
   const { pins, lateCount } = axisOf(steps, doc, today, { fixedDay0, marks, types });
@@ -67,42 +80,50 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
 
   return (
     <div className="flex flex-col gap-3">
-      <Segmented label="보는 방식 고르기" value={view} onChange={pickView} options={[{ value: 'steps', label: '단계' }, { value: 'month', label: '달력' }]} />
-      <Card>
-        <div className="border-b border-line px-2">
-          <ToggleChips label="단계 종류로 걸러 보기" values={types} onChange={pickTypes}
-            options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABEL[t], dot: TYPE_DOT[t] }))} />
+      <Segmented label="보는 방식 고르기" value={view} onChange={(v) => void pickView(v)}
+        options={[{ value: 'summary', label: '요약' }, { value: 'steps', label: '단계' }, { value: 'month', label: '달력' }]} />
+      {view === 'summary' ? (
+        <div className="pt-3">
+          <HomeSummary steps={steps} currentId={currentId} onStep={onStep} onDay={openDay} onShowSteps={() => void pickView('steps')}
+            marks={marks} guest={guest} updates={updates} onNotice={onNotice} />
         </div>
-        {pins.length > 0 && (
-          <div className="flex items-center gap-x-4 overflow-x-auto border-b border-line px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="고정 일정">
-            <span className="flex min-h-11 shrink-0 items-center whitespace-nowrap text-sm font-normal text-ink-soft"><i className="fas fa-thumbtack mr-1.5" aria-hidden />고정 일정</span>
-            {pins.map((p) => openDay
-              ? (
-                <button key={`${p.date}${p.label}`} type="button" onClick={() => openDay(p.date)}
-                  className="inline-flex min-h-11 shrink-0 items-center gap-x-1.5 whitespace-nowrap text-sm text-ink-soft hover:underline">
-                  <span className="font-bold">{shortDate(p.date)}</span><span className="font-normal">{p.label}</span>
-                </button>
-              )
-              : (
-                <span key={`${p.date}${p.label}`} className="inline-flex min-h-11 shrink-0 items-center gap-x-1.5 whitespace-nowrap text-sm text-ink-soft">
-                  <span className="font-bold">{shortDate(p.date)}</span><span className="font-normal">{p.label}</span>
-                </span>
-              ))}
+      ) : (
+        <Card>
+          <div className="border-b border-line px-2">
+            <ToggleChips label="단계 종류로 걸러 보기" values={types} onChange={pickTypes}
+              options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABEL[t], dot: TYPE_DOT[t] }))} />
           </div>
-        )}
+          {pins.length > 0 && (
+            <div className="flex items-center gap-x-4 overflow-x-auto border-b border-line px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="고정 일정">
+              <span className="flex min-h-11 shrink-0 items-center whitespace-nowrap text-sm font-normal text-ink-soft"><i className="fas fa-thumbtack mr-1.5" aria-hidden />고정 일정</span>
+              {pins.map((p) => openDay
+                ? (
+                  <button key={`${p.date}${p.label}`} type="button" onClick={() => openDay(p.date)}
+                    className="inline-flex min-h-11 shrink-0 items-center gap-x-1.5 whitespace-nowrap text-sm text-ink-soft hover:underline">
+                    <span className="font-bold">{shortDate(p.date)}</span><span className="font-normal">{p.label}</span>
+                  </button>
+                )
+                : (
+                  <span key={`${p.date}${p.label}`} className="inline-flex min-h-11 shrink-0 items-center gap-x-1.5 whitespace-nowrap text-sm text-ink-soft">
+                    <span className="font-bold">{shortDate(p.date)}</span><span className="font-normal">{p.label}</span>
+                  </span>
+                ))}
+            </div>
+          )}
 
-        {view === 'steps'
-          ? <StepBars {...shared} currentId={currentId} onStep={onStep} />
-          : <MonthCalendar {...shared} />}
+          {view === 'steps'
+            ? <StepBars {...shared} currentId={currentId} onStep={onStep} />
+            : <MonthCalendar {...shared} />}
 
-        {lateCount > 0 && openDay && (
-          <button type="button" onClick={() => openDay(today)}
-            className="flex min-h-11 w-full items-center gap-2 border-t border-line px-4 text-left text-base font-semibold text-danger-ink transition-colors hover:bg-sunken">
-            <span className="min-w-0 flex-1">기한 지남<span className="ml-1.5 font-normal">{lateCount}개</span></span>
-            <i className="fas fa-chevron-right text-xs text-muted" aria-hidden />
-          </button>
-        )}
-      </Card>
+          {lateCount > 0 && openDay && (
+            <button type="button" onClick={() => openDay(today)}
+              className="flex min-h-11 w-full items-center gap-2 border-t border-line px-4 text-left text-base font-semibold text-danger-ink transition-colors hover:bg-sunken">
+              <span className="min-w-0 flex-1">기한 지남<span className="ml-1.5 font-normal">{lateCount}개</span></span>
+              <i className="fas fa-chevron-right text-xs text-muted" aria-hidden />
+            </button>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

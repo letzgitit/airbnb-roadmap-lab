@@ -5,19 +5,24 @@ import { dayRangeLabel, shortDate } from '@/lib/client/format';
 import type { TaskItem } from '@/lib/core/types';
 import { textBtn } from '@/components/ui/buttonCls';
 import { IconButton } from '@/components/ui/IconButton';
-import { TYPE_COLOR } from '@/components/TimelineChart';
+import { TYPE_COLOR, TYPE_LABEL } from '@/components/TimelineChart';
 import { addDays, diffDays, isoOf, mondayOf, pinsOf, stepRanges, toDate, typeFilter, type DocLike, type Pin, type StepRange, type TimelineStep } from './step-dates';
 
 // 홈 「달력」 탭: 한 달을 월요일부터 일요일까지 주 단위로(날짜 띠의 주와 같은 기준).
 //   한 주 줄 = 날짜 숫자(오늘 = 강조색, 마지막으로 연 날 = ink 2px 테두리, 고정 일정 날은 숫자 옆 핀)
 //            → 단계 기간 띠(16px, 종류 색을 옅게 깐 면 + 시작하는 날에 진한 색 점, 이름은 띠 안에 12px. 주마다 겹치지 않게 줄을 나눈다)
-//            → 그날 고정 일정 이름 → 그날 마감 할 일(왼쪽 2px 단계 종류 색, 기한 지난 안 끝난 일 = 빨강 글자, 끝낸 일 = 흐린 글자 + 가운데 줄)
-//              폰은 두 개, 넓은 화면은 세 개까지, 나머지는 「+n」.
+//              띠가 한 칸뿐이면 단계 번호만(말줄임표 없이).
+//            → 그날 고정 일정 이름(폰은 핀 + 앞 토막만) → 그날 마감 할 일
+//              넓은 화면(640px 이상): 할 일 글자 세 개까지(기한 지난 안 끝난 일 = 빨강 글자, 끝낸 일 = 흐린 글자 + 가운데 줄), 나머지는 「+n」.
+//              폰: 칸이 좁아 글자가 잘리므로 「할 일 2」처럼 개수 한 줄(기한 지난 안 끝난 일이 있으면 빨강).
+//   아무것도 없는 주(단계 띠 · 고정 일정 · 할 일 없음)는 줄 높이 44px. 단계 종류로 걸렀는데 그 달에 해당 단계가 없으면 「이번 달엔 ○○ 단계가 없어요.」
 //   날을 누르면 그날 창(DaySheet — 할 일 추가 · 고치기 · 날짜 바꾸기 · 지우기는 그 창이 맡는다). 로그인 전(onPick 없음)은 누를 수 없다.
 //   위 줄: ‹ 2026년 10월 › + 「오늘」(이번 달로).
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
 const DOW_FULL = ['일', '월', '화', '수', '목', '금', '토'];
 const LANE = 18; // 단계 띠 한 줄(16px + 2px 틈)
+/** 폰 달력 칸의 고정 일정 이름: 「잔금 · 전입 · 신청」 → 「잔금」 */
+const shortPin = (label: string) => label.split(/\s*·\s*/)[0];
 const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--prep-bar)';
 const monthStart = (iso: string) => `${iso.slice(0, 7)}-01`;
 const addMonths = (first: string, n: number) => { const d = toDate(first); d.setMonth(d.getMonth() + n, 1); return isoOf(d); };
@@ -44,13 +49,14 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
   const ranges = stepRanges(steps, doc, today, fixedDay0).filter((r) => keep(r.id));
   const tasks = Object.values(doc.tasks).filter((t) => !t.deletedAt && t.due && keep(t.stepId));
   const pins = pinsOf(doc, marks);
-  const typeOf = new Map(steps.map((s) => [s.id, s.type]));
 
   const m = toDate(month);
   const lastOfMonth = isoOf(new Date(m.getFullYear(), m.getMonth() + 1, 0));
   const weeks: string[] = [];
   for (let w = mondayOf(month); w <= lastOfMonth; w = addDays(w, 7)) weeks.push(w);
   const thisMonth = monthStart(today);
+  const inMonthRanges = ranges.filter((r) => r.from <= lastOfMonth && r.to >= month);
+  const monthWord = month === thisMonth ? '이번 달' : `${m.getMonth() + 1}월`;
   const dayTasks = (d: string) => tasks.filter((t) => t.due === d)
     .sort((a, b) => Number(a.done) - Number(b.done) || a.stepId - b.stepId || a.createdAt.localeCompare(b.createdAt));
 
@@ -65,11 +71,15 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
       <div className="grid grid-cols-7 border-b border-line" aria-hidden>
         {DOW.map((d) => <span key={d} className="py-1 text-center text-xs font-normal text-muted">{d}</span>)}
       </div>
+      {types.length > 0 && inMonthRanges.length === 0 && (
+        <p className="border-b border-line px-4 py-3 text-base text-muted">{monthWord}엔 {types.map((t) => (TYPE_LABEL as Record<string, string>)[t] ?? t).join(' · ')} 단계가 없어요.</p>
+      )}
       <div role="group" aria-label={`${m.getMonth() + 1}월 달력`}>
         {weeks.map((mon) => {
           const sun = addDays(mon, 6);
           const lanes = lanesOf(ranges, mon, sun);
           const laneH = lanes.length ? (Math.max(...lanes.map((l) => l.lane)) + 1) * LANE : 0;
+          const empty = lanes.length === 0 && !tasks.some((t) => t.due! >= mon && t.due! <= sun) && !pins.some((p) => p.date >= mon && p.date <= sun);
           return (
             <div key={mon} className="relative border-b border-line last:border-b-0">
               <div className="grid grid-cols-7">
@@ -97,14 +107,18 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
                       <span className="block shrink-0" style={{ height: laneH }} />
                       <span className="flex min-w-0 flex-col gap-0.5 px-0.5 pb-1.5">
                         {dayPins.map((p) => (
-                          <span key={p.label} className="block truncate text-xs font-bold text-ink-soft"><i className="fas fa-thumbtack mr-0.5" aria-hidden />{p.label}</span>
+                          <span key={p.label} className="block overflow-hidden text-xs font-bold whitespace-nowrap text-ink-soft sm:truncate">
+                            <i className="fas fa-thumbtack mr-0.5" aria-hidden /><span className="sm:hidden">{shortPin(p.label)}</span><span className="hidden sm:inline">{p.label}</span>
+                          </span>
                         ))}
-                        {list.slice(0, 3).map((t, k) => <TaskLine key={t.id} t={t} late={!t.done && d < today} color={colorOf(typeOf.get(t.stepId) ?? '')} extra={k === 2} />)}
-                        {list.length > 2 && <span className={`block text-xs font-normal text-muted ${list.length === 3 ? 'sm:hidden' : ''}`}><span className="sm:hidden">+{list.length - 2}</span><span className="hidden sm:inline">+{list.length - 3}</span></span>}
+                        {/* 폰: 개수 한 줄 / 넓은 화면: 할 일 글자 세 개까지 */}
+                        {list.length > 0 && <span className={`block text-xs whitespace-nowrap sm:hidden ${late ? 'font-bold text-danger-ink' : 'font-normal text-ink-soft'}`}>할 일 {list.length}</span>}
+                        {list.slice(0, 3).map((t) => <TaskLine key={t.id} t={t} late={!t.done && d < today} />)}
+                        {list.length > 3 && <span className="hidden text-xs font-normal text-muted sm:block">+{list.length - 3}</span>}
                       </span>
                     </>
                   );
-                  const cls = `flex min-h-16 min-w-0 flex-col text-left ${i > 0 ? 'border-l border-line' : ''} ${inMonth ? '' : 'bg-page/50'}`;
+                  const cls = `flex ${empty ? 'min-h-11' : 'min-h-16'} min-w-0 flex-col text-left ${i > 0 ? 'border-l border-line' : ''} ${inMonth ? '' : 'bg-page/50'}`;
                   return onPick
                     ? <button key={d} type="button" aria-pressed={on} aria-label={label} onClick={() => onPick(d)}
                         className={`${cls} transition-colors hover:bg-sunken focus-visible:-outline-offset-2`}>{body}</button>
@@ -122,7 +136,9 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
                       opacity: r.done ? 0.55 : 1,
                     }}>
                     {head && <span className="mr-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: colorOf(r.type) }} />}
-                    <span className="truncate">{r.id}. {r.title}{head && span >= 3 ? <span className="ml-1 text-ink-soft">{guest ? dayRangeLabel(r.start, r.end) : `~${shortDate(r.to)}`}</span> : null}</span>
+                    {span < 2
+                      ? <span className="whitespace-nowrap">{r.id}</span>
+                      : <span className="truncate">{r.id}. {r.title}{head && span >= 3 ? <span className="ml-1 text-ink-soft">{guest ? dayRangeLabel(r.start, r.end) : `~${shortDate(r.to)}`}</span> : null}</span>}
                   </span>
                 ))}
               </div>
@@ -134,9 +150,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
   );
 }
 
-function TaskLine({ t, late, color, extra }: { t: TaskItem; late: boolean; color: string; extra: boolean }) {
+function TaskLine({ t, late }: { t: TaskItem; late: boolean }) {
   const tone = t.done ? 'text-muted line-through' : late ? 'text-danger-ink' : 'text-ink';
-  return (
-    <span className={`${extra ? 'hidden sm:block' : 'block'} truncate border-l-2 pl-1 text-xs font-normal ${tone}`} style={{ borderLeftColor: color }}>{t.text}</span>
-  );
+  return <span className={`hidden truncate text-xs font-normal sm:block ${tone}`}>{t.text}</span>;
 }

@@ -13,7 +13,7 @@ import { useProgress } from './progress/ProgressProvider';
 import { useSheetRouter, type SheetKind } from './use-sheet-router';
 
 // 홈. 머리글 · 내비게이션 · 진행 현황(ProgressProvider) · 사진(PhotosProvider)은 사이트 틀(components/shell/SiteShell)이 맡는다.
-// 구성: 「단계」(요약 · 단계/달력 탭 + 단계 종류 거르기 · 검색 · 주의사항/대화 예시 — 로그인 전후 같은 모양, 다른 건 내용뿐) → 꼬리글.
+// 구성: 「진행」(요약 줄 · 요약/단계/달력 탭 + 단계 종류 거르기 · 검색 · 주의사항/대화 예시 — 로그인 전후 같은 모양, 다른 건 내용뿐) → 꼬리글.
 // 공개 안내 시트 셋(단계 · 주의사항 · 대화 예시)은 주소 해시(#step-3 · #notice · #scripts)와 함께 열고 닫는다.
 export default function App({ content }: { content: Content }) {
   const { steps, scripts, updates } = content;

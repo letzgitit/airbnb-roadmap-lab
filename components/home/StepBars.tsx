@@ -5,13 +5,13 @@ import { dayRangeLabel, shortDate } from '@/lib/client/format';
 import { cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { TYPE_COLOR } from '@/components/TimelineChart';
-import { DAY, DateStrip } from './DateStrip';
+import { DateStrip } from './DateStrip';
 import { axisOf, type DocLike, type Pin, type StepRange, type TimelineStep } from './step-dates';
 
-// 홈 「단계」 탭: 날짜 띠 + 단계 막대가 한 상자에서 같이 가로로 넘어간다(하루 30px).
+// 홈 「단계」 탭: 날짜 띠 + 단계 막대가 한 상자에서 같이 가로로 넘어간다(하루 30px, 폰은 14px로 약 4주가 한 화면에).
 //   단계 줄(48px) 두 줄 모양은 모든 단계가 같다:
 //     윗줄 = 이름 · 기간 · 「지금」/완료 체크 — 늘 상자 왼쪽 끝에 붙어 있다(가로로 넘겨도 자리가 그대로, 왼쪽에 빈칸이 생기지 않는다).
-//     아랫줄 = 그 기간의 막대(16px 색면, 최소 14px). 막대가 화면 밖이면 그쪽 가장자리에 같은 색 조각 + 화살표만(기간은 윗줄에 이미 있다).
+//     아랫줄 = 그 기간의 막대(16px 색면, 최소 14px). 막대가 화면 밖이면 그쪽 가장자리에 같은 색 조각(24px, 상자 쪽 모서리는 각지게 — 「상자 밖으로 이어짐」)만 둔다(기간은 윗줄에 이미 있다).
 //   줄을 누르면 단계 창. 「끝난 단계 n개」는 접어 둔다.
 //   로그인 전(guest)은 날짜 대신 공개 일정 날수(「13~14일째」)를 기간 자리에 적고, 날짜 칸은 누를 수 없다.
 const MIN_BAR = 14;
@@ -33,8 +33,8 @@ export function StepBars({ steps, doc, today, types, currentId, onStep, onPick, 
   return (
     // 거르기 · 펼치기로 축이 바뀌면 처음 자리를 다시 잡는다
     <DateStrip key={`${first}${last}`} first={first} last={last} today={today} picked={picked} pins={pins} dayInfo={dayInfo} beyond={beyond}
-      onPick={onPick} startAt={anchor} align="lead">
-      {({ x, sl, viewW }) => {
+      onPick={onPick} startAt={anchor} align="lead" dense>
+      {({ x, day, sl, viewW }) => {
         const vw = viewW || 360;
         const leftEdge = sl;
         const rightEdge = sl + vw;
@@ -53,7 +53,7 @@ export function StepBars({ steps, doc, today, types, currentId, onStep, onPick, 
             {shownRanges.map((r) => {
               const cur = currentId === r.id;
               const barL = x(r.from);
-              const barR = x(r.to) + DAY;
+              const barR = x(r.to) + day;
               const after = barL > rightEdge - 24; // 막대가 오른쪽 화면 밖(거의 안 보임)
               const before = barR < leftEdge + 24; // 막대가 왼쪽 화면 밖
               const face = cur ? 'bg-accent-soft' : 'bg-surface group-hover:bg-sunken';
@@ -75,12 +75,10 @@ export function StepBars({ steps, doc, today, types, currentId, onStep, onPick, 
                       {r.done && <span className="shrink-0 text-xs text-muted"><i className="fas fa-check" aria-hidden /></span>}
                     </span>
                   </div>
-                  {/* 아랫줄: 막대가 화면 밖이면 그쪽 가장자리에 같은 색 조각 + 화살표 */}
+                  {/* 아랫줄: 막대가 화면 밖이면 그쪽 가장자리에 같은 색 조각(상자 테두리 쪽은 각지게 — 상자 밖으로 이어지는 모양) */}
                   {(after || before) && (
                     <div className={`pointer-events-none sticky left-0 z-20 flex h-5 items-center pt-1 ${after ? 'justify-end' : 'justify-start'}`} style={{ width: vw }} aria-hidden>
-                      {before && <span className="block h-4 w-3 rounded-r-control" style={{ backgroundColor: colorOf(r.type), opacity: r.done ? 0.4 : 1 }} />}
-                      <i className={`fas ${after ? 'fa-chevron-right' : 'fa-chevron-left'} mx-1.5 text-xs text-muted`} />
-                      {after && <span className="block h-4 w-3 rounded-l-control" style={{ backgroundColor: colorOf(r.type), opacity: r.done ? 0.4 : 1 }} />}
+                      <span className={`block h-4 w-6 ${after ? 'rounded-l-control' : 'rounded-r-control'}`} style={{ backgroundColor: colorOf(r.type), opacity: r.done ? 0.4 : 1 }} />
                     </div>
                   )}
                 </li>

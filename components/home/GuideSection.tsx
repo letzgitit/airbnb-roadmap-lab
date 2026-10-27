@@ -11,8 +11,8 @@ import { GuideLinks } from './GuideLinks';
 import { DateTimeline } from './DateTimeline';
 import { FIXED_DAY0, FIXED_MARKS, toTimelineSteps } from './timeline-config';
 
-// 홈 「단계」 구역(누구나 본다). 로그인한 사람과 안 한 사람이 같은 모양을 본다:
-//   제목 + 요약 한 줄 → 날짜 화면(DateTimeline: 단계 · 달력 탭 + 단계 종류 거르기 칩) → 검색 → 주의사항 · 대화 예시 두 줄.
+// 홈 「진행」 구역(누구나 본다. 예전 이름 「단계」 — 안의 「단계」 탭과 겹쳐 바꿨다). 로그인한 사람과 안 한 사람이 같은 모양을 본다:
+//   제목 + 요약 한 줄 → DateTimeline(요약 · 단계 · 달력 탭 + 단계 종류 거르기 칩) → 검색 → 주의사항 · 대화 예시 두 줄.
 //   다른 것은 내용뿐이다 — 로그인 전에는 현황(할 일 · 목표일 · 고정 일정 · 단계 상태)이 없어 공개 일정 날수를 오늘부터 센 기간만 보이고,
 //   날짜를 눌러 여는 그날 창(편집)이 없다. 요약도 로그인 전 = 일반 안내, 로그인 후 = 「지금 n단계 이름」.
 //   현황을 확인하는 동안(처음 불러올 때)은 같은 자리에 반짝이는 칸 — 날짜는 브라우저의 오늘로 계산해야 해서 서버에서 그리지 않는다.
@@ -34,7 +34,7 @@ export function GuideSection({ steps, updates, scripts, statuses, currentId, onS
 
   return (
     <section aria-labelledby="guide-h">
-      <SectionHeader id="guide-h" title="단계" summary={status === 'loading' ? '\u00a0' : summary} />
+      <SectionHeader id="guide-h" title="진행" summary={status === 'loading' ? '\u00a0' : summary} />
       <div className="flex flex-col gap-4">
         {status === 'loading'
           ? (
@@ -47,7 +47,8 @@ export function GuideSection({ steps, updates, scripts, statuses, currentId, onS
           )
           : (
             <DateTimeline key={guest ? 'guest' : 'member'} steps={toTimelineSteps(steps)} currentId={currentId} onStep={(i) => onStep(i, null)}
-              onDay={guest ? undefined : onDay} fixedDay0={FIXED_DAY0} marks={FIXED_MARKS} guest={guest} />
+              onDay={guest ? undefined : onDay} fixedDay0={FIXED_DAY0} marks={FIXED_MARKS} guest={guest}
+              updates={updates} onNotice={onNotice} />
           )}
         <HomeSearch steps={steps} updates={updates} scripts={scripts}
           onStep={(i, sec) => onStep(i, sec)} onNotice={(idx) => onNotice(idx)} onScript={(idx) => onScript(idx)} />
