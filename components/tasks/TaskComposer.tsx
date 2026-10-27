@@ -44,7 +44,7 @@ const simpleLabelCls = `w-28 shrink-0 ${labelCls}`;
 const dateFitCls = `${dateCls} block w-full min-w-[11rem] flex-1 basis-[11rem]`;
 
 /**
- * 쉬운 모양(새 홈)의 날짜 칸 + 「문의 필요」: [언제부터(선택)] [언제까지] 두 줄(이름표는 고정 폭) + 체크 한 줄.
+ * 쉬운 모양(새 홈)의 날짜 칸 + 「물어봐야 하는 일」: [언제부터(선택)] [언제까지] 두 줄(이름표는 고정 폭) + 켜기 칸 한 줄(밑에 작은 설명).
  * 데이터는 시작일(start) · 마감일(due) 그대로, 문의 필요 = 할 일 종류 「문의」. 담당(owner)은 쉬운 모양에서 보이지 않는다(값은 그대로).
  * 새 할 일 폼 · 고치는 폼이 같이 쓴다.
  */
@@ -60,10 +60,17 @@ export function SimpleWhenFields({ start, onStart, due, onDue, ask, onAsk }: {
       <label className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><span className={simpleLabelCls}>언제까지</span>
         <input type="date" className={dateFitCls} value={due} onChange={(e) => onDue(e.target.value)} />
       </label>
-      <label className="flex min-h-11 cursor-pointer items-center gap-2">
-        <span className={simpleLabelCls}>문의 필요</span>
-        <input type="checkbox" className="size-5 cursor-pointer" checked={ask} onChange={(e) => onAsk(e.target.checked)} />
-        <span className="text-sm font-normal text-muted">묻는 내용은 메모에</span>
+      {/* 「물어봐야 하는 일」 켜기(2026-10-28 — 예전 「문의 필요 □ 묻는 내용은 메모에」가 무슨 말인지 몰랐다). 켜면 줄에 「문의 필요」 꼬리표 */}
+      <label className="flex cursor-pointer items-start gap-3 py-1">
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-semibold text-ink">물어봐야 하는 일</span>
+          <span className="mt-0.5 block text-sm font-normal text-sub">구청이나 업체에 물어볼 게 있으면 켜요. 물을 내용은 메모에 적어요.</span>
+        </span>
+        <span className="relative mt-0.5 inline-flex h-11 shrink-0 items-center">
+          <input type="checkbox" role="switch" className="peer sr-only" checked={ask} onChange={(e) => onAsk(e.target.checked)} />
+          <span className="h-7 w-12 rounded-full bg-strong transition-colors peer-checked:bg-ink peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-ink" aria-hidden />
+          <span className="absolute left-1 size-5 rounded-full bg-surface shadow-sm transition-transform peer-checked:translate-x-5" aria-hidden />
+        </span>
       </label>
     </div>
   );
