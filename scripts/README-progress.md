@@ -124,6 +124,26 @@ node scripts/guides.mjs import guides.json --yes                # 한 번에 넣
 ```
 - 할 일 문서에 `guide`를 넣는 연산은 없다(`task.update` patch 에 넣으면 거절, `task.add`에 넣으면 버림). 잠깐 있던 판의 `guide` 키가 문서에 남아 있으면 읽을 때 버린다.
 
+### 블록 메모 (`scripts/cardnotes.mjs`)
+
+새 홈 일터 탭(행정 · 설비 · 운영)의 단계 블록마다 다는 짧은 메모(2026-10-28). 블록 몸통의 할 일 줄 밑에 한 줄씩(날짜 · 쓴 사람). **현황 문서 밖에 따로 저장한다**(설명서와 같은 까닭 — 할 일 문서 구조는 바꾸지 않는다). 더하기 · 지우기만 있고 고치기는 없다.
+
+- 저장: 운영 = Upstash 해시 `oedomin:cardnotes`(필드 = 블록 id, 값 = 메모 배열 `[{ id, text, at, by }]` JSON), 로컬 = `.data/cardnotes.json`. 코드 `lib/core/cardnotes.ts`.
+- 블록 id = 「분야.블록」: `admin.move-in` · `admin.register` · `admin.safety` · `admin.inspect` · `admin.biz` · `admin.step-1`~`3`, `facility.bath` · `facility.wall` · `facility.aircon` · `facility.light` · `facility.buy` · `facility.other`, `ops.listing` · `ops.guide` · `ops.supplies` · `ops.other`(코드 `components/simple-home/home-model.ts` `blockId`). 바꾸지 않는다(메모 · 사진이 이 이름에 붙는다).
+- 규칙: 글은 줄바꿈 · 겹친 띄어쓰기를 띄어쓰기 하나로, 1~500자, 블록마다 200개까지. 메모 id `n_` + 10자. 적은 순으로 보인다. 두 사람이 동시에 써도 서로 덮지 않는다(필드 하나 비교 후 쓰기).
+- API(로그인한 두 사람만, 쓰기는 같은 출처 JSON 요청만):
+  - `GET /api/cardnotes` → `{ notes: { [블록 id]: 메모[] } }`(메모 없는 블록은 빠짐)
+  - `POST /api/cardnotes/<블록 id>` `{ text }` → `{ note }`(쓴 사람 = 로그인한 사람). 되돌리기는 `{ restore: <지운 메모> }` → 같은 id · 시각 · 쓴 사람으로 다시(이미 있으면 그대로)
+  - `DELETE /api/cardnotes/<블록 id>/<메모 id>`(본문 `{}`) → `{ note }`(지운 메모 — 화면이 8초 「되돌리기」에 쓴다). 없으면 404
+- 블록 사진은 메모와 달리 **사진 저장소**에 올리고 사진 정보에 `cardId`(블록 id)를 단다(`POST /api/photos` 폼에 `cardId`). 옛 사진은 키가 없고 `null`로 읽힌다. `taskId`와 같이 쓰지 않는다.
+
+```bash
+node scripts/cardnotes.mjs list                                   # 메모 있는 블록마다: 메모 id · 적은 날(한국) · 쓴 사람 · 글
+node scripts/cardnotes.mjs list admin.move-in                     # 한 블록만
+node scripts/cardnotes.mjs add admin.move-in 신분증 원본 챙기기 --by 나 --yes   # 한 줄 더하기(운영이면 --yes)
+node scripts/cardnotes.mjs rm admin.move-in n_0123456789 --yes    # 지우기(되살리기는 출력 JSON 의 removed 를 API restore 로)
+```
+
 - 「사용자 체크리스트 항목」은 **할 일(task)과 같은 항목**입니다. `checklist.add/update/delete/restore`는 `task.*`의 별칭입니다.
 - `baseVersion`은 `get`에서 본 `(id … vN)`의 N입니다. 서버 version과 다르면 **그 연산만** 409로 실패하고 나머지는 적용됩니다(결과의 `failed`에 최신 내용이 들어 있음). 덮어쓰려면 연산에 `"force": true`.
 - 삭제된 항목을 고치려 하면 410(`deleted`).
@@ -199,7 +219,8 @@ node scripts/progress.mjs apply "$OUT/link.json" --dry-run && node scripts/progr
 ```bash
 node --test scripts/test-todoist.mjs   # 임시 폴더의 연습 파일만 쓰고, Todoist · Claude API 는 가짜 fetch
 node --test scripts/test-task-tree.mjs # 시작일 · 세부 항목 규칙(임시 폴더의 연습 파일만)
-npm test                               # 위 둘 + 화면 계산 시험
+node --test scripts/test-cardnotes.mjs # 블록 메모 저장 · 지우기 · 되돌리기, 사진 cardId(임시 폴더의 연습 파일만)
+npm test                               # 위 셋 + 설명서 · 화면 계산 시험
 ```
 
 ## export-md
