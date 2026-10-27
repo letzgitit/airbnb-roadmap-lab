@@ -15,7 +15,26 @@ export const TABS: { id: TabId; label: string }[] = [
 ];
 
 // ── 뉴스: 사이트에 이미 있는 두 자료(민박업 규정 소식 content/updates.json · 단계별 참고 자료 refs — 고정 + 6시간마다 자동 수집)를 한 목록으로 ──
-export interface NewsItem { key: string; title: string; date: string; dateText: string; source: string; url: string; kind: string }
+/** status = 그 날짜의 뜻을 쉬운 말로(규정 소식만, 예: 「국회에 법안이 올라감」) */
+export interface NewsItem { key: string; title: string; date: string; dateText: string; status?: string; source: string; url: string; kind: string }
+
+// 사이트가 직접 쓴 글(규정 소식 · 고정 참고 자료)의 표시만 바꾼다. 원본 데이터 · 외부 기사 제목은 그대로.
+const STATUS_WORD: Record<string, string> = {
+  시행: '이때부터 시행', 적용: '이때부터 적용', 시작: '이때 시작', 발의: '국회에 법안이 올라감',
+  건의: '정부에 고쳐 달라고 요청함', 게시: '안내문이 올라옴', 발표: '정부가 발표함',
+};
+export const plainStatus = (word: string | undefined) => (word ? STATUS_WORD[word] ?? word : undefined);
+// 출처는 기관 이름만 짧게(앞에서부터 처음 맞는 것)
+const SOURCE_SHORT: [RegExp, string][] = [
+  [/국가법령정보센터|법제처/, '법제처'], [/국회/, '국회'], [/서울시|서울특별시/, '서울시'], [/문화체육관광부|문체부/, '문화체육관광부'],
+  [/행정안전부|행안부/, '행정안전부'], [/법무부/, '법무부'], [/국토교통부|국토부/, '국토교통부'], [/에어비앤비/, '에어비앤비'],
+];
+export function shortSource(src: string): string {
+  for (const [re, name] of SOURCE_SHORT) if (re.test(src)) return name;
+  const gu = /([가-힣]+구청)/.exec(src);
+  if (gu) return gu[1];
+  return src.split(/[\s(「]/)[0] || src;
+}
 // 구청 공지 · 정책으로 보는 낱말(출처 · 제목). 규정 소식은 모두, 참고 자료는 종류가 「공지」이거나 이 낱말이 있으면
 const POLICY = /구청|구 ?보건소|시청|서울시|법무부|국토|문화체육|문체부|관광공사|법령|법안|국회|정부|정책|규정|시행|개정|조례|등록 ?안내|민원/;
 function newsDate(d: string): string {
@@ -35,10 +54,11 @@ export function newsGroups(updates: UpdateItem[], refs: RefItem[]): { policy: Ne
     to.push(it);
   };
   updates.forEach((u, i) => push(policy, {
-    key: `u${i}`, title: u.title, date: u.date, dateText: `${newsDate(u.date)}${u.dateWord ? ` ${u.dateWord}` : ''}`, source: u.source, url: u.url, kind: '규정',
+    key: `u${i}`, title: u.title, date: u.date, dateText: newsDate(u.date), status: plainStatus(u.dateWord), source: shortSource(u.source), url: u.url, kind: '규정',
   }));
   refs.forEach((r, i) => {
-    const it = { key: `r${i}`, title: r.title, date: r.date, dateText: newsDate(r.date), source: r.source, url: r.url, kind: r.kind };
+    // 자동 수집(auto)은 외부 글이라 출처도 받은 그대로
+    const it = { key: `r${i}`, title: r.title, date: r.date, dateText: newsDate(r.date), source: r.auto ? r.source : shortSource(r.source), url: r.url, kind: r.kind };
     push(r.kind === '공지' || POLICY.test(`${r.source} ${r.title}`) ? policy : other, it);
   });
   const recent = (a: NewsItem, b: NewsItem) => b.date.localeCompare(a.date);
@@ -65,9 +85,9 @@ export interface CardDef {
 export const DOC_CARDS: CardDef[] = [
   { id: 'move-in', title: '전입신고', steps: [4], addStep: 4, fixedWords: ['전입'] },
   { id: 'register', title: '외도민 등록 서류', steps: [5, 9], addStep: 9, fixedWords: ['등록 신청', '신청', '접수'], sub: '구청에 내는 서류' },
-  { id: 'safety', title: '안전 설비', steps: [8], addStep: 8, sub: '소화기 · 화재감지기처럼 꼭 사야 할 것' },
+  { id: 'safety', title: '안전 설비', steps: [8], addStep: 8, sub: '소화기 · 화재감지기 등 꼭 살 것' },
   { id: 'inspect', title: '현장 실사', steps: [12], addStep: 12, sub: '구청에서 집을 보러 오는 날' },
-  { id: 'biz', title: '사업자 등록', steps: [13], addStep: 13 },
+  { id: 'biz', title: '사업자 등록', steps: [13], addStep: 13, sub: '세무서에 하는 신고' },
 ];
 /** 서류 탭 맨 아래 「끝난 일」로 접어 두는 단계(집 고르기 · 구청 확인 · 계약) */
 export const DONE_STEPS = [1, 2, 3];
@@ -209,11 +229,11 @@ export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummar
     .map((x) => x.c);
 }
 
-/** 「3개 중 1개 끝」 */
+/** 「3개 중 1개 했어요」 */
 export function progressText(s: Pick<CardSummary, 'total' | 'done'>): string {
   if (s.total === 0) return '할 일 없음';
-  if (s.done === s.total) return `${s.total}개 다 끝`;
-  return `${s.total}개 중 ${s.done}개 끝`;
+  if (s.done === s.total) return `${s.total}개 다 했어요`;
+  return `${s.total}개 중 ${s.done}개 했어요`;
 }
 
 /** 탭 하나의 「기한 지남 · 다음 7일」 개수(탭 이름 옆 빨강 점, 탭 맨 위 한 줄) */

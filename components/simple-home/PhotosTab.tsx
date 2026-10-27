@@ -42,7 +42,7 @@ export function PhotosTab() {
         empty="공사가 끝나면 여기에 올려 주세요." onUpload={() => upload(AFTER_STEP, AFTER_ALBUM)} onOpen={(id) => view(id, undefined, after.map((p) => p.id))} />
       {hidden > 0 && (
         <p className="flex flex-wrap items-center gap-x-3 text-sm font-normal text-muted">
-          <span>참고 사진과 서류 {hidden}장은 여기엔 안 나와요.</span>
+          <span>꾸미기 참고 사진과 서류 사진(모두 {hidden}장)은 「사진 전체 보기」에서 볼 수 있어요.</span>
           <Link href="/house/photos" className={`${textBtn} mx-0`}>사진 전체 보기</Link>
         </p>
       )}

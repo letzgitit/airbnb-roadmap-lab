@@ -13,7 +13,7 @@ export function NewsTab({ content }: { content: Content }) {
   const { policy, other } = useMemo(() => newsGroups(content.updates, content.steps.flatMap((s) => s.refs)), [content]);
   return (
     <div className="flex flex-col gap-4">
-      <NewsCard title="구청 · 정책" sub="규정이 바뀐 것 · 구청 안내" list={policy} />
+      <NewsCard title="구청 · 정책" sub="규정이 바뀐 것, 구청 안내" list={policy} />
       <NewsCard title="기사 · 영상" sub="준비하면서 볼 만한 것" list={other} />
     </div>
   );
@@ -25,7 +25,7 @@ function NewsCard({ title, sub, list }: { title: string; sub: string; list: News
     <Card as="section" aria-labelledby={`${uid}-t`}>
       <div className="px-4 pb-2 pt-4">
         <h3 id={`${uid}-t`} className="text-lg font-bold text-ink">{title}</h3>
-        <p className="mt-0.5 text-sm font-normal text-muted">{list.length > 0 ? `${sub} · ${list.length}개` : sub}</p>
+        <p className="mt-0.5 text-sm font-normal text-muted">{list.length > 0 ? `${sub} (${list.length}개)` : sub}</p>
       </div>
       <ul className="border-t border-line">
         {list.length === 0 && <li className="px-4 py-3 text-base text-muted">아직 없어요.</li>}
@@ -53,6 +53,7 @@ function Body({ n }: { n: NewsItem }) {
       <span className="block break-words text-base font-semibold text-ink">{n.title}</span>
       <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-sm font-normal text-muted">
         <span className="whitespace-nowrap text-ink-soft">{n.dateText}</span>
+        {n.status && <span className="whitespace-nowrap">{n.status}</span>}
         <span className="min-w-0 break-words">{n.source}</span>
       </span>
     </span>

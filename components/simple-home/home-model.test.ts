@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
-  newsGroups, progressText, relDay, sortCards, summarize, tasksByCard,
+  newsGroups, progressText, relDay, shortSource, sortCards, summarize, tasksByCard,
 } from './home-model.ts';
 
 const T = (id: string, stepId: number, text: string, extra: Record<string, unknown> = {}) => ({
@@ -62,7 +62,7 @@ test('카드 마감: 고정 일정 → 단계 목표일 → 할 일 마감', () 
   const safety = summarize(DOC_CARDS[2], [T('x', 8, '소화기', { due: '2026-10-20' }), T('y', 8, '감지기', { due: '2026-10-30', done: true })], { steps, property } as never, today);
   assert.equal(safety.deadline, '2026-11-06');
   assert.equal(safety.late, 1);
-  assert.equal(progressText(safety), '2개 중 1개 끝');
+  assert.equal(progressText(safety), '2개 중 1개 했어요');
   const inspect = summarize(DOC_CARDS[3], [T('z', 12, '실사', { due: '2026-11-20' })], { steps, property } as never, today);
   assert.equal(inspect.deadline, '2026-11-20');
 });
@@ -87,7 +87,17 @@ test('뉴스: 규정 소식 · 공지 · 구청 낱말은 「구청 · 정책」
   const g = newsGroups(u as never, r as never);
   assert.deepEqual(g.policy.map((n) => n.title), ['구청 설명회', '등록 안내문', '비자 운영']);
   assert.deepEqual(g.other.map((n) => n.title), ['숙박 기사']);
-  assert.equal(g.policy[1].dateText, '2026년 9월 게시');
+  assert.equal(g.policy[1].dateText, '2026년 9월');
+  assert.equal(g.policy[1].status, '안내문이 올라옴');
+});
+
+test('뉴스 출처 짧게', () => {
+  assert.equal(shortSource('국가법령정보센터 공중위생관리법 개정이유'), '법제처');
+  assert.equal(shortSource('국회 의안정보시스템 의안 2221123'), '국회');
+  assert.equal(shortSource('서울시 보도자료(2026.10.1, 기획조정실)'), '서울시');
+  assert.equal(shortSource('가나구청 민원서식 「신규 등록」'), '가나구청');
+  assert.equal(shortSource('에어비앤비 뉴스룸(2025.8.18)'), '에어비앤비');
+  assert.equal(shortSource('행정안전부 보도자료(2026.8.3)'), '행정안전부');
 });
 
 test('남은 날 말과 색', () => {

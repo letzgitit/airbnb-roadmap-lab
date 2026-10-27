@@ -91,7 +91,7 @@ function Deadline({ summary, today, hero }: { summary: CardSummary; today: strin
     return (
       <span className={`flex shrink-0 flex-col items-end ${hero ? 'text-on-hero' : 'text-muted'}`}>
         <i className="fas fa-check text-xl" aria-hidden />
-        <span className="text-sm font-bold">끝</span>
+        <span className="text-sm font-bold">다 했어요</span>
       </span>
     );
   }
