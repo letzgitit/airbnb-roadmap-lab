@@ -47,6 +47,13 @@ export interface PhotoMeta {
   takenAt: string;
   /** 구글 드라이브 원본 주소(CLI 가 올릴 때만). 드라이브 권한이 있어야 열린다. 저장소 코드에는 두지 않는다. */
   originalUrl?: string | null;
+  /**
+   * 2026-10-28 추가(선택): 할 일 메모에 붙인 사진이면 그 할 일 id. 없으면 키가 없다(옛 사진 그대로).
+   * 이 사진들은 사진 화면 · 단계 창 · 새 홈 사진 탭에 나오지 않고 그 할 일 메모 밑에만 보인다.
+   */
+  taskId?: string | null;
+  /** 할 일을 지울 때 같이 지운 사진(할 일을 되살리면 이것만 같이 되살린다 — 따로 지운 사진은 그대로) */
+  deletedWithTask?: boolean;
   uploadedAt: string; by: string;
   version: number; updatedAt: string; updatedBy: string;
   deletedAt: string | null; deletedBy: string | null;
@@ -281,6 +288,12 @@ export function cleanAlbum(s: unknown): string {
   if (v.length > LIMITS.albumMax) throw new PhotoError(400, 'album_too_long', `묶음 이름은 ${LIMITS.albumMax}자까지예요.`);
   return v;
 }
+/** 할 일 id(현황 문서의 할 일 id 꼴 — 영문 · 숫자 · _ · - 64자까지). 빈 값 = 할 일 사진 아님 */
+export function cleanTaskId(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(v)) throw new PhotoError(400, 'task_invalid', '할 일을 찾지 못했어요.');
+  return v;
+}
 export function cleanCaption(s: unknown): string {
   const v = typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '';
   if (v.length > LIMITS.captionMax) throw new PhotoError(400, 'caption_too_long', `설명은 ${LIMITS.captionMax}자까지예요.`);
@@ -335,12 +348,15 @@ export interface AddInput {
   doc?: boolean;
   /** 원본 보기 주소(https 만) */
   originalUrl?: string | null;
+  /** 할 일 메모에 붙이는 사진이면 그 할 일 id */
+  taskId?: unknown;
 }
 
 export async function addPhoto(input: AddInput): Promise<PhotoMeta> {
   const stepId = cleanStep(input.stepId);
   const album = cleanAlbum(input.album);
   const caption = cleanCaption(input.caption);
+  const taskId = cleanTaskId(input.taskId);
   if (input.data.length === 0) throw new PhotoError(400, 'empty', '빈 파일이에요.');
   if (input.data.length > LIMITS.inputMax) throw new PhotoError(413, 'too_large', '파일이 너무 커요(15MB까지).');
   const originalUrl = cleanUrl(input.originalUrl);
@@ -372,7 +388,7 @@ export async function addPhoto(input: AddInput): Promise<PhotoMeta> {
 
   const takenAt = exifTaken ?? kstLocal(input.takenAtFallback ?? new Date());
   const m: PhotoMeta = {
-    id, stepId, album, caption, kind, width, height, parts, bytes, order: nextOrder(), takenAt, originalUrl,
+    id, stepId, album, caption, kind, width, height, parts, bytes, order: nextOrder(), takenAt, originalUrl, ...(taskId ? { taskId } : {}),
     uploadedAt: iso, by: input.by, version: 1, updatedAt: iso, updatedBy: input.by, deletedAt: null, deletedBy: null,
   };
   await backend().put(id, JSON.stringify(m));
@@ -444,6 +460,29 @@ export async function deletePhoto(id: string, by: string): Promise<PhotoMeta> {
   return next;
 }
 
+/**
+ * 할 일을 지우거나 되살릴 때 그 할 일 메모 사진도 같이(세부 항목까지 — taskIds 에 다 넣어 부른다).
+ * 지울 때: 안 지운 사진을 삭제 표시 + deletedWithTask. 되살릴 때: deletedWithTask 인 것만 되살린다(따로 지운 사진은 그대로).
+ * 사진마다 하나씩 다시 쓴다. 바뀐 사진 수를 돌려준다.
+ */
+export async function setTaskPhotosDeleted(taskIds: string[], deleted: boolean, by: string): Promise<number> {
+  if (taskIds.length === 0) return 0;
+  const want = new Set(taskIds);
+  const iso = new Date().toISOString();
+  let n = 0;
+  for (const cur of await listPhotos()) {
+    if (!cur.taskId || !want.has(cur.taskId)) continue;
+    let next: PhotoMeta | null = null;
+    if (deleted && !cur.deletedAt) next = { ...cur, deletedAt: iso, deletedBy: by, deletedWithTask: true };
+    if (!deleted && cur.deletedAt && cur.deletedWithTask) { next = { ...cur, deletedAt: null, deletedBy: null }; delete next.deletedWithTask; }
+    if (!next) continue;
+    Object.assign(next, { version: cur.version + 1, updatedAt: iso, updatedBy: by });
+    await backend().put(cur.id, JSON.stringify(next));
+    n += 1;
+  }
+  return n;
+}
+
 /** CLI 전용: 바이트까지 바로 지운다(되살릴 수 없음) */
 export async function purgePhoto(id: string): Promise<boolean> {
   const cur = await getPhoto(id);
@@ -455,9 +494,11 @@ export async function purgePhoto(id: string): Promise<boolean> {
 // 화면에 보내는 사진 정보(조각 수 같은 저장소 내부 값은 빼고)
 export type PhotoView = Pick<PhotoMeta, 'id' | 'stepId' | 'album' | 'caption' | 'kind' | 'width' | 'height' | 'order' | 'position' | 'takenAt' | 'uploadedAt' | 'by' | 'version' | 'deletedAt' | 'deletedBy'> & {
   hasImage: boolean; originalUrl: string | null;
+  /** 할 일 메모 사진이면 그 할 일 id, 아니면 null */
+  taskId: string | null;
 };
 export const toView = (m: PhotoMeta): PhotoView => ({
   id: m.id, stepId: m.stepId, album: m.album, caption: m.caption, kind: m.kind, width: m.width, height: m.height, order: m.order, position: m.position ?? null,
   takenAt: m.takenAt, uploadedAt: m.uploadedAt, by: m.by, version: m.version, deletedAt: m.deletedAt, deletedBy: m.deletedBy,
-  hasImage: !!m.parts.thumb, originalUrl: m.originalUrl ?? null,
+  hasImage: !!m.parts.thumb, originalUrl: m.originalUrl ?? null, taskId: m.taskId ?? null,
 });

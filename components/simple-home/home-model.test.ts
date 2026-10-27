@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
-  progressText, relDay, sortCards, summarize, tasksByCard,
+  newsGroups, progressText, relDay, sortCards, summarize, tasksByCard,
 } from './home-model.ts';
 
 const T = (id: string, stepId: number, text: string, extra: Record<string, unknown> = {}) => ({
@@ -74,6 +74,20 @@ test('카드 순서: 마감 이른 순 → 날짜 없음 → 다 끝냄', () => 
     d: { deadline: '2026-11-06', finished: false }, e: { deadline: null, finished: false },
   };
   assert.deepEqual(sortCards(cards, sums).map((c) => c.id), ['d', 'c', 'a', 'e', 'b']);
+});
+
+test('뉴스: 규정 소식 · 공지 · 구청 낱말은 「구청 · 정책」, 나머지는 기사 · 영상, 최근 순 · 같은 주소 한 번', () => {
+  const u = [{ date: '2026-09', dateWord: '게시', title: '등록 안내문', text: '', source: '가나구청', url: 'https://a.example/1' }];
+  const r = [
+    { title: '비자 운영', summary: '', source: '법무부', date: '2026-07-07', url: 'https://b.example/2', kind: '공지' },
+    { title: '숙박 기사', summary: '', source: '신문', date: '2026-10-01', url: 'https://c.example/3', kind: '기사' },
+    { title: '구청 설명회', summary: '', source: '방송', date: '2026-10-05', url: 'https://d.example/4', kind: '영상' },
+    { title: '겹침', summary: '', source: '신문', date: '2026-10-02', url: 'https://a.example/1/', kind: '기사' },
+  ];
+  const g = newsGroups(u as never, r as never);
+  assert.deepEqual(g.policy.map((n) => n.title), ['구청 설명회', '등록 안내문', '비자 운영']);
+  assert.deepEqual(g.other.map((n) => n.title), ['숙박 기사']);
+  assert.equal(g.policy[1].dateText, '2026년 9월 게시');
 });
 
 test('남은 날 말과 색', () => {

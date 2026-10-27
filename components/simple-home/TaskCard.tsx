@@ -53,7 +53,7 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
           {card.sub && <span className={`mt-0.5 block text-sm font-normal ${hero ? 'text-hero-sub' : 'text-ink-soft'}`}>{card.sub}</span>}
           <span className={`mt-1 flex flex-wrap items-center gap-x-3 text-sm font-normal ${hero ? 'text-hero-sub' : 'text-muted'}`}>
             <span>{progressText(summary)}</span>
-            {summary.soon > 0 && <span className={`font-bold ${hero ? 'text-on-hero' : 'text-ink'}`}>다음 7일 {summary.soon}</span>}
+            {summary.soon > 0 && <span className={`font-bold ${hero ? 'text-on-hero' : 'text-ink'}`}>일주일 안에 할 일 {summary.soon}개</span>}
           </span>
         </span>
         <Deadline summary={summary} today={today} hero={hero} />

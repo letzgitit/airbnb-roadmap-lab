@@ -1,17 +1,49 @@
-// 새 홈(탭 다섯 개짜리 「한눈에 보기」)이 쓰는 순수 계산. 화면 없이 home-model.test.ts 가 node --test 로 확인한다.
+// 새 홈(탭 여섯 개짜리 「한눈에 보기」)이 쓰는 순수 계산. 화면 없이 home-model.test.ts 가 node --test 로 확인한다.
 //   지우기만 하면 되는 TS 문법만 쓰고, @/ 경로는 type import 에만 쓴다.
 // 데이터 구조(ProgressDoc)는 바꾸지 않는다. 카드는 단계 번호 또는 할 일 제목의 낱말로 고른다.
 import type { PhotoView } from '@/lib/core/photos';
-import type { ProgressDoc, PropertyItem, QuestionItem, TaskItem, TaskKind } from '@/lib/core/types';
+import type { ProgressDoc, PropertyItem, QuestionItem, RefItem, TaskItem, TaskKind, UpdateItem } from '@/lib/core/types';
 
-export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts';
+export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts' | 'news';
 export const TABS: { id: TabId; label: string }[] = [
   { id: 'docs', label: '서류' },
   { id: 'interior', label: '인테리어' },
   { id: 'photos', label: '사진' },
   { id: 'airbnb', label: '에어비앤비' },
   { id: 'contacts', label: '연락처' },
+  { id: 'news', label: '뉴스' },
 ];
+
+// ── 뉴스: 사이트에 이미 있는 두 자료(민박업 규정 소식 content/updates.json · 단계별 참고 자료 refs — 고정 + 6시간마다 자동 수집)를 한 목록으로 ──
+export interface NewsItem { key: string; title: string; date: string; dateText: string; source: string; url: string; kind: string }
+// 구청 공지 · 정책으로 보는 낱말(출처 · 제목). 규정 소식은 모두, 참고 자료는 종류가 「공지」이거나 이 낱말이 있으면
+const POLICY = /구청|구 ?보건소|시청|서울시|법무부|국토|문화체육|문체부|관광공사|법령|법안|국회|정부|정책|규정|시행|개정|조례|등록 ?안내|민원/;
+function newsDate(d: string): string {
+  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(d);
+  if (!m) return d;
+  return m[3] ? `${m[1]}년 ${Number(m[2])}월 ${Number(m[3])}일` : `${m[1]}년 ${Number(m[2])}월`;
+}
+/** 구청 · 정책 묶음(먼저)과 그 밖의 기사 · 영상. 각 묶음은 날짜 최근 순, 같은 주소는 한 번만 */
+export function newsGroups(updates: UpdateItem[], refs: RefItem[]): { policy: NewsItem[]; other: NewsItem[] } {
+  const seen = new Set<string>();
+  const policy: NewsItem[] = [];
+  const other: NewsItem[] = [];
+  const push = (to: NewsItem[], it: NewsItem) => {
+    const k = it.url.replace(/[?#].*$/, '').replace(/\/$/, '') || it.key;
+    if (seen.has(k)) return;
+    seen.add(k);
+    to.push(it);
+  };
+  updates.forEach((u, i) => push(policy, {
+    key: `u${i}`, title: u.title, date: u.date, dateText: `${newsDate(u.date)}${u.dateWord ? ` ${u.dateWord}` : ''}`, source: u.source, url: u.url, kind: '규정',
+  }));
+  refs.forEach((r, i) => {
+    const it = { key: `r${i}`, title: r.title, date: r.date, dateText: newsDate(r.date), source: r.source, url: r.url, kind: r.kind };
+    push(r.kind === '공지' || POLICY.test(`${r.source} ${r.title}`) ? policy : other, it);
+  });
+  const recent = (a: NewsItem, b: NewsItem) => b.date.localeCompare(a.date);
+  return { policy: policy.sort(recent), other: other.sort(recent) };
+}
 
 /**
  * 카드 하나.

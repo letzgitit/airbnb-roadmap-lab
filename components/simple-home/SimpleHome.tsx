@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import type { ProgressDoc } from '@/lib/core/types';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { Content, ProgressDoc } from '@/lib/core/types';
+import { usePhotos } from '@/components/progress/PhotosPanel';
 import { todayStr } from '@/lib/client/format';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { useSite } from '@/components/shell/SiteShell';
@@ -10,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { ContactsTab } from './ContactsTab';
 import { GuQuestions } from './GuQuestions';
+import { NewsTab } from './NewsTab';
 import { PhotosTab } from './PhotosTab';
 import { TaskCard } from './TaskCard';
 import {
@@ -23,20 +25,28 @@ const read = (k: string) => { try { return localStorage.getItem(k); } catch { re
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 저장이 막혀도 이번 화면에는 적용 */ } };
 
 /**
- * 새 홈(로그인한 두 사람): 엑셀 시트처럼 맨 위 탭 다섯 개 — 서류 · 인테리어 · 사진 · 에어비앤비 · 연락처.
+ * 새 홈(로그인한 두 사람): 엑셀 시트처럼 맨 위 탭 여섯 개 — 서류 · 인테리어 · 사진 · 에어비앤비 · 연락처 · 뉴스.
  * 탭마다 큰 덩어리 카드(마감 날짜를 크게), 펼치면 그 자리에서 체크 · 추가 · 고치기 · 지우기 · 메모.
  * 예전 홈(준비 일정 · 간트 · 달력)은 /classic 에 그대로 있고, 맨 아래 작은 「예전 화면」 글자로만 들어간다.
  */
-export function SimpleHome() {
+export function SimpleHome({ content }: { content: Content }) {
   const { doc } = useProgress();
   const { steps } = useSite();
+  const { ensure } = usePhotos();
   const uid = useId();
+  const tabsRef = useRef<HTMLDivElement>(null);
+  // 할 일 메모 사진을 보이려고 사진 목록도 처음에 한 번 받는다
+  useEffect(() => { ensure(); }, [ensure]);
   const [tab, setTab] = useState<TabId>(() => {
     const v = read(TAB_KEY);
     return TABS.some((t) => t.id === v) ? (v as TabId) : 'docs';
   });
   const pick = (t: TabId) => { setTab(t); write(TAB_KEY, t); window.scrollTo({ top: 0 }); };
   const today = todayStr();
+  // 폰에서 탭 줄이 옆으로 밀릴 때 고른 탭이 화면 안에 오게
+  useEffect(() => {
+    tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
 
   // 탭 이름 옆 빨강 점: 그 탭에 기한 지난 안 끝난 일이 있나
   const late = useMemo(() => {
@@ -45,7 +55,7 @@ export function SimpleHome() {
       docs: tabCounts(tasksByCard(doc, DOC_CARDS), today).late,
       interior: tabCounts(tasksByCard(doc, INTERIOR_CARDS), today).late,
       airbnb: tabCounts(tasksByCard(doc, AIRBNB_CARDS), today).late,
-      photos: 0, contacts: 0,
+      photos: 0, contacts: 0, news: 0,
     } as Record<TabId, number>;
   }, [doc, today]);
 
@@ -55,12 +65,12 @@ export function SimpleHome() {
       <h1 className="sr-only">우리 준비 한눈에</h1>
       {/* 시트 탭: 머리글 띠 바로 밑에 붙어 따라온다. 고른 탭 = ink 700 + 3px 밑줄(SubNav 와 같은 모양) */}
       <div className="sticky top-[calc(56px+env(safe-area-inset-top))] z-30 -mx-4 -mt-4 mb-4 bg-page px-4 pt-1">
-        <div role="tablist" aria-label="한눈에 보기" className="flex overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div ref={tabsRef} role="tablist" aria-label="한눈에 보기" className="flex overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((t) => {
             const on = t.id === tab;
             return (
               <button key={t.id} type="button" role="tab" id={`${uid}-${t.id}`} aria-selected={on} aria-controls={`${uid}-panel`} onClick={() => pick(t.id)}
-                className={`relative flex min-h-12 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap px-2 text-base transition-colors ${on ? 'font-bold text-ink' : 'font-semibold text-muted hover:text-ink'}`}>
+                className={`relative flex min-h-12 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap px-3 text-base transition-colors ${on ? 'font-bold text-ink' : 'font-semibold text-muted hover:text-ink'}`}>
                 {t.label}
                 {late[t.id] > 0 && <><span className="size-1.5 rounded-full bg-danger-ink" aria-hidden /><span className="sr-only">(기한 지남 있음)</span></>}
                 {on && <span className="absolute inset-x-1 bottom-0 h-[3px] rounded-full bg-ink" aria-hidden />}
@@ -76,6 +86,7 @@ export function SimpleHome() {
         {tab === 'photos' && <PhotosTab />}
         {tab === 'airbnb' && <CardsTab key="airbnb" tab="airbnb" cards={AIRBNB_CARDS} doc={doc} steps={steps} today={today} />}
         {tab === 'contacts' && <ContactsTab />}
+        {tab === 'news' && <NewsTab content={content} />}
       </div>
 
       <footer className="mt-12 flex justify-center">

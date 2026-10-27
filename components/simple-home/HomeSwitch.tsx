@@ -13,7 +13,7 @@ import { SimpleHome } from './SimpleHome';
  */
 export function HomeSwitch({ content, signedIn = false }: { content: Content; signedIn?: boolean }) {
   const { status, doc } = useProgress();
-  if (status === 'ready' && doc) return <SimpleHome />;
+  if (status === 'ready' && doc) return <SimpleHome content={content} />;
   if (status === 'loading' && signedIn) return <SimpleHomeSkeleton />;
   return <App content={content} />;
 }
@@ -23,9 +23,9 @@ function SimpleHomeSkeleton() {
   return (
     <div role="status" aria-label="불러오는 중">
       <div className="-mx-4 -mt-4 mb-4 bg-page px-4 pt-1">
-        <div className="flex border-b border-line" aria-hidden>
+        <div className="flex overflow-hidden border-b border-line" aria-hidden>
           {TABS.map((t, i) => (
-            <span key={t.id} className={`relative flex min-h-12 flex-1 items-center justify-center whitespace-nowrap px-2 text-base ${i === 0 ? 'font-bold text-ink' : 'font-semibold text-muted'}`}>{t.label}</span>
+            <span key={t.id} className={`relative flex min-h-12 flex-1 shrink-0 items-center justify-center whitespace-nowrap px-3 text-base ${i === 0 ? 'font-bold text-ink' : 'font-semibold text-muted'}`}>{t.label}</span>
           ))}
         </div>
       </div>

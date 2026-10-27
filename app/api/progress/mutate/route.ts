@@ -4,6 +4,7 @@ import { mutate, OpError } from '@/lib/core/engine';
 import { opSchema } from '@/lib/core/validate';
 import { checkWriteRequest, NO_STORE } from '@/lib/http';
 import { pushToTodoist } from '@/lib/core/todoist-push';
+import { setTaskPhotosDeleted } from '@/lib/core/photos';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,14 @@ export async function POST(req: Request) {
 
   try {
     const { doc, result } = await mutate(parsed.data, a.actor);
+    // 할 일을 지우거나 되살리면 그 할 일(+ 같이 지워지거나 되살아난 세부 항목) 메모 사진도 같이 — 사진 저장소는 따로라 여기서 맞춘다.
+    // 실패해도 할 일 저장은 이미 끝났으므로 응답은 그대로(사진은 「삭제한 사진」에서 손으로 맞출 수 있다).
+    if (parsed.data.op === 'task.delete' || parsed.data.op === 'task.restore') {
+      const deleted = parsed.data.op === 'task.delete';
+      const id = parsed.data.id;
+      const ids = Object.values(doc.tasks).filter((t) => (t.id === id || t.parentId === id) && !!t.deletedAt === deleted).map((t) => t.id);
+      await setTaskPhotosDeleted(ids, deleted, a.actor.name).catch((e) => console.error('task photos sync failed:', e instanceof Error ? e.message : 'unknown'));
+    }
     // 할 일이 바뀌었으면 응답을 보낸 뒤 Todoist 에도 반영(토큰 없으면 건너뜀, 실패해도 이 응답과 상관없다)
     if (parsed.data.op.startsWith('task.')) {
       const op = parsed.data;

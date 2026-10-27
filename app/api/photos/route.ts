@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   try {
     const data = Buffer.from(await file.arrayBuffer());
     const m = await addPhoto({ stepId: form.get('stepId'), album: String(form.get('album') ?? ''), caption: String(form.get('caption') ?? ''), by: a.actor.name, data,
-      doc: form.get('doc') === '1' });
+      doc: form.get('doc') === '1', taskId: form.get('taskId') });
     return NextResponse.json({ photo: toView(m) }, { headers: NO_STORE });
   } catch (e) {
     if (e instanceof PhotoError) return NextResponse.json({ error: e.code, message: e.message }, { status: e.status, headers: NO_STORE });

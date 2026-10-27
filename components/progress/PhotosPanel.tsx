@@ -45,8 +45,12 @@ interface Ctx {
   steps: StepName[];
   data: Data | null;
   state: 'idle' | 'loading' | 'error' | 'anon';
-  /** 단계 순서 · 찍은 날짜 순으로 줄 세운 전체 사진(크게 보기의 앞뒤 넘기기도 이 순서) */
+  /** 단계 순서 · 찍은 날짜 순으로 줄 세운 전체 사진(크게 보기의 앞뒤 넘기기도 이 순서). 할 일 메모 사진은 빠진다 */
   ordered: PhotoView[];
+  /** 할 일 메모 사진(지우지 않은 것, 올린 순). 새 홈 할 일 줄이 taskId 로 골라 쓴다 */
+  taskPhotos: PhotoView[];
+  /** 할 일 메모에 사진 올리기(여러 장 차례로). 끝나면 목록을 다시 받는다 */
+  uploadToTask: (taskId: string, stepId: number, files: File[]) => Promise<void>;
   /** 사진 탭에 보이는 줄(거르기 · 검색 · 정렬 적용). 사진 탭에서 연 크게 보기의 앞뒤 넘기기도 이 순서 */
   shown: PhotoView[];
   sort: SortMode; setSort: (s: SortMode) => void;
@@ -74,6 +78,7 @@ export function usePhotos(): Ctx {
 export function PhotosProvider({ steps, children }: { steps: StepName[]; children: ReactNode }) {
   const { toast, confirm, doc } = useProgress();
   const [data, setData] = useState<Data | null>(null);
+  const [taskPhotos, setTaskPhotos] = useState<PhotoView[]>([]);
   const [state, setState] = useState<Ctx['state']>('idle');
   const [viewId, setViewId] = useState<string | null>(null);
   const [viewStep, setViewStep] = useState<number | null>(null);
@@ -89,7 +94,10 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
       const res = await busyFetch('/api/photos', { cache: 'no-store' });
       if (res.status === 401 || res.status === 403) { setData(null); setState('anon'); return; }
       if (!res.ok) { setState('error'); return; }
-      setData(await res.json());
+      // 할 일 메모 사진(taskId 있음)은 사진 화면 · 단계 창 · 「삭제한 사진」에 섞지 않고 따로 둔다(그 할 일 메모 밑에만 보인다)
+      const j = (await res.json()) as Data;
+      setData({ photos: j.photos.filter((p) => !p.taskId), trash: j.trash.filter((p) => !p.taskId) });
+      setTaskPhotos(j.photos.filter((p) => !!p.taskId).sort((a, b) => a.order - b.order));
       setState('idle');
     } catch { setState('error'); }
   }, []);
@@ -133,9 +141,31 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
 
   // 크게 보기에서 넘기는 목록: 고른 사진 묶음(새 홈 사진 탭) → 한 단계(단계 창) → 사진 탭에 보이는 줄
   const viewList = useMemo(() => {
-    if (viewIds) { const by = new Map(ordered.map((p) => [p.id, p])); return viewIds.map((id) => by.get(id)).filter((p): p is PhotoView => !!p); }
+    if (viewIds) { const by = new Map([...ordered, ...taskPhotos].map((p) => [p.id, p])); return viewIds.map((id) => by.get(id)).filter((p): p is PhotoView => !!p); }
     return viewStep === null ? shown : ordered.filter((p) => p.stepId === viewStep);
-  }, [shown, ordered, viewStep, viewIds]);
+  }, [shown, ordered, taskPhotos, viewStep, viewIds]);
+
+  // 할 일 메모 사진 올리기: 사진 올리기 창과 같은 길(큰 사진은 미리 줄이고 한 장씩), 단계 = 그 할 일 단계, taskId 표시
+  const uploadToTask = useCallback(async (taskId: string, stepId: number, files: File[]) => {
+    let okN = 0;
+    for (const f of files) {
+      try {
+        if (!f.type.startsWith('image/')) throw new Error('사진만 올릴 수 있어요.');
+        const fd = new FormData();
+        fd.append('file', await shrinkIfLarge(f), 'photo.jpg');
+        fd.append('stepId', String(stepId));
+        fd.append('taskId', taskId);
+        const res = await busyFetch('/api/photos', { method: 'POST', headers: { 'x-photos-upload': '1' }, body: fd }, { slow: true });
+        const j = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(typeof j?.message === 'string' ? j.message : '올리지 못했어요.');
+        okN += 1;
+      } catch (e) {
+        toast(`${f.name}: ${e instanceof Error ? e.message : '올리지 못했어요.'}`, { kind: 'error' });
+      }
+    }
+    await reload();
+    if (okN > 0) toast(`사진 ${okN}장을 붙였어요.`);
+  }, [reload, toast]);
 
   // 같은 단계 사진을 기본 순서로 놓고 한 칸 옮긴 뒤, 그 단계 사진들의 position 을 그 순서대로 다시 매겨 한 번에 저장한다
   const canMove = useCallback((id: string, dir: -1 | 1) => {
@@ -165,20 +195,25 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
   }, [ordered, canMove, reload, toast]);
   const viewIndex = viewId ? viewList.findIndex((p) => p.id === viewId) : -1;
   const remove = useCallback(async (p: PhotoView) => {
-    const ok = await confirm({ title: '이 사진을 지울까요?', body: p.caption || p.album || undefined, note: PHOTO_TRASH_NOTE, confirmLabel: '삭제', danger: true });
+    // 할 일 메모 사진은 「삭제한 사진」 목록에 안 나오므로 되살리기는 알림의 「되돌리기」로만
+    const ok = await confirm({ title: '이 사진을 지울까요?', body: p.caption || p.album || undefined, note: p.taskId ? undefined : PHOTO_TRASH_NOTE, confirmLabel: '삭제', danger: true });
     if (!ok) return;
     // 지운 뒤에는 다음 사진(마지막이면 앞 사진)을 보여 준다
     const i = viewList.findIndex((q) => q.id === p.id);
     const next = viewList[i + 1] ?? viewList[i - 1] ?? null;
-    if (await patch(p.id, 'DELETE')) { setViewId(next?.id ?? null); toast('사진을 지웠어요.'); }
+    if (await patch(p.id, 'DELETE')) {
+      setViewId(next?.id ?? null);
+      if (p.taskId) toast('사진을 지웠어요.', { ms: 8000, action: { label: '되돌리기', run: () => void patch(p.id, 'PATCH', { restore: true }) } });
+      else toast('사진을 지웠어요.');
+    }
   }, [confirm, viewList, patch, toast]);
 
   const value = useMemo<Ctx>(() => ({
-    steps, data, state, ordered, shown, sort, setSort, kind, setKind, query, setQuery, move, canMove, ensure, reload,
+    steps, data, state, ordered, taskPhotos, uploadToTask, shown, sort, setSort, kind, setKind, query, setQuery, move, canMove, ensure, reload,
     view: (id, stepId, ids) => { setViewStep(stepId ?? null); setViewIds(ids ?? null); setViewId(id); },
     upload: (stepId, album) => { setUploadAlbum(album ?? ''); setUploadStep(stepId ?? defaultStep); },
     patch,
-  }), [steps, data, state, ordered, shown, sort, setSort, kind, setKind, query, move, canMove, ensure, reload, defaultStep, patch]);
+  }), [steps, data, state, ordered, taskPhotos, uploadToTask, shown, sort, setSort, kind, setKind, query, move, canMove, ensure, reload, defaultStep, patch]);
 
   return (
     <C.Provider value={value}>

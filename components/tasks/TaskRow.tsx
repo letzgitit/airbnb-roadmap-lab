@@ -14,6 +14,8 @@ import { callNumber, phonesIn, telHref } from './phone';
 import { START_AFTER_DUE, taskErrorMessage } from './task-errors';
 import { placeOf, placePatch, placeStep, spanDate } from './task-view';
 import { KindSelect, NoteField, OwnerSelect, type StepRef, type TaskOwner, type TaskWithNote } from './TaskComposer';
+import { TaskPhotos } from './TaskPhotos';
+import { usePhotos } from '@/components/progress/PhotosPanel';
 
 /**
  * 할 일 한 줄(홈 「할 일」과 단계 시트 「우리 할 일」이 같이 쓴다): [체크 44px] [글 + 보조 한 줄] [휴지통 44px].
@@ -42,6 +44,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
 }) {
   const t = task as TaskWithNote; // 외도민판 · 지산판 같은 코드(autoFill 은 지산판에선 늘 비어 있다)
   const { doc, send, toast, confirm } = useProgress();
+  const { taskPhotos } = usePhotos();
   const ed = useEditing(`task:${t.id}`);
   const [text, setText] = useState('');
   const [start, setStart] = useState('');
@@ -166,6 +169,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               </label>
             )}
             <NoteField value={note} onChange={setNote} />
+            {/* 쉬운 모양: 메모 사진도 여기서 붙인다(바로 올라가고, 저장 단추와 상관없다) */}
+            {simple && !deleted && <TaskPhotos taskId={t.id} stepId={t.stepId} />}
             {/* 메모 속 전화번호는 눌러서 바로 건다(메모 글은 그대로) */}
             {phonesIn(note).length > 0 && (
               <p className="flex flex-wrap items-center gap-x-3 text-sm font-normal text-ink-soft">
@@ -200,7 +205,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     const soon = !t.done && !late && !!t.due && (dl?.rel === '오늘' || /^D-[1-6]$/.test(dl?.rel ?? ''));
     const noteLines = (t.note ?? '').trim();
     const firstLine = noteLines.split('\n')[0];
-    const more = noteLines.includes('\n') || firstLine.length > 40;
+    const photoN = taskPhotos.filter((p) => p.taskId === t.id).length;
+    const more = noteLines.includes('\n') || firstLine.length > 40 || photoN > 0;
     return (
       <li className={rowCls}>
         <label className={`${leadCls} cursor-pointer ${depth ? 'ml-6' : ''}`}>
@@ -218,21 +224,24 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               <EditBadge k={`task:${t.id}`} />
             </span>
           </button>
-          {/* 메모: 접힌 채 첫 줄만 살짝. 누르면 전부 펼치고, 속 전화번호는 바로 건다 */}
-          {noteLines && (
+          {/* 메모: 접힌 채 첫 줄만 살짝(사진이 있으면 「사진 n」). 누르면 전부 펼치고 메모 사진 · 「사진 추가」, 속 전화번호는 바로 건다.
+              메모도 사진도 없는 할 일은 고치는 폼에서 사진을 붙인다 */}
+          {(noteLines || photoN > 0) && (
             noteOpen ? (
               <div className="-mt-1 pb-3">
-                <p className="whitespace-pre-wrap break-words text-sm font-normal leading-relaxed text-ink-soft">{noteLines}</p>
+                {noteLines && <p className="whitespace-pre-wrap break-words text-sm font-normal leading-relaxed text-ink-soft">{noteLines}</p>}
+                <TaskPhotos taskId={t.id} stepId={t.stepId} />
                 <div className="flex flex-wrap items-center gap-x-4">
                   {[...new Set(phonesIn(noteLines))].map((p) => <a key={p} href={telHref(p)} className={`${textBtn} mx-0 tabular-nums`}><i className="fas fa-phone mr-1.5" aria-hidden />{p}</a>)}
                   <button type="button" className={`${textBtn} mx-0`} aria-expanded="true" onClick={() => setNoteOpen(false)}>메모 접기</button>
                 </div>
               </div>
             ) : (
-              <button type="button" aria-expanded="false" aria-label={`메모 펼치기: ${firstLine}`} onClick={() => setNoteOpen(true)}
+              <button type="button" aria-expanded="false" aria-label={`메모 펼치기: ${firstLine || `사진 ${photoN}장`}`} onClick={() => setNoteOpen(true)}
                 className="-mt-2 flex min-h-11 w-full items-center gap-1.5 pb-1 text-left text-sm font-normal text-muted">
-                <i className="far fa-note-sticky shrink-0" aria-hidden />
-                <span className="min-w-0 truncate">{firstLine}</span>
+                <i className={`${noteLines ? 'far fa-note-sticky' : 'far fa-image'} shrink-0`} aria-hidden />
+                {noteLines && <span className="min-w-0 truncate">{firstLine}</span>}
+                {photoN > 0 && <span className="shrink-0 whitespace-nowrap">{noteLines && <i className="far fa-image mr-1" aria-hidden />}사진 {photoN}</span>}
                 {more && <i className="fas fa-chevron-down shrink-0 text-xs" aria-hidden />}
               </button>
             )
