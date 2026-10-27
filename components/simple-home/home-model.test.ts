@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
-  progressText, relDay, sortCards, summarize, tasksByCard, urgentCard,
+  progressText, relDay, sortCards, summarize, tasksByCard, splitBlocks, workTab, isWorkTab,
   TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos, docGroups,
   dayCounts, dayCellText, dayTasks,
 } from './home-model.ts';
@@ -52,32 +52,33 @@ test('받아 둔 서류: PDF + 서류 낱말 사진, 참고 · 다른 집은 빼
   assert.deepEqual(docGroups(docs).map((g) => `${g.stepId}:${g.items.map((p) => p.id).join('')}`), ['3:a', '5:b', '9:f', '0:c']);
 });
 
-test('탭 여섯 개(뉴스 없음), 달력이 맨 끝, 에어비앤비는 침대 아이콘', () => {
-  assert.deepEqual(TABS.map((t) => t.label), ['서류', '인테리어', '사진', '에어비앤비', '연락처', '달력']);
-  assert.deepEqual(TABS.map((t) => t.icon), ['doc', 'sofa', 'camera', 'bed', 'phone', 'calendar']);
+test('분야 탭 여섯 개: 행정 · 설비 · 운영 · 갤러리 · 연락처 · 달력(글자 탭), 일터는 앞 셋', () => {
+  assert.deepEqual(TABS.map((t) => t.label), ['행정', '설비', '운영', '갤러리', '연락처', '달력']);
+  assert.deepEqual(TABS.filter((t) => isWorkTab(t.id)).map((t) => t.id), ['admin', 'facility', 'ops']);
+  // 행정 = 서류 블록 + 늘 접는 1~3단계, 설비 = 인테리어, 운영 = 에어비앤비
+  assert.deepEqual(workTab('admin').cards.flatMap((c) => c.steps), [4, 5, 9, 8, 12, 13, 1, 2, 3]);
+  assert.deepEqual(workTab('admin').alwaysDone, ['step-1', 'step-2', 'step-3']);
+  assert.equal(workTab('facility').cards, INTERIOR_CARDS);
+  assert.equal(workTab('ops').cards, AIRBNB_CARDS);
 });
 
-test('가장 급한 일: 카드 마감이 아니라 안 끝난 할 일 중 가장 급한 것 기준', () => {
+test('블록 나누기: 1~3단계 · 다 끝낸 블록은 「완료한 단계」로, 나머지는 기한 지남 → 마감 이른 순 → 날짜 없음', () => {
   const steps = { 4: { status: 'todo', targetDate: '2026-11-09' }, 8: { status: 'todo', targetDate: '2026-11-06' } } as never;
   const today = '2026-10-28';
   const doc = { steps, property: {} } as never;
-  // 전입신고 카드 마감은 11/9(D-12)지만 그 안 할 일이 11/2(D-5) → 안전 설비(카드 마감 11/6, 할 일 11/5)보다 급하다
-  const moveIn = summarize(DOC_CARDS[0], [T('a', 4, '견적', { due: '2026-11-02' }), T('b', 4, '치수')], doc, today);
-  const safety = summarize(DOC_CARDS[2], [T('c', 8, '소화기', { due: '2026-11-05' })], doc, today);
-  assert.equal(moveIn.deadline, '2026-11-09');
-  assert.equal(moveIn.nextDue, '2026-11-02');
-  const cards = [DOC_CARDS[2], DOC_CARDS[0]];
-  assert.equal(urgentCard(cards, { [DOC_CARDS[0].id]: moveIn, [DOC_CARDS[2].id]: safety }), 'move-in');
-  // 기한 지난 할 일이 있는 카드가 먼저
-  const lateSafety = summarize(DOC_CARDS[2], [T('c', 8, '소화기', { due: '2026-10-20' }), T('d', 8, '감지기', { due: '2026-11-20' })], doc, today);
-  assert.equal(urgentCard(cards, { [DOC_CARDS[0].id]: moveIn, [DOC_CARDS[2].id]: lateSafety }), 'safety');
-  // 날짜 있는 안 끝난 할 일이 없으면 없음
-  const none = summarize(DOC_CARDS[0], [T('b', 4, '치수'), T('e', 4, '끝', { due: '2026-11-01', done: true })], doc, today);
-  assert.equal(none.nextDue, null);
-  assert.equal(urgentCard([DOC_CARDS[0]], { [DOC_CARDS[0].id]: none }), null);
+  const cards = workTab('admin').cards;
+  const sums = Object.fromEntries(cards.map((c) => [c.id, summarize(c, [], doc, today)]));
+  sums['move-in'] = summarize(DOC_CARDS[0], [T('a', 4, '견적', { due: '2026-11-02' }), T('b', 4, '치수')], doc, today);
+  sums.safety = summarize(DOC_CARDS[2], [T('c', 8, '소화기', { due: '2026-10-20' })], doc, today);
+  sums.biz = summarize(DOC_CARDS[4], [T('d', 13, '끝', { due: '2026-11-01', done: true })], doc, today);
+  assert.equal(sums['move-in'].nextDue, '2026-11-02');
+  const { open, done } = splitBlocks(cards, sums, workTab('admin').alwaysDone);
+  assert.deepEqual(open.map((c) => c.id), ['safety', 'move-in', 'register', 'inspect']);
+  assert.deepEqual(done.map((c) => c.id), ['biz', 'step-1', 'step-2', 'step-3']);
+  assert.equal(done[1].stepTitle, 1);
 });
 
-test('이번 주 꼭 할 일: 기한 지남 + 6일 뒤까지, 마감 이른 순 5개, 끝낸 일 · 날짜 없는 일은 빠짐', () => {
+test('이번 주 할 일: 기한 지남 + 6일 뒤까지, 마감 이른 순 모두(자르지 않음), 끝낸 일 · 날짜 없는 일은 빠짐', () => {
   const today = '2026-10-28';
   const groups = {
     a: [T('a1', 4, '하나', { due: '2026-11-03' }), T('a2', 4, '둘', { due: '2026-11-04' }), T('a3', 4, '셋', { due: '2026-10-20' })],
@@ -86,7 +87,7 @@ test('이번 주 꼭 할 일: 기한 지남 + 6일 뒤까지, 마감 이른 순 
   };
   const r = weekTasks(groups, today);
   assert.equal(r.total, 6);
-  assert.deepEqual(r.list.map((t: { id: string }) => t.id), ['a3', 'b6', 'b1', 'b4', 'b5']);
+  assert.deepEqual(r.list.map((t: { id: string }) => t.id), ['a3', 'b6', 'b1', 'b4', 'b5', 'a1']);
   // 방금 체크한 일(isDone 이 아직 false)은 자리를 지킨다
   const sticky = weekTasks({ b: [T('b2', 8, '다섯', { due: '2026-10-30', done: true })] }, today, () => false);
   assert.equal(sticky.total, 1);
@@ -107,11 +108,11 @@ test('달력: 카드 마감 날짜만(카드 머리와 같은 값), 짧은 이�
   const marks = calendarMarks(doc as never, today);
   const brief = marks.map((m) => `${m.date} ${m.tab} ${m.short}${m.late ? ' 지남' : ''}${m.finished ? ' 끝' : ''}`);
   assert.deepEqual(brief, [
-    '2026-10-20 interior 도배 지남',
-    '2026-10-27 docs 전입 신고 끝',
-    '2026-11-09 docs 등록 서류',
-    '2026-11-12 interior 욕실',
-    '2026-11-12 airbnb 숙소 이름',
+    '2026-10-20 facility 도배 지남',
+    '2026-10-27 admin 전입 신고 끝',
+    '2026-11-09 admin 등록 서류',
+    '2026-11-12 facility 욕실',
+    '2026-11-12 ops 숙소 이름',
   ]);
 });
 
@@ -130,12 +131,13 @@ test('달력을 처음 열 달: 이번 달에 마감 없으면 가장 가까운 
   assert.equal(startMonth([{ date: '2026-09-27' }, { date: '2026-11-28' }], today), '2026-11-01'); // 같으면 앞날 쪽
 });
 
-test('달력 주: 월요일 시작, 앞뒤 달 날짜로 채움', () => {
+test('달력 주: 일요일 시작(일 · 월 · … · 토), 앞뒤 달 날짜로 채움', () => {
   const w = monthWeeks('2026-10-01');
   assert.equal(w.length, 5);
-  assert.equal(w[0][0], '2026-09-28');
-  assert.equal(w[4][6], '2026-11-01');
-  assert.equal(monthWeeks('2026-11-01')[0][0], '2026-10-26');
+  assert.equal(w[0][0], '2026-09-27');
+  assert.equal(w[4][6], '2026-10-31');
+  assert.equal(monthWeeks('2026-11-01')[0][0], '2026-11-01'); // 1일이 일요일이면 앞 달 날짜 없이
+  assert.equal(monthWeeks('2026-11-01').length, 5);
   assert.equal(addMonths('2026-12-01', 1), '2027-01-01');
   assert.equal(addMonths('2026-01-01', -1), '2025-12-01');
 });
@@ -197,8 +199,9 @@ test('카드 마감: 고정 일정 → 단계 목표일 → 할 일 마감', () 
   assert.equal(safety.deadline, '2026-11-06');
   assert.equal(safety.late, 1);
   assert.equal(progressText(safety), '1/2');
-  assert.equal(progressSr(safety), '2개 중 1개 했어요');
-  assert.equal(progressText({ total: 0, done: 0 }), '할 일 없음');
+  assert.equal(progressSr(safety), '2개 중 1개 완료');
+  // 할 일이 없는 블록은 「할 일 없음」 같은 글 없이 빈칸(2026-10-28)
+  assert.equal(progressText({ total: 0, done: 0 }), '');
   const inspect = summarize(DOC_CARDS[3], [T('z', 12, '실사', { due: '2026-11-20' })], { steps, property } as never, today);
   assert.equal(inspect.deadline, '2026-11-20');
 });

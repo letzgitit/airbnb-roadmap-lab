@@ -1,22 +1,22 @@
-// 새 홈(탭 여섯 개짜리 「한눈에 보기」)이 쓰는 순수 계산. 화면 없이 home-model.test.ts 가 node --test 로 확인한다.
+// 새 홈(간단히 보기 — 분야 탭 여섯 개)이 쓰는 순수 계산. 화면 없이 home-model.test.ts 가 node --test 로 확인한다.
 //   지우기만 하면 되는 TS 문법만 쓰고, @/ 경로는 type import 에만 쓴다.
-// 데이터 구조(ProgressDoc)는 바꾸지 않는다. 카드는 단계 번호 또는 할 일 제목의 낱말로 고른다.
+// 데이터 구조(ProgressDoc)는 바꾸지 않는다. 블록(예전 이름 「카드」)은 단계 번호 또는 할 일 제목의 낱말로 고른다.
 import type { PhotoView } from '@/lib/core/photos';
 import type { ProgressDoc, PropertyItem, QuestionItem, TaskItem, TaskKind } from '@/lib/core/types';
 
-// 「뉴스」 탭은 2026-10-28 뺐다(규정 소식은 예전 화면 · 단계 창에 그대로 있다).
-// icon = 탭 위 선 아이콘 이름(components/ui/LineIcon). 뜻이 바로 통하는 물건으로: 서류 = 문서, 인테리어 = 소파, 사진 = 카메라,
-// 에어비앤비 = 침대(숙소 — 예전 열쇠는 뜻이 안 통했다), 연락처 = 전화, 달력 = 달력.
-// 「사진」 탭 안에 하위 탭 「사진」 「문서」(받아 둔 서류가 「문서」로 옮겨 왔다). 탭 이름은 집에서 쓰는 말 그대로 「사진」(390px 에 여섯 탭이 다 들어가게)
-export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts' | 'calendar';
-export const TABS: { id: TabId; label: string; icon: 'doc' | 'sofa' | 'camera' | 'bed' | 'phone' | 'calendar' }[] = [
-  { id: 'docs', label: '서류', icon: 'doc' },
-  { id: 'interior', label: '인테리어', icon: 'sofa' },
-  { id: 'photos', label: '사진', icon: 'camera' },
-  { id: 'airbnb', label: '에어비앤비', icon: 'bed' },
-  { id: 'contacts', label: '연락처', icon: 'phone' },
-  { id: 'calendar', label: '달력', icon: 'calendar' },
+// 분야 탭(2026-10-28 다시 짬 — 기획 27): 일터 셋 「행정 · 설비 · 운영」 + 「갤러리 · 연락처 · 달력」. 글자 탭(아이콘 없음 — 데일리 .tab), 390px 폰에서 한 줄에 다 든다.
+// 행정 = 옛 「서류」(4 · 5 · 8 · 9 · 12 · 13단계 + 끝난 1~3), 설비 = 옛 「인테리어」(6 · 7), 운영 = 옛 「에어비앤비」(10 · 11 · 14), 갤러리 = 옛 「사진」.
+export type TabId = 'admin' | 'facility' | 'ops' | 'gallery' | 'contacts' | 'calendar';
+export type WorkTabId = 'admin' | 'facility' | 'ops';
+export const TABS: { id: TabId; label: string }[] = [
+  { id: 'admin', label: '행정' },
+  { id: 'facility', label: '설비' },
+  { id: 'ops', label: '운영' },
+  { id: 'gallery', label: '갤러리' },
+  { id: 'contacts', label: '연락처' },
+  { id: 'calendar', label: '달력' },
 ];
+export const isWorkTab = (t: TabId): t is WorkTabId => t === 'admin' || t === 'facility' || t === 'ops';
 
 /**
  * 카드 하나.
@@ -33,6 +33,8 @@ export const TABS: { id: TabId; label: string; icon: 'doc' | 'sofa' | 'camera' |
 export interface CardDef {
   id: string; title: string; steps: number[]; addStep: number;
   match?: RegExp; prefix?: string; kind?: TaskKind; fixedWords?: string[]; sub?: string; short?: string;
+  /** 이름을 그 단계 이름으로 보인다(행정의 1~3단계 블록) */
+  stepTitle?: number;
 }
 
 // ── 서류: 단계로 고른다 ──
@@ -179,24 +181,8 @@ export function summarize(card: CardDef, tasks: TaskItem[], doc: Pick<ProgressDo
 }
 
 /**
- * 「가장 급한 일」 카드 고르기: 카드 마감이 아니라 **카드 안 안 끝난 할 일 중 가장 급한 것** 기준.
- * 기한 지난 할 일이 있는 카드 먼저 → 그다음 가장 이른 할 일 마감 순 → 같으면 앞 카드.
- * 날짜 있는 안 끝난 할 일이 없으면 null. 그래서 위 「일주일 안에 할 일」 맨 앞 할 일이 든 카드가 「가장 급한 일」이 된다.
- */
-export function urgentCard(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'late' | 'nextDue'>>): string | null {
-  let best: { id: string; late: boolean; due: string } | null = null;
-  for (const c of cards) {
-    const s = sums[c.id];
-    if (!s?.nextDue) continue;
-    const cur = { id: c.id, late: s.late > 0, due: s.nextDue };
-    if (!best || (cur.late && !best.late) || (cur.late === best.late && cur.due < best.due)) best = cur;
-  }
-  return best?.id ?? null;
-}
-
-/**
- * 카드 순서: 기한 지난 일이 있는 안 끝난 카드 → 그 밖의 안 끝난 카드 중 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드
- * (각 묶음 안에서는 마감 이른 순, 같으면 정의 순서). 맨 앞 카드가 「가장 급한 일」(옅은 회색 큰 카드)이 된다.
+ * 블록 순서: 기한 지난 일이 있는 안 끝난 블록 → 그 밖의 안 끝난 블록 중 마감 이른 순 → 날짜 없는 블록 → 다 끝낸 블록
+ * (각 묶음 안에서는 마감 이른 순, 같으면 정의 순서). 2026-10-28 「가장 급한 일」 큰 카드는 없앴다.
  */
 export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'> & { late?: number }>): CardDef[] {
   const rank = (c: CardDef) => {
@@ -211,16 +197,25 @@ export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummar
     .map((x) => x.c);
 }
 
-/** 카드 머리 진행 표시: 「1/3」(할 일이 없으면 「할 일 없음」). 화면 읽기 프로그램에는 progressSr 의 긴 말 */
+/**
+ * 일터 탭의 블록 나누기: open = 단계 블록들(sortCards 순서), done = 맨 위 「완료한 단계 n」 접는 줄 안에 둘 블록.
+ * done = 늘 접어 두는 블록(alwaysDone — 행정의 1~3단계) + 다 끝낸 블록(summary.finished), 정의 순서 그대로.
+ */
+export function splitBlocks(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'> & { late?: number }>, alwaysDone: string[] = []): { open: CardDef[]; done: CardDef[] } {
+  const isDone = (c: CardDef) => alwaysDone.includes(c.id) || sums[c.id]?.finished;
+  return { open: sortCards(cards.filter((c) => !isDone(c)), sums), done: cards.filter(isDone) };
+}
+
+/** 블록 머리 진행 표시: 「1/3」(할 일이 없으면 빈 글자 — 「할 일 없음」 같은 말은 쓰지 않는다). 화면 읽기 프로그램에는 progressSr 의 긴 말 */
 export function progressText(s: Pick<CardSummary, 'total' | 'done'>): string {
-  if (s.total === 0) return '할 일 없음';
+  if (s.total === 0) return '';
   return `${s.done}/${s.total}`;
 }
-/** 「3개 중 1개 했어요」(화면 읽기 프로그램용) */
+/** 「3개 중 1개 완료」(화면 읽기 프로그램용) */
 export function progressSr(s: Pick<CardSummary, 'total' | 'done'>): string {
-  if (s.total === 0) return '할 일 없음';
-  if (s.done === s.total) return `${s.total}개 다 했어요`;
-  return `${s.total}개 중 ${s.done}개 했어요`;
+  if (s.total === 0) return '';
+  if (s.done === s.total) return `${s.total}개 모두 완료`;
+  return `${s.total}개 중 ${s.done}개 완료`;
 }
 
 // ── 문의 필요: 할 일 종류 「문의」(묻는 내용은 메모에) ──
@@ -246,28 +241,31 @@ export function tabCounts(groups: Record<string, TaskItem[]>, today: string): { 
   return { late, soon };
 }
 
-// ── 일주일 안에 할 일: 서류 · 인테리어 · 에어비앤비 탭 맨 위 묶음 ──
-export const WEEK_MAX = 5;
+// ── 이번 주 할 일: 행정 · 설비 · 운영 탭 맨 위 블록(PC 는 오른쪽 곁 칸) ──
 /**
  * 그 탭의 안 끝난 할 일 중 기한 지남 + 오늘 ~ 6일 뒤 마감(세부 항목 포함). 마감 이른 순(= 기한 지난 것이 먼저), 같으면 만든 순.
- * list = 앞에서 WEEK_MAX 개, total = 모두. isDone = 방금 체크한 줄이 잠깐 제자리를 지키게(useStickyDone).
+ * 모두 보인다(줄이 짧아 개수를 자르지 않는다). isDone = 방금 체크한 줄이 잠깐 제자리를 지키게(useStickyDone).
  */
 export function weekTasks(groups: Record<string, TaskItem[]>, today: string, isDone: (t: TaskItem) => boolean = (t) => t.done): { list: TaskItem[]; total: number } {
   const all = Object.values(groups).flat().filter((t) => !isDone(t) && t.due && daysBetween(today, t.due) <= 6).sort(byDue);
-  return { list: all.slice(0, WEEK_MAX), total: all.length };
+  return { list: all, total: all.length };
 }
 
-// ── 달력 탭: 카드마다 마감 날짜 하나 ──
-export const CARD_TABS: { tab: TabId; label: string; cards: CardDef[] }[] = [
-  { tab: 'docs', label: '서류', cards: DOC_CARDS },
-  { tab: 'interior', label: '인테리어', cards: INTERIOR_CARDS },
-  { tab: 'airbnb', label: '에어비앤비', cards: AIRBNB_CARDS },
+// ── 일터 탭 셋: 블록 정의 · 늘 접는 블록 ──
+/** 행정 탭에서 늘 「완료한 단계」 안에 접어 두는 1~3단계 블록(이름은 화면에서 단계 이름으로 — stepTitle) */
+export const DONE_CARDS: CardDef[] = DONE_STEPS.map((id) => ({ id: `step-${id}`, title: `${id}단계`, stepTitle: id, steps: [id], addStep: id }));
+export const CARD_TABS: { tab: WorkTabId; label: string; cards: CardDef[]; alwaysDone: string[] }[] = [
+  { tab: 'admin', label: '행정', cards: [...DOC_CARDS, ...DONE_CARDS], alwaysDone: DONE_CARDS.map((c) => c.id) },
+  { tab: 'facility', label: '설비', cards: INTERIOR_CARDS, alwaysDone: [] },
+  { tab: 'ops', label: '운영', cards: AIRBNB_CARDS, alwaysDone: [] },
 ];
+export const workTab = (tab: WorkTabId) => CARD_TABS.find((c) => c.tab === tab)!;
 export interface CalendarMark { date: string; tab: TabId; tabLabel: string; cardId: string; title: string; short: string; finished: boolean; late: boolean }
-/** 서류 · 인테리어 · 에어비앤비 카드 중 마감 날짜가 있는 것(카드 머리의 큰 날짜와 같은 값). 날짜순 → 탭 순서 → 카드 정의 순서 */
+/** 행정 · 설비 · 운영 블록 중 마감 날짜가 있는 것(블록 머리 날짜와 같은 값, 늘 접는 1~3단계 블록은 뺀다). 날짜순 → 탭 순서 → 블록 정의 순서 */
 export function calendarMarks(doc: Pick<ProgressDoc, 'tasks' | 'steps' | 'property'>, today: string): CalendarMark[] {
   const out: CalendarMark[] = [];
-  for (const { tab, label, cards } of CARD_TABS) {
+  for (const { tab, label, cards: all, alwaysDone } of CARD_TABS) {
+    const cards = all.filter((c) => !alwaysDone.includes(c.id));
     const groups = tasksByCard(doc, cards);
     for (const c of cards) {
       const s = summarize(c, groups[c.id], doc, today);
@@ -325,13 +323,13 @@ export const addDays = (iso: string, n: number) => { const d = toDate(iso); d.se
 export const monthOf = (iso: string) => `${iso.slice(0, 7)}-01`;
 /** 달 옮기기: 1일 기준으로 n달 */
 export const addMonths = (first: string, n: number) => { const d = toDate(first); d.setMonth(d.getMonth() + n, 1); return isoOf(d); };
-/** 한 달 달력의 주(월요일 시작 — 예전 홈 달력과 같은 기준). 주마다 날짜 일곱 개, 앞뒤 달 날짜도 채운다 */
+/** 한 달 달력의 주(일요일 시작 — 일 · 월 · 화 · 수 · 목 · 금 · 토, 2026-10-28 사이트 주인 지시). 주마다 날짜 일곱 개, 앞뒤 달 날짜도 채운다 */
 export function monthWeeks(first: string): string[][] {
   const d = toDate(first);
   const last = isoOf(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-  let mon = addDays(first, -((d.getDay() + 6) % 7));
+  let sun = addDays(first, -d.getDay());
   const weeks: string[][] = [];
-  for (; mon <= last; mon = addDays(mon, 7)) weeks.push(Array.from({ length: 7 }, (_, i) => addDays(mon, i)));
+  for (; sun <= last; sun = addDays(sun, 7)) weeks.push(Array.from({ length: 7 }, (_, i) => addDays(sun, i)));
   return weeks;
 }
 

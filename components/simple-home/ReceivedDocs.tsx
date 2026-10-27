@@ -9,7 +9,7 @@ import { LineIcon } from '@/components/ui/LineIcon';
 import { DOC_ALBUM, docGroups, docPhotos } from './home-model';
 
 /**
- * 「사진」 탭 › 「문서」(2026-10-28 서류 탭 「받아 둔 서류」에서 옮겨 옴): 사진 저장소의 PDF와 서류 사진(등기 · 계약서 · 건축물대장 · 도면 · 안내문 같은 것)을
+ * 「갤러리」 탭 › 「문서」(2026-10-28 서류 탭 「받아 둔 서류」에서 옮겨 옴 — 행정 탭의 「받아 둔 문서 n개 보기」 줄은 없앴다): 사진 저장소의 PDF와 서류 사진(등기 · 계약서 · 건축물대장 · 도면 · 안내문 같은 것)을
  * 단계별 묶음으로, 묶음마다 두 칸씩 큰 둥근 카드(4:3, 모서리 18, 실제 썸네일 — 시안 B). 사진은 누르면 크게 보기(그 묶음 안에서만 넘김), PDF는 새 창.
  * 「＋ 문서 올리기」는 묶음 이름 「서류」로 올린다(설명에 서류 낱말이 없어도 여기에 잡히게).
  */
@@ -55,26 +55,6 @@ export function DocsPanel() {
   );
 }
 
-/**
- * 서류 탭 가장 급한 카드 밑 한 줄: 「받아 둔 문서 n개 보기 ›」 — 누르면 사진 › 문서로 간다.
- * 개수는 「문서」 칸과 같은 계산(docPhotos)이고, 사진 목록을 다 받기 전에는 숫자를 숨긴다(받는 중 「0개」로 보이지 않게).
- * 다 받았는데 0개면 「받아 둔 문서 없음 · 올리기」 — 누르면 바로 올리기 창(묶음 이름 「서류」).
- */
-export function DocsLink({ onOpen }: { onOpen: () => void }) {
-  const { ordered, data, state, upload } = usePhotos();
-  const n = useMemo(() => docPhotos(ordered).length, [ordered]);
-  const loaded = !!data && state === 'idle';
-  const none = loaded && n === 0;
-  return (
-    <button type="button" onClick={none ? () => upload(undefined, DOC_ALBUM) : onOpen}
-      className="-my-3 flex min-h-12 w-full items-center gap-2 text-left text-base font-semibold text-ink hover:underline">
-      <LineIcon name={none ? 'plus' : 'doc'} className="size-5 text-muted" />
-      <span className="flex-1">{none ? '받아 둔 문서 없음 · 올리기' : `받아 둔 문서${loaded ? ` ${n}개` : ''} 보기`}</span>
-      {!none && <LineIcon name="chevron" className="size-5 text-faint" />}
-    </button>
-  );
-}
-
 /** 칸 하나: 사진 = 큰 썸네일(누르면 크게 보기), PDF = 문서 아이콘 + 「PDF」(그림이 있으면 그림 + 「PDF」 표시, 누르면 새 창). 밑에 설명 한 줄 */
 function DocTile({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
   const [failed, setFailed] = useState(false);
@@ -91,7 +71,7 @@ function DocTile({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
           <img src={`/api/photos/${p.id}?size=thumb`} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} className="h-full w-full object-cover" />
         )}
         {failed && <span className="absolute inset-0 flex items-center justify-center text-sm text-muted">못 불러왔어요</span>}
-        {p.kind === 'pdf' && <span className="keep-light absolute left-2 top-2 rounded-full bg-surface px-2 py-0.5 text-sm font-semibold text-ink">PDF</span>}
+        {p.kind === 'pdf' && <span className="keep-light absolute left-2 top-2 rounded-chip bg-surface px-1.5 py-0.5 text-meta font-semibold text-ink">PDF</span>}
       </span>
     );
   const label = <span className="mt-2 block truncate text-sm font-medium text-ink">{name}</span>;

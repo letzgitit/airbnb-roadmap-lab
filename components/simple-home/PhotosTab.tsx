@@ -17,11 +17,11 @@ export type PhotoSub = 'photos' | 'docs';
 const SUBS: { id: PhotoSub; label: string }[] = [{ id: 'photos', label: '사진' }, { id: 'docs', label: '문서' }];
 
 /**
- * 「사진」 탭: 맨 위 하위 탭 「사진」 「문서」(시안 페이지 하위 탭 SubNav 와 같은 밑줄 모양 — 고른 것 = ink 600 + 2px 검정 밑줄).
+ * 「갤러리」 탭(2026-10-28 전 이름 「사진」 — 안의 묶음 짜기는 다음 단계에서 손본다): 맨 위 하위 탭 「사진」 「문서」(데일리 보조 탭 꼴 — 고른 것 = ink 700 + 2px 검정 밑줄).
  * - 사진: 우리 집 사진만 「공사 전」 · 「공사 후」 두 칸 + 그 밑 「모든 사진」(사진 저장소 전체 PhotosPanel).
  *   거르기(home-model housePhotos): PDF · 참고 사진(0단계) · 설명에 참고/다른 집/서류 낱말 · 우리 호수가 아닌 「n호」는 뺀다.
  *   공사 후 = 묶음 이름이 「공사 후」(이 칸의 「＋ 사진 올리기」가 그 이름으로 올린다). 크게 보기는 그 칸 사진 안에서만 넘긴다.
- * - 문서: 받아 둔 서류 사진 · PDF(ReceivedDocs DocsPanel). 서류 탭의 「받아 둔 문서 n개 보기」가 이리로 온다.
+ * - 문서: 받아 둔 서류 사진 · PDF(ReceivedDocs DocsPanel).
  * 홈 밖(/house)으로 보내지 않는다.
  */
 export function PhotosTab({ sub, onSub }: { sub: PhotoSub; onSub: (s: PhotoSub) => void }) {
@@ -32,9 +32,9 @@ export function PhotosTab({ sub, onSub }: { sub: PhotoSub; onSub: (s: PhotoSub) 
           const on = s.id === sub;
           return (
             <button key={s.id} type="button" aria-pressed={on} onClick={() => onSub(s.id)}
-              className={`relative flex min-h-12 items-center text-base transition-colors ${on ? 'font-semibold text-ink' : 'font-medium text-muted hover:text-ink'}`}>
+              className={`relative flex min-h-11.5 items-center text-base transition-colors ${on ? 'font-bold text-ink' : 'font-semibold text-ink-soft hover:text-ink'}`}>
               {s.label}
-              {on && <span className="absolute -inset-x-0.5 -bottom-px h-0.5 bg-ink" aria-hidden />}
+              {on && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-ink" aria-hidden />}
             </button>
           );
         })}

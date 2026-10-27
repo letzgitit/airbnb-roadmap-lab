@@ -14,7 +14,8 @@ import { useEditingSet } from '@/components/tasks/useTaskList';
 import type { StepRef } from '@/components/tasks/TaskComposer';
 import { addMonths, dateParts, dayCellText, dayCounts, dayTasks, monthOf, monthWeeks, type DayCount } from './home-model';
 
-const DOW = ['월', '화', '수', '목', '금', '토', '일'];
+// 요일 순서 일 · 월 · 화 · 수 · 목 · 금 · 토(2026-10-28 사이트 주인 지시 — monthWeeks 도 일요일 시작)
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 /**
  * 달력 탭: 맨 위 「첫 손님까지」 한 줄 카드(예전 홈 첫 손님 카드와 같은 계산) → 한 달 달력 → 고른 날의 할 일.
