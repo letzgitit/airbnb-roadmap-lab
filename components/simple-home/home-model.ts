@@ -41,7 +41,7 @@ export interface CardDef {
 export const DOC_CARDS: CardDef[] = [
   { id: 'move-in', title: '전입신고', short: '전입 신고', steps: [4], addStep: 4, fixedWords: ['전입'] },
   { id: 'register', title: '외도민 등록 서류', short: '등록 서류', steps: [5, 9], addStep: 9, fixedWords: ['등록 신청', '신청', '접수'], sub: '구청에 내는 서류' },
-  { id: 'safety', title: '안전 설비', steps: [8], addStep: 8, sub: '소화기 · 화재감지기 등 꼭 살 것' },
+  { id: 'safety', title: '등록용 소방 물품', short: '소방 물품', steps: [8], addStep: 8, sub: '등록 전에 꼭 사서 달아야 하는 소방 물품' },
   { id: 'inspect', title: '현장 실사', steps: [12], addStep: 12, sub: '구청에서 집을 보러 오는 날' },
   { id: 'biz', title: '사업자 등록', short: '사업자 등록', steps: [13], addStep: 13, sub: '세무서에 하는 신고' },
 ];

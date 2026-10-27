@@ -25,7 +25,7 @@ export function taskPhase(t: Pick<TaskItem, 'done' | 'due'> & { start?: string |
   if (t.start && t.start <= today && (!t.due || today <= t.due)) return 'prep';
   return null;
 }
-export const PHASE_WORD = { soon: '곧 마감', prep: '지금 할 때' } as const;
+export const PHASE_WORD = { soon: '곧 마감', prep: '지금 하면 돼요' } as const;
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 /** 긴 날짜(새 홈 쉬운 모양 · 시안 B): 「10월 27일(화)」 */

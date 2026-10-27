@@ -116,7 +116,7 @@ function Blocks({ blocks, inBox = false }: { blocks: Block[]; inBox?: boolean })
 
 export function GuideView({ text }: { text: string }) {
   const blocks = parseGuide(text);
-  if (blocks.length === 0) return <p className="text-base text-muted">아직 적힌 설명이 없어요.</p>;
+  if (blocks.length === 0) return <p className="text-base text-muted">아직 적힌 도움말이 없어요.</p>;
   // 본문 17px(긴 글 읽기 — DESIGN.md 3.1 예외) · 행간 1.7 · 낱말 중간에서 끊지 않음
   return (
     <div className="max-w-[36em] break-keep text-[17px] font-normal leading-[1.7] text-ink-soft">
@@ -172,7 +172,7 @@ function GuideSheet({ s, title, guide, error = null, preview = false }: { s: Ret
   return createPortal(
     <div onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); s.close(); } else e.stopPropagation(); }}>
       <Sheet open={s.open} shown={s.shown} onClose={s.close} wide
-        eyebrow={<span className="text-sm font-semibold text-muted">{preview ? '설명서 미리 보기' : '설명서'}</span>} title={title}>
+        eyebrow={<span className="text-sm font-semibold text-muted">{preview ? '도움말 미리 보기' : '도움말'}</span>} title={title}>
         <div className="px-6 pb-[calc(40px+env(safe-area-inset-bottom))] pt-6" aria-busy={guide === null && !error}>
           {error ? <p role="alert" className="text-base text-danger-ink">{error}</p>
             : guide === null ? <p className="text-base text-muted">불러오는 중…</p>
@@ -197,12 +197,12 @@ export function GuideButton({ taskId, title, version }: { taskId: string; title:
     setBody(null);
     fetchGuide(taskId)
       .then((g) => setBody({ v: version, md: g?.md ?? '' }))
-      .catch(() => setError('설명서를 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.'));
+      .catch(() => setError('도움말을 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.'));
   };
   const guide = body?.v === version ? body.md : null;
   return (
     <>
-      <button type="button" aria-label={`${title} 설명서 보기`} aria-haspopup="dialog" onClick={open}
+      <button type="button" aria-label={`${title} 도움말 보기`} aria-haspopup="dialog" onClick={open}
         className="-my-2.5 -mr-3 ml-[-6px] inline-flex size-11 items-center justify-center rounded-full align-middle text-ink-soft transition-colors hover:bg-strong">
         <LineIcon name="help" className="size-5" />
       </button>
@@ -225,7 +225,7 @@ export function GuideField({ value, onChange, title, loading = false, error = nu
       <button type="button" aria-expanded={open} aria-controls={`${uid}-g`} onClick={() => setOpen((v) => !v)}
         className="flex min-h-11 w-full items-center gap-2 px-3 text-left">
         <LineIcon name="help" className="size-5 text-ink-soft" />
-        <span className="text-base font-semibold text-ink">설명서</span>
+        <span className="text-base font-semibold text-ink">도움말</span>
         <span className="text-sm font-normal text-muted">{loading ? '불러오는 중…' : n ? `${n.toLocaleString()}자` : '없음'}</span>
         <LineIcon name="chevron" className={`ml-auto size-5 text-faint ${open ? '-rotate-90' : 'rotate-90'}`} />
       </button>
@@ -235,7 +235,7 @@ export function GuideField({ value, onChange, title, loading = false, error = nu
             이 일을 왜 · 어떻게 하는지 적어 두면 할 일 옆 물음표로 볼 수 있어요. 줄 앞에 ## 를 쓰면 소제목, - 를 쓰면 목록이 돼요.
           </p>
           {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
-          <AutoTextarea className={`${inputCls} leading-relaxed`} rows={8} value={value} maxLength={GUIDE_MAX} aria-label="설명서" disabled={loading || !!error}
+          <AutoTextarea className={`${inputCls} leading-relaxed`} rows={8} value={value} maxLength={GUIDE_MAX} aria-label="도움말" disabled={loading || !!error}
             placeholder={'## 왜 해야 하나요\n…\n\n## 어떻게 하나요\n- …\n- …'} onChange={(e) => onChange(e.target.value)} />
           <div className="flex items-center justify-between gap-3">
             <button type="button" className={`${textBtn} mx-0`} aria-haspopup="dialog" onClick={s.show}>미리 보기</button>

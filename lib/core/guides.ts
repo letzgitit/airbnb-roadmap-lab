@@ -128,9 +128,9 @@ function checkId(id: unknown): string {
 }
 /** 앞뒤 공백만 지운 본문(줄바꿈은 그대로). 6000자를 넘으면 400 */
 export function cleanMd(md: unknown): string {
-  if (typeof md !== 'string') throw new GuideError(400, 'invalid', '설명서는 글이어야 합니다.');
+  if (typeof md !== 'string') throw new GuideError(400, 'invalid', '도움말은 글이어야 해요.');
   const s = md.replace(/\r\n?/g, '\n').trim();
-  if (s.length > GUIDE_MAX) throw new GuideError(400, 'too_long', `설명서는 ${GUIDE_MAX}자 이하로 입력하세요.`);
+  if (s.length > GUIDE_MAX) throw new GuideError(400, 'too_long', `도움말은 ${GUIDE_MAX}자까지 적을 수 있어요.`);
   return s;
 }
 
@@ -171,7 +171,7 @@ export async function putGuide(id: string, md: unknown, baseVersion: unknown, ac
     const cur = parse(raw);
     const curVersion = cur?.version ?? 0;
     if (!opts.force && curVersion !== baseVersion) {
-      throw new GuideError(409, 'conflict', '그 사이 다른 사람이 설명서를 고쳤어요. 새로 불러와 다시 고쳐 주세요.', cur);
+      throw new GuideError(409, 'conflict', '그 사이 다른 사람이 도움말을 고쳤어요. 새로 불러와 다시 고쳐 주세요.', cur);
     }
     if (!body) {
       if (!raw) return null;

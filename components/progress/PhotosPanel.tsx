@@ -305,7 +305,7 @@ export function PhotoSearchFields({ placeholder = '설명 · 앨범 · 단계', 
       </div>
       <select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
         className="min-h-11 shrink-0 rounded-control border border-line-strong bg-surface px-3 text-base font-semibold text-ink focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink">
-        <option value="default">기본 순서</option>
+        <option value="default">올린 순서</option>
         <option value="newest">최신순</option>
         <option value="oldest">오래된순</option>
       </select>

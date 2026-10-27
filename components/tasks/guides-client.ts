@@ -34,7 +34,7 @@ const EMPTY: Record<string, GuideMeta> = {};
 
 export async function fetchGuide(id: string): Promise<GuideBody | null> {
   const r = await fetch(`/api/guides/${encodeURIComponent(id)}`, { cache: 'no-store' });
-  if (!r.ok) throw new Error(`설명서를 불러오지 못했어요(${r.status}).`);
+  if (!r.ok) throw new Error(`도움말을 불러오지 못했어요(${r.status}).`);
   return ((await r.json()) as { guide: GuideBody | null }).guide;
 }
 
@@ -45,13 +45,13 @@ export async function saveGuide(id: string, md: string, baseVersion: number): Pr
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ md, baseVersion }),
     });
     const j = await r.json().catch(() => ({})) as { guide?: GuideBody | null; message?: string; current?: GuideBody | null };
-    if (!r.ok) return { ok: false, status: r.status, message: j.message ?? '설명서를 저장하지 못했어요.', current: j.current };
+    if (!r.ok) return { ok: false, status: r.status, message: j.message ?? '도움말을 저장하지 못했어요.', current: j.current };
     // 목록(물음표)을 바로 맞춘다
     const next = { ...(ids ?? {}) };
     if (j.guide) next[id] = { len: j.guide.md.length, version: j.guide.version }; else delete next[id];
     ids = next; emit();
     return { ok: true, guide: j.guide ?? null };
   } catch {
-    return { ok: false, status: 0, message: '인터넷 연결을 확인해 주세요. 설명서를 저장하지 못했어요.' };
+    return { ok: false, status: 0, message: '인터넷 연결을 확인해 주세요. 도움말을 저장하지 못했어요.' };
   }
 }

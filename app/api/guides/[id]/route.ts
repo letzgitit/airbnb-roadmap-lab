@@ -37,7 +37,7 @@ export async function PUT(req: Request, ctx: RouteContext<'/api/guides/[id]'>) {
   let body: Record<string, unknown> | null = null;
   try {
     const text = await req.text();
-    if (text.length > MAX_BODY_BYTES) return NextResponse.json({ error: 'too_large', message: '설명서가 너무 길어요.' }, { status: 413, headers: NO_STORE });
+    if (text.length > MAX_BODY_BYTES) return NextResponse.json({ error: 'too_large', message: '도움말이 너무 길어요.' }, { status: 413, headers: NO_STORE });
     const v = JSON.parse(text);
     body = v && typeof v === 'object' && !Array.isArray(v) ? v : null;
   } catch { body = null; }

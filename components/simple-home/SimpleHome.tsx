@@ -150,7 +150,8 @@ export function SimpleHome() {
         </div>
         {/* 곁 칸(PC): 위에 붙어 따라온다(분야 탭 줄 아래) */}
         <aside aria-label="곁 칸" className="hidden lg:sticky lg:top-16 lg:flex lg:flex-col lg:gap-2">
-          <WeekBlock title={weekTitle} items={asideWeek} today={today} onPick={goTask} showTab={!isWorkTab(tab)} />
+          {/* 달력 탭에서는 달력이 같은 일을 하므로 이번 주 할 일을 숨긴다 */}
+          {tab !== 'calendar' && <WeekBlock title={weekTitle} items={asideWeek} today={today} onPick={goTask} showTab={!isWorkTab(tab)} />}
           <QuickCalls doc={doc} onMore={() => pick('contacts')} />
         </aside>
       </div>
@@ -184,8 +185,9 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
   const [askOn, setAskOn] = useState(false);
   const askCount = Object.values(groups).flat().filter((t) => isAsk(t) && !t.done).length;
   const titleOf = (c: CardDef) => (c.stepTitle ? steps.find((s) => s.id === c.stepTitle)?.title ?? c.title : c.title);
-  const block = (c: CardDef, list = groups[c.id]) => (
-    <StepBlock key={c.id} blockId={blockId(tab, c.id)} card={c} cards={cards} title={titleOf(c)} tasks={list} summary={sums[c.id]} steps={steps} today={today} />
+  const block = (c: CardDef, list = groups[c.id], extra?: React.ReactNode) => (
+    <StepBlock key={c.id} blockId={blockId(tab, c.id)} card={c} cards={cards} title={titleOf(c)} tasks={list} summary={sums[c.id]} steps={steps} today={today}
+      headExtra={extra} />
   );
 
   // 이번 주 할 일에서 고른 할 일로: 줄이 없으면(접힌 「완료한 단계」 안 · 문의 거르기에 가림) 펼친 뒤 다시
@@ -205,20 +207,21 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
 
   if (askOn) {
     const shown = [...open, ...done].filter((c) => askOnly(groups[c.id]).length > 0);
+    const on = <AskToggle on count={askCount} onToggle={() => setAskOn(false)} />;
     return (
       <div className="flex flex-col gap-2">
-        <AskRow><AskToggle on count={askCount} onToggle={() => setAskOn(false)} /></AskRow>
-        {shown.length === 0 && <p className={`${blockCls} px-5 py-4 text-base text-muted`}>문의할 일이 없어요.</p>}
-        {shown.map((c) => block(c, askOnly(groups[c.id])))}
+        {shown.length === 0 && <><AskRow>{on}</AskRow><p className={`${blockCls} px-5 py-4 text-base text-muted`}>문의할 일이 없어요.</p></>}
+        {shown.map((c, i) => block(c, askOnly(groups[c.id]), i === 0 ? on : undefined))}
       </div>
     );
   }
   const ask = askCount > 0 ? <AskToggle on={false} count={askCount} onToggle={() => setAskOn(true)} /> : null;
   const hasWeek = weekItems.length > 0;
+  // 「문의 필요만 보기」 자리: 이번 주 블록이 있으면 그 머리 오른쪽(폰 · 태블릿), PC(이번 주가 곁 칸)이거나 이번 주가 없으면 첫 단계 블록 머리 오른쪽
+  const firstExtra = ask ? (hasWeek ? <span className="hidden lg:inline-flex">{ask}</span> : ask) : undefined;
   return (
     <div className="flex flex-col gap-2">
-      {/* 이번 주 블록이 있으면 그 머리 오른쪽(폰 · 태블릿). PC 는 이번 주가 곁 칸이라 첫 블록 위 오른쪽 */}
-      {ask && <AskRow className={hasWeek ? 'hidden lg:flex' : ''}>{ask}</AskRow>}
+      {ask && open.length === 0 && <AskRow className={hasWeek ? 'hidden lg:flex' : ''}>{ask}</AskRow>}
       <WeekBlock title={weekTitle} items={weekItems} today={today} onPick={onPickWeek} headRight={ask} className="lg:hidden" />
       {done.length > 0 && (
         <div className={blockCls}>
@@ -226,7 +229,7 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
         </div>
       )}
       {showDone && done.length > 0 && <div id={`${uid}-done`} className="flex flex-col gap-2">{done.map((c) => block(c))}</div>}
-      {open.map((c) => block(c))}
+      {open.map((c, i) => block(c, groups[c.id], i === 0 ? firstExtra : undefined))}
     </div>
   );
 }
@@ -274,8 +277,9 @@ function WeekBlock({ title, items, today, onPick, showTab = false, headRight, cl
           return (
             <li key={task.id} className="border-b border-line last:border-b-0">
               <button type="button" onClick={() => onPick(task.id, tab)}
-                className="-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center gap-2 rounded-control px-2 py-2 text-left transition-colors hover:bg-sunken">
-                <span className="w-18 shrink-0"><Badge tone={tone}>{rel.text}</Badge></span>
+                className="-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center gap-3 rounded-control px-2 py-2 text-left transition-colors hover:bg-sunken">
+                {/* 꼬리표는 내용 폭(고정 칸 없음) — PC 300px 곁 칸에서도 제목이 한 줄에 들게 */}
+                <Badge tone={tone} className="shrink-0">{rel.text}</Badge>
                 <span className="min-w-0 flex-1 text-base text-ink-soft">{task.text}</span>
                 {showTab && <span className="shrink-0 text-meta text-muted">{label(tab)}</span>}
               </button>

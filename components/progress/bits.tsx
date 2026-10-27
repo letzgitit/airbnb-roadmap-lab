@@ -82,12 +82,14 @@ export function useBusy() {
   return { busy, run: async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } } };
 }
 
-// 마지막으로 누가 · 언제 고쳤는지: 줄마다 두지 않고 편집 폼 안에 한 줄로만 둔다(가운뎃점 대신 간격으로 나눈다)
+// 마지막으로 누가 · 언제 고쳤는지: 줄마다 두지 않고 편집 폼 안에 한 줄로만 둔다(가운뎃점 대신 간격으로 나눈다).
+// CLI · 자동 동기화가 쓴 것(by = claude)은 사람 이름 대신 「자동 정리」
 export function LastEdit({ by, at }: { by: string | null | undefined; at: string | null | undefined }) {
   if (!by) return null;
+  const who = by.trim().toLowerCase() === 'claude' ? '자동 정리' : displayName(by);
   return (
     <p className="flex flex-wrap gap-x-3 text-sm font-normal text-muted">
-      <span>마지막 수정</span><span>{displayName(by)}</span><span>{relTime(at)}</span>
+      <span>마지막 수정</span><span>{who}</span><span>{relTime(at)}</span>
     </p>
   );
 }

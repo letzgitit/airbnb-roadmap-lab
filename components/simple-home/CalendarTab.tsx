@@ -11,7 +11,7 @@ import { phonesIn, telHref } from '@/components/tasks/phone';
 import { treeRows, SOON_DAYS } from '@/components/tasks/task-view';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import type { StepRef } from '@/components/tasks/TaskComposer';
-import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { textBtn } from '@/components/ui/buttonCls';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { blockCls } from './StepBlock';
@@ -24,8 +24,10 @@ import {
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 /** 분야 점 색(globals.css --color-ev-* — 데일리 「달력」 묶음 --ev-* 에서 고른 세 색) */
 export const FIELD_DOT: Record<WorkTabId, string> = { admin: 'bg-ev-admin', facility: 'bg-ev-facility', ops: 'bg-ev-ops' };
-// 일요일 빨강 · 토요일 파랑(데일리 --cal-sun · --cal-sat = 위험 빨강 · 안내 파랑). 지난 날 · 다른 달은 회색과 반씩 섞는다
+// 일요일 빨강 · 토요일 파랑(데일리 --cal-sun · --cal-sat = 위험 빨강 · 안내 파랑). 지난 날의 일 · 토는 회색과 반씩 섞어 흐리게(데일리 app.css 「달력」 묶음)
 const SUN = 'text-danger-ink', SAT = 'text-info-ink';
+const SUN_DIM = 'text-[color-mix(in_srgb,var(--color-danger-ink),var(--color-muted))]';
+const SAT_DIM = 'text-[color-mix(in_srgb,var(--color-info-ink),var(--color-muted))]';
 
 /**
  * 달력 탭(기획 27의 6절 — 데일리 「일정 · 모집」 그대로). 흰 블록 하나에 위에서 아래로:
@@ -35,8 +37,8 @@ const SUN = 'text-danger-ink', SAT = 'text-info-ink';
  *   숫자 밑 분야 색 점(그날 마감 할 일의 분야 — 행정 · 설비 · 운영 셋까지, 그 분야를 다 끝냈으면 회색 점). 칸 안에 글자는 없다.
  * - 「오늘」(또는 고른 날 「10월 30일 (금)」) 묶음: 그날 마감 · 그날 시작 할 일 줄(TaskRow 쉬운 모양 — 체크 · 설명서 · 연필 · 휴지통). 없으면 「오늘은 할 일이 없어요」.
  *   날을 누르면 이 자리가 그날 할 일로 바로 바뀐다(한 번 더 누르게 하지 않는다).
- * - 「다가오는 일정 n건」: 내일부터 14일 안 마감인 안 끝난 할 일(데일리 일정 줄 — 왼쪽 큰 날짜 「29 / 10월 목」, 제목, 분야 점 + 꼬리표, 오른쪽 D-배지).
- *   줄을 누르면 그 자리에서 펼쳐 메모 · 사진 · 완료 체크 · 설명서 · 고치기 · 지우기.
+ * - 「다가오는 일정 n건」: 내일부터 14일 안 마감인 안 끝난 할 일 — 위 묶음에 나온 것은 뺀다(데일리 일정 줄 — 왼쪽 체크 칸, 큰 날짜 「29 / 10월 목」, 제목,
+ *   분야 점 + 꼬리표, 오른쪽 남은 날 — 3일 안 = 주의 꼬리표, 그 밖 = 13 보조 글자). 줄을 누르면 그 자리에서 펼쳐 메모 · 사진 · 도움말 · 고치기 · 지우기.
  * 「첫 손님까지」 큰 카드는 없앴다(머리 띠에 있다).
  */
 export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: string }) {
@@ -94,8 +96,8 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
                 const { wd } = dateParts(d);
                 const say = list.length ? `, ${list.map((x) => `${fieldLabel(x.tab)}${x.done ? ' 완료' : ''}`).join(', ')} 할 일` : '';
                 const label = `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일 ${wd}요일${isToday ? ', 오늘' : ''}${say}`;
-                // 글자색: 일 빨강 · 토 파랑 · 나머지 본문색(지난 날도 같은 색 — 데일리). 앞으로 할 일이 있는 날은 굵게
-                const tint = i === 0 ? SUN : i === 6 ? SAT : busy ? 'text-ink' : 'text-ink-soft';
+                // 글자색: 일 빨강 · 토 파랑(지난 날은 흐리게) · 나머지 본문색. 앞으로 할 일이 있는 날은 굵게
+                const tint = i === 0 ? (dim ? SUN_DIM : SUN) : i === 6 ? (dim ? SAT_DIM : SAT) : busy ? 'text-ink' : 'text-ink-soft';
                 const circle = isToday ? 'bg-ink font-bold text-surface' : on ? `bg-strong font-bold ${tint}` : `${tint} ${busy ? 'font-bold' : 'font-normal'}`;
                 return (
                   <button key={d} type="button" aria-pressed={on} aria-label={label} aria-controls={`${uid}-day`} onClick={() => pick(d)}
@@ -119,7 +121,7 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
       <div id={`${uid}-day`} ref={dayRef} aria-live="polite" className="scroll-mt-16">
         <DayList key={picked} doc={doc} date={picked} today={today} steps={rowSteps} />
       </div>
-      <Upcoming doc={doc} today={today} steps={rowSteps} tabOf={tabOf} />
+      <Upcoming doc={doc} today={today} picked={picked} steps={rowSteps} tabOf={tabOf} />
     </section>
   );
 }
@@ -159,11 +161,14 @@ function DayList({ doc, date, today, steps }: { doc: ProgressDoc; date: string; 
   );
 }
 
-/** 「다가오는 일정 n건」: 내일부터 14일 안 마감인 안 끝난 할 일(방금 체크한 줄은 8초 동안 자리를 지킨다) */
-function Upcoming({ doc, today, steps, tabOf }: { doc: ProgressDoc; today: string; steps: StepRef[]; tabOf: Map<string, WorkTabId> }) {
+/**
+ * 「다가오는 일정 n건」: 내일부터 14일 안 마감인 안 끝난 할 일(방금 체크한 줄은 8초 동안 자리를 지킨다).
+ * 위 「오늘」 · 고른 날 묶음에 이미 나온 할 일(그날 마감 · 그날 시작)은 뺀다(같은 줄이 두 번 나오지 않게).
+ */
+function Upcoming({ doc, today, picked, steps, tabOf }: { doc: ProgressDoc; today: string; picked: string; steps: StepRef[]; tabOf: Map<string, WorkTabId> }) {
   const uid = useId();
   const { isDone, onToggle } = useStickyDone();
-  const list = useMemo(() => upcomingTasks(doc, today, UPCOMING_DAYS, isDone), [doc, today, isDone]);
+  const list = useMemo(() => upcomingTasks(doc, today, UPCOMING_DAYS, isDone).filter((t) => t.due !== picked && t.start !== picked), [doc, today, picked, isDone]);
   return (
     <section aria-labelledby={`${uid}-h`}>
       <GroupHead id={`${uid}-h`} name="다가오는 일정" count={list.length} />
@@ -179,8 +184,8 @@ function Upcoming({ doc, today, steps, tabOf }: { doc: ProgressDoc; today: strin
 }
 
 /**
- * 다가오는 일정 한 줄(데일리 .evr): [큰 날짜 「29」 + 「10월 목」] [제목 16 (두 줄까지) / 분야 점 + 「행정」 꼬리표 ……… D-배지] [꺾쇠].
- * 누르면 그 자리에서 펼친다: 메모 전체 · 메모 사진 · 「완료」 체크 · 설명서 · 고치기(그 자리에서 고치는 폼) · 지우기(바로 지우고 8초 「되돌리기」).
+ * 다가오는 일정 한 줄(데일리 .evr): [체크 칸] [큰 날짜 「29」 + 「10월 목」] [제목 16 (두 줄까지) / 분야 점 + 「행정」 꼬리표 ……… 남은 날] [꺾쇠].
+ * 누르면 그 자리에서 펼친다: 메모 전체 · 메모 사진(「＋ 사진」) · 도움말 · 고치기(그 자리에서 고치는 폼) · 지우기(바로 지우고 8초 「되돌리기」).
  */
 function UpcomingRow({ t, today, steps, tab, onToggle }: { t: TaskItem; today: string; steps: StepRef[]; tab: WorkTabId | null; onToggle: (t: TaskItem) => void }) {
   const uid = useId();
@@ -192,7 +197,8 @@ function UpcomingRow({ t, today, steps, tab, onToggle }: { t: TaskItem; today: s
   const due = t.due!;
   const { wd } = dateParts(due);
   const rel = relDay(due, today);
-  const tone: BadgeTone = daysBetween(today, due) <= SOON_DAYS ? 'warn' : 'neutral';
+  // 남은 날: 3일 안이면 주의 꼬리표, 그 밖은 13 보조 글자(데일리 .evr-n)
+  const soon = daysBetween(today, due) <= SOON_DAYS;
   const note = (t.note ?? '').trim();
   const guide = guideIds[t.id];
 
@@ -211,8 +217,16 @@ function UpcomingRow({ t, today, steps, tab, onToggle }: { t: TaskItem; today: s
   const iconBtn = 'flex size-11 shrink-0 items-center justify-center rounded-control text-ink-soft transition-colors hover:bg-sunken';
   return (
     <li className="border-t border-line first:border-t-0">
+      <div className="flex items-center">
+      {/* 줄 왼쪽 체크 칸 하나(할 일 줄과 같은 꼴 — 22px 네모, 누르는 칸 44px) */}
+      <label className="relative -ml-2.5 flex size-11 shrink-0 cursor-pointer items-center justify-center">
+        <input type="checkbox" checked={t.done} aria-label={`${t.text} 완료`}
+          className="peer size-5.5 cursor-pointer appearance-none rounded-chip border-[1.5px] border-faint bg-surface transition-colors checked:border-ink checked:bg-ink"
+          onChange={(e) => { onToggle(t); void send({ op: 'task.update', id: t.id, patch: { done: e.target.checked } }); }} />
+        <LineIcon name="check" stroke={2.6} className="pointer-events-none absolute size-4 text-surface opacity-0 peer-checked:opacity-100" />
+      </label>
       <button type="button" aria-expanded={open} aria-controls={`${uid}-d`} onClick={() => setOpen((v) => !v)}
-        className="flex min-h-15 w-full items-center gap-3 py-2 text-left active:opacity-60">
+        className="flex min-h-15 min-w-0 flex-1 items-center gap-3 py-2 text-left active:opacity-60">
         <span className="flex w-11 shrink-0 flex-col items-center gap-0.5 leading-none" aria-hidden>
           <b className="text-2xl font-semibold tracking-[-0.02em] text-ink tabular-nums">{Number(due.slice(8))}</b>
           <small className="whitespace-nowrap text-meta text-muted">{Number(due.slice(5, 7))}월 {wd}</small>
@@ -224,13 +238,15 @@ function UpcomingRow({ t, today, steps, tab, onToggle }: { t: TaskItem; today: s
           <span className="flex min-w-0 items-center gap-1.5 text-meta text-muted">
             {tab && <><i className={`block size-[7px] shrink-0 rounded-full ${FIELD_DOT[tab]}`} aria-hidden /><Badge>{fieldLabel(tab)}</Badge></>}
             {t.kind === '문의' && <Badge tone="info">문의 필요</Badge>}
-            <Badge tone={tone} className="ml-auto">{rel.text}</Badge>
+            {soon ? <Badge tone="warn" className="ml-auto">{rel.text}</Badge> : <span className="ml-auto whitespace-nowrap tabular-nums">{rel.text}</span>}
           </span>
         </span>
         <LineIcon name="chevron" className={`size-4 shrink-0 text-muted transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} stroke={2} />
       </button>
+      </div>
       {open && (
-        <div id={`${uid}-d`} className="pb-3 pl-14">
+        // 펼친 내용은 제목 글 줄에 맞춘다(체크 칸 34 + 날짜 칸 44 + 사이 12)
+        <div id={`${uid}-d`} className="pb-3 pl-[90px]">
           {note && (
             <div className="max-w-[36em] space-y-2 break-keep pb-1 text-base leading-[1.7] text-ink-soft [overflow-wrap:anywhere]">
               {note.split(/\n+/).map((para, i) => <p key={i} className="whitespace-pre-wrap">{para}</p>)}
@@ -238,16 +254,9 @@ function UpcomingRow({ t, today, steps, tab, onToggle }: { t: TaskItem; today: s
           )}
           {[...new Set(phonesIn(note))].map((p) => <a key={p} href={telHref(p)} className={`${textBtn} mx-0 mr-4 tabular-nums`}><i className="fas fa-phone mr-1.5" aria-hidden />{p}</a>)}
           <TaskPhotos taskId={t.id} stepId={t.stepId} />
-          {/* 단추 줄: [완료 체크] [설명서] ……… [고치기] [지우기] */}
-          <div className="-ml-2.5 flex items-center gap-1">
-            <label className="relative flex min-h-11 cursor-pointer items-center gap-2 pl-2.5 pr-2 text-cta font-semibold text-ink">
-              <input type="checkbox" checked={t.done} aria-label={`${t.text} 완료`}
-                className="peer size-5.5 cursor-pointer appearance-none rounded-chip border-[1.5px] border-faint bg-surface transition-colors checked:border-ink checked:bg-ink"
-                onChange={(e) => { onToggle(t); void send({ op: 'task.update', id: t.id, patch: { done: e.target.checked } }); }} />
-              <LineIcon name="check" stroke={2.6} className="pointer-events-none absolute left-[13px] size-4 text-surface opacity-0 peer-checked:opacity-100" />
-              완료
-            </label>
-            {guide && <span className="ml-2 inline-flex items-center gap-0.5 text-cta font-semibold text-ink-soft">설명서<GuideButton taskId={t.id} title={t.text} version={guide.version} /></span>}
+          {/* 단추 줄: [도움말] ……… [고치기] [지우기] — 완료 체크는 줄 왼쪽 칸 하나 */}
+          <div className="flex items-center gap-1">
+            {guide && <span className="inline-flex items-center gap-0.5 text-cta font-semibold text-ink-soft">도움말<GuideButton taskId={t.id} title={t.text} version={guide.version} /></span>}
             <span className="ml-auto flex items-center">
               <button type="button" aria-label={`${t.text} 고치기`} onClick={() => setEditing(true)} className={iconBtn}><LineIcon name="pen" className="size-5" /></button>
               <button type="button" aria-label={`${t.text} 삭제`} onClick={quickDel} className={`${iconBtn} -mr-2.5 hover:text-danger-ink active:text-danger-ink`}><LineIcon name="trash" className="size-5" /></button>

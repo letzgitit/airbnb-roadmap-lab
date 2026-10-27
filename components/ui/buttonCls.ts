@@ -22,3 +22,5 @@ export const inputCls = 'w-full min-h-11 rounded-control border border-line-stro
 export const dateCls = 'min-h-11 rounded-control border border-line-strong bg-surface px-3 py-2 text-lg font-medium text-ink focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink';
 /** 그 자리에서 펼쳐지는 입력 폼(추가 · 고치기)의 바탕: 각진 흰 면 + 1px 테두리 */
 export const composerCls = 'my-2 w-full space-y-2 border border-line-strong bg-surface p-4';
+/** 「＋ ○○」 글자 단추(15/700 + ＋ 선 아이콘, 44px): 새 홈 블록 맨 아래 단추 줄 「＋ 할 일 · ＋ 메모 · ＋ 사진」 · 갤러리 「＋ 올리기」 · 할 일 메모 「＋ 사진」 — 한 모양 */
+export const addBtnCls = 'inline-flex min-h-11 items-center gap-1.5 rounded-control px-3 text-cta font-bold text-ink transition-colors hover:bg-sunken';

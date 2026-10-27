@@ -56,13 +56,15 @@ export function focusTask(id: string): boolean {
 type GuideForm = { text: string; orig: string; base: number; loading: boolean; error: string | null };
 const NO_GUIDE: GuideForm = { text: '', orig: '', base: 0, loading: false, error: null };
 
-export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, hideDate = false, autoEdit = false, onEditChange, onToggle, onGone }: {
+export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, hideDate = false, hideDueOn = null, autoEdit = false, onEditChange, onToggle, onGone }: {
   t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
   depth?: 0 | 1; parentTitle?: string; simple?: boolean;
   /** 처음 그릴 때 바로 고치는 폼을 연다(달력 「다가오는 일정」의 연필 — 폼을 닫으면 부르는 쪽이 이 줄을 치운다) */
   autoEdit?: boolean;
   /** 쉬운 모양: 보조 줄의 「10월 28일(수)까지」를 숨긴다(달력 그날 목록처럼 머리가 이미 그 날짜를 말할 때). 남은 날 배지는 남긴다 */
   hideDate?: boolean;
+  /** 쉬운 모양: 마감이 이 날이면 「n월 n일까지」를 숨긴다(단계 블록 머리 날짜와 같을 때). 시작일이 있는 기간 표시는 그대로 */
+  hideDueOn?: string | null;
   onEditChange: (id: string, open: boolean) => void; onToggle: (t: TaskItem) => void; onGone: () => void;
 }) {
   const t = task as TaskWithNote; // 외도민판 · 지산판 같은 코드(autoFill 은 지산판에선 늘 비어 있다)
@@ -115,7 +117,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     setGf({ ...NO_GUIDE, loading: true });
     fetchGuide(t.id)
       .then((g) => setGf({ text: g?.md ?? '', orig: g?.md ?? '', base: g?.version ?? 0, loading: false, error: null }))
-      .catch(() => setGf({ ...NO_GUIDE, error: '설명서를 불러오지 못했어요. 폼을 닫았다 다시 열어 주세요.' }));
+      .catch(() => setGf({ ...NO_GUIDE, error: '도움말을 불러오지 못했어요. 폼을 닫았다 다시 열어 주세요.' }));
   };
   const formOf = (c: Record<string, unknown>): Form => ({
     text: String(c.text ?? ''), start: String(c.start ?? ''), due: String(c.due ?? ''), kind: (c.kind ?? '') as TaskKind | '', owner: (c.owner ?? '') as TaskOwner | '', note: String(c.note ?? ''),
@@ -210,7 +212,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
                 if (!g.ok) {
                   // 409: 그 사이 다른 사람이 고침 — 내 글은 그대로 두고 version 만 맞춰, 한 번 더 저장하면 덮어쓴다
                   if (g.status === 409) setGf((s) => ({ ...s, base: g.current?.version ?? 0 }));
-                  setErr(g.status === 409 ? '그 사이 다른 사람이 설명서를 고쳤어요. 내 글로 덮어쓰려면 한 번 더 저장하세요.' : g.message);
+                  setErr(g.status === 409 ? '그 사이 다른 사람이 도움말을 고쳤어요. 내 글로 덮어쓰려면 한 번 더 저장하세요.' : g.message);
                   return;
                 }
                 setGf((s) => ({ ...s, orig: g.guide?.md ?? '', text: g.guide?.md ?? '', base: g.guide?.version ?? 0 }));
@@ -302,7 +304,9 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const startEdit = () => { fill(formOf(t as unknown as Record<string, unknown>)); loadGuide(); setErr(null); setBase(t.version); ed.start(); };
   if (simple) {
     // 남은 날 꼬리표(제목 줄 오른쪽): 기한 지남 = 위험(빨강 테두리) · 3일 안 = 주의(검정 테두리) · 그 밖 = 회색. 누르지 못하는 표시라 빨강 면 · 검정 면을 쓰지 않는다.
-    // 둘째 줄: 「10월 27일(화)까지」(13 메타) · 「문의 필요」 안내 꼬리표 · 「지금 할 때」. 담당은 쉬운 모양에서 보이지 않는다(값은 그대로).
+    // 둘째 줄: 「10월 27일(화)까지」(13 메타) · 「문의 필요」 안내 꼬리표 · 「지금 하면 돼요」. 담당은 쉬운 모양에서 보이지 않는다(값은 그대로).
+    // 마감이 블록 머리 날짜와 같으면(hideDueOn) 「n월 n일까지」를 숨긴다(머리가 이미 말한다 — 남은 날 꼬리표는 그대로).
+    // 둘째 줄에 보일 것이 없으면(날짜 없는 할 일 등) 단추를 제목 줄 오른쪽에 둬 빈 줄로 높아지지 않게 한다.
     const phase = taskPhase(t, todayStr());
     const tone: BadgeTone = late ? 'danger' : phase === 'soon' ? 'warn' : 'neutral';
     const noteLines = (t.note ?? '').trim();
@@ -312,10 +316,13 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     const more = noteLines.includes('\n') || firstLine.length > 40;
     const hasMemo = !!noteLines || photoN > 0;
     const ask = t.kind === '문의';
-    const dateWord = spanDate(t.start, t.due) ?? (t.due ? `${longDate(t.due)}까지` : null);
+    const span = spanDate(t.start, t.due);
+    const dateWord = span ?? (t.due && !(hideDueOn && t.due === hideDueOn) ? `${longDate(t.due)}까지` : null);
+    const showDate = !!dateWord && !hideDate;
+    const hasSub = showDate || (ask && !t.done) || phase === 'prep' || !!parentTitle;
     const sub = (
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-meta font-normal text-muted">
-        {dateWord && !hideDate && <span className="whitespace-nowrap tabular-nums">{dateWord}</span>}
+        {showDate && <span className="whitespace-nowrap tabular-nums">{dateWord}</span>}
         {ask && !t.done && <Badge tone="info">문의 필요</Badge>}
         {phase === 'prep' && <span className="whitespace-nowrap">{PHASE_WORD.prep}</span>}
         {parentTitle && <span className="min-w-0 truncate">‘{parentTitle}’의 세부 항목</span>}
@@ -323,6 +330,21 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
       </span>
     );
     const iconBtn = 'flex size-11 shrink-0 items-center justify-center rounded-control transition-colors hover:bg-sunken';
+    const buttons = (
+      <span className="-my-2.5 -mr-2.5 flex shrink-0 items-center text-ink-soft">
+        {call && (
+          <a href={telHref(call)} aria-label={`${t.text} 전화 걸기 ${call}`} className={iconBtn}>
+            <LineIcon name="phone" className="size-5" />
+          </a>
+        )}
+        <button ref={textBtnRef} type="button" aria-label={`${t.text} 고치기`} onClick={startEdit} className={iconBtn}>
+          <LineIcon name="pen" className="size-5" />
+        </button>
+        <button type="button" aria-label={`${t.text} 삭제`} onClick={quickDel} className={`${iconBtn} hover:text-danger-ink active:text-danger-ink`}>
+          <LineIcon name="trash" className="size-5" />
+        </button>
+      </span>
+    );
     return (
       <li ref={rowRef} id={`task-${t.id}`} className={`flex scroll-mt-16 flex-wrap items-start gap-x-2.5 border-b border-line py-3.5 last:border-b-0 ${depth ? 'pl-6' : ''} ${flash ? 'task-flash' : ''}`}>
         {/* 체크(22px 네모 · 모서리 6, 누르는 칸 44px): 빈 칸 → 고르면 검정(다크 흰색) 면 + 체크 */}
@@ -359,24 +381,15 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               )}
             </div>
             {dl && !t.done && <Badge tone={tone} className="mt-px shrink-0">{dl.rel}</Badge>}
+            {!hasSub && buttons}
           </div>
           {/* 둘째 줄: 날짜(13) + 오른쪽 단추(전화 · 고치기 · 지우기). 단추 칸은 44px 이고 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않는다 */}
-          <div className="mt-1 flex items-center gap-2">
-            {sub}
-            <span className="-my-2.5 -mr-2.5 flex shrink-0 items-center text-ink-soft">
-              {call && (
-                <a href={telHref(call)} aria-label={`${t.text} 전화 걸기 ${call}`} className={iconBtn}>
-                  <LineIcon name="phone" className="size-5" />
-                </a>
-              )}
-              <button ref={textBtnRef} type="button" aria-label={`${t.text} 고치기`} onClick={startEdit} className={iconBtn}>
-                <LineIcon name="pen" className="size-5" />
-              </button>
-              <button type="button" aria-label={`${t.text} 삭제`} onClick={quickDel} className={`${iconBtn} hover:text-danger-ink active:text-danger-ink`}>
-                <LineIcon name="trash" className="size-5" />
-              </button>
-            </span>
-          </div>
+          {hasSub && (
+            <div className="mt-1 flex items-center gap-2">
+              {sub}
+              {buttons}
+            </div>
+          )}
           {/* 셋째 줄: 메모 첫 줄(접힘, 14 요지 글). 누르면 아래(줄 폭 그대로)에 메모 전체를 펼친다. 사진은 첫 줄 제목 뒤에 이미 보인다 */}
           {noteLines && !noteOpen && (
               <button type="button" aria-expanded="false" aria-label={`메모 펼치기: ${firstLine}`} onClick={() => setNoteOpen(true)}

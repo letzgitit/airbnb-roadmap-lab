@@ -60,10 +60,10 @@ export function SimpleWhenFields({ start, onStart, due, onDue, ask, onAsk }: {
       <label className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><span className={simpleLabelCls}>언제까지</span>
         <input type="date" className={dateFitCls} value={due} onChange={(e) => onDue(e.target.value)} />
       </label>
-      {/* 「물어봐야 하는 일」 켜기(2026-10-28 — 예전 「문의 필요 □ 묻는 내용은 메모에」가 무슨 말인지 몰랐다). 켜면 줄에 「문의 필요」 꼬리표 */}
+      {/* 「문의 필요」 켜기(2026-10-28 — 줄 꼬리표 · 거르기 단추와 같은 이름, 밑 설명 글이 무엇인지 말한다). 켜면 줄에 「문의 필요」 꼬리표 */}
       <label className="flex cursor-pointer items-start gap-3 py-1">
         <span className="min-w-0 flex-1">
-          <span className="block text-base font-semibold text-ink">물어봐야 하는 일</span>
+          <span className="block text-base font-semibold text-ink">문의 필요</span>
           <span className="mt-0.5 block text-sm font-normal text-sub">구청이나 업체에 물어볼 게 있으면 켜요. 물을 내용은 메모에 적어요.</span>
         </span>
         <span className="relative mt-0.5 inline-flex h-11 shrink-0 items-center">

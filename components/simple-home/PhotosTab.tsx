@@ -5,9 +5,9 @@ import type { PhotoView } from '@/lib/core/photos';
 import { REF_LABEL, REF_STEP } from '@/lib/core/photo-order';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { PhotoSearchFields, PhotoTrash, usePhotos } from '@/components/progress/PhotosPanel';
-import { textBtn } from '@/components/ui/buttonCls';
+import { addBtnCls, textBtn } from '@/components/ui/buttonCls';
 import { LineIcon } from '@/components/ui/LineIcon';
-import { addBtnCls, BlockHead, blockCls } from './StepBlock';
+import { BlockHead, blockCls } from './StepBlock';
 import {
   AFTER_ALBUM, DOC_ALBUM, DOC_KINDS, FIELD_TABS, docKind, docKindGroups, fieldLabel, galleryParts, ourUnits, photoMatches, sortPhotos, taskTabs,
   type WorkTabId,
@@ -19,15 +19,22 @@ const AFTER_STEP = 7;
 export type PhotoSub = 'photos' | 'docs' | 'etc';
 const SUBS: { id: PhotoSub; label: string }[] = [{ id: 'photos', label: '사진' }, { id: 'docs', label: '문서' }, { id: 'etc', label: '기타' }];
 
-interface Group { key: string; title: string; list: PhotoView[]; upload?: () => void; empty?: string; doc?: boolean }
+interface Group {
+  key: string; title: string; list: PhotoView[]; upload?: () => void; empty?: string; doc?: boolean;
+  /** 한 장짜리 문서 묶음을 한 블록에 모을 때의 소제목 묶음(이때 list = 전부) */
+  subs?: { key: string; title: string; list: PhotoView[] }[];
+}
+/** 한 장짜리 문서 묶음이 여럿이면 한 블록(이 이름)에 소제목으로 모은다 */
+const SINGLE_DOCS = '한 장씩 받은 문서';
 
 /**
  * 「갤러리」 탭(기획 27의 5절, 옛 「사진」). 위에서 아래로, 블록 사이 8px 회색 띠:
- * 1. 맨 위 블록: 「38장 (전체 44장)」 + 검색칸(설명 · 묶음 · 단계 · 분야) + 정렬(기본 순서 · 최신 · 오래된) → 보조 탭 「사진 · 문서 · 기타」(데일리 .subtab).
+ * 1. 맨 위 블록: (검색 중일 때만) 「38장 (전체 44장)」 + 검색칸(설명 · 묶음 · 단계 · 분야) + 정렬(올린 순서 · 최신 · 오래된) → 보조 탭 「사진 · 문서 · 기타」(데일리 .subtab).
  * 2. 고른 보조 탭의 묶음 블록들(머리 = 형광 밑줄 큰 글자 + 장수, 몸통 = 썸네일 격자, 맨 아래 「＋ 올리기」 — 블록 단추 줄과 같은 모양):
  *    - 사진: 공사 전 · 공사 후 · 분야별(행정 · 설비 · 운영 블록과 그 할 일에 붙인 사진 — cardId · taskId). 썸네일 3열(넓으면 4 · 5열).
  *    - 문서: 「받아 둔 문서」 제목 없이 문서 종류별 묶음(계약서 · 등기부 · 건축물대장 · 평면도 · 구청 서류 · 그 밖 — 설명 · 묶음 이름의 낱말). 썸네일 2열(넓으면 3열) + 설명 한 줄.
- *    - 기타: 참고 사진(0단계) · 그 밖(시안 · 다른 집 등).
+ *      한 장짜리 묶음이 여럿이면 「한 장씩 받은 문서」 한 블록에 소제목으로 모은다. 단위는 「장」.
+ *    - 기타: 참고 사진(0단계) · 나머지(시안 · 다른 집 등).
  * 3. 맨 아래 「삭제한 사진 n」(지운 게 있을 때만, 30일 보관).
  * 나누기 · 검색 · 정렬은 home-model(galleryParts · docKindGroups · photoMatches · sortPhotos). 지우지 않은 사진은 어느 한 묶음에 꼭 들어간다.
  * 크게 보기는 그 묶음 안에서만 넘긴다. 홈 밖(/house)으로 보내지 않는다.
@@ -55,13 +62,10 @@ export function PhotosTab({ sub, onSub }: { sub: PhotoSub; onSub: (s: PhotoSub) 
       { key: 'after', title: '공사 후', list: pick(parts.after, () => AFTER_ALBUM), upload: () => upload(AFTER_STEP, AFTER_ALBUM), empty: '공사가 끝나면 여기에 올려 주세요.' },
       ...FIELD_TABS.map((t) => ({ key: t, title: fieldLabel(t), list: pick(parts.fields[t], () => fieldLabel(t)) })),
     ],
-    docs: docKindGroups(pick(parts.docs, kindLabel)).map((g) => ({
-      key: g.kind, title: g.label, list: g.items, doc: true,
-      upload: () => upload(undefined, g.kind === 'other' ? DOC_ALBUM : g.label, { doc: true }),
-    })),
+    docs: docGroupsFor(docKindGroups(pick(parts.docs, kindLabel)), upload),
     etc: [
-      { key: 'ref', title: REF_LABEL, list: pick(parts.ref, () => '참고'), upload: () => upload(REF_STEP), empty: '남의 집 · 다른 호수 같은 참고 사진을 올려 두세요.' },
-      { key: 'other', title: '그 밖', list: pick(parts.other) },
+      { key: 'ref', title: REF_LABEL, list: pick(parts.ref, () => '참고'), upload: () => upload(REF_STEP), empty: '남의 집이나 다른 호수 같은 참고 사진을 올려 두세요.' },
+      { key: 'other', title: '나머지', list: pick(parts.other) },
     ],
   };
   const totals: Record<PhotoSub, number> = {
@@ -79,10 +83,11 @@ export function PhotosTab({ sub, onSub }: { sub: PhotoSub; onSub: (s: PhotoSub) 
     <div className="flex flex-col gap-2">
       <section aria-label="사진 찾기" className={blockCls}>
         <div role="search" className="space-y-2 px-5 pb-3 pt-3.5">
-          <p className="text-meta text-muted tabular-nums" aria-live="polite">
-            {loading ? '사진을 불러오는 중…' : searching ? `${found(sub)}장 (전체 ${totals[sub]}장)` : `${totals[sub]}장`}
+          {/* 장수 줄은 검색 중일 때만(보조 탭 옆 숫자가 평소 장수를 말한다) */}
+          <p className={`text-meta text-muted tabular-nums ${searching && !loading ? '' : 'sr-only'}`} aria-live="polite">
+            {searching && !loading ? `${found(sub)}장 (전체 ${totals[sub]}장)` : ''}
           </p>
-          <PhotoSearchFields placeholder="설명 · 묶음 · 단계 · 분야" label="사진 검색(설명 · 묶음 이름 · 단계 · 분야)" />
+          <PhotoSearchFields placeholder="욕실, 계약서처럼 찾아보세요" label="사진 찾기(설명 · 묶음 이름 · 단계 · 분야)" />
         </div>
         {/* 보조 탭(데일리 .subtab): 같은 폭 셋, 고른 것 = 700 + 아래 2px 검정 선, 옆에 장수(13) */}
         <div role="tablist" aria-label="갤러리 보기" className="flex border-t border-line px-2">
@@ -128,18 +133,50 @@ export function PhotosTab({ sub, onSub }: { sub: PhotoSub; onSub: (s: PhotoSub) 
   );
 }
 
+/**
+ * 문서 묶음 → 블록들. 한 장짜리 묶음이 둘 이상이면 「한 장씩 받은 문서」 한 블록에 소제목으로 모으고 「＋ 올리기」는 한 번만(묶음 이름 「서류」).
+ * 여러 장 묶음은 따로 블록 — 그 블록의 「＋ 올리기」는 묶음 이름을 그 종류로(그 밖 = 「서류」) · 「글씨 많은 문서」를 켠 채 연다.
+ */
+function docGroupsFor(groups: ReturnType<typeof docKindGroups>, upload: (stepId?: number, album?: string, opts?: { doc?: boolean }) => void): Group[] {
+  const up = (g: { kind: string; label: string }) => () => upload(undefined, g.kind === 'other' ? DOC_ALBUM : g.label, { doc: true });
+  const singles = groups.filter((g) => g.items.length === 1);
+  const merge = singles.length >= 2;
+  const out: Group[] = groups.filter((g) => !merge || g.items.length > 1)
+    .map((g) => ({ key: g.kind, title: g.label, list: g.items, doc: true, upload: up(g) }));
+  if (merge) {
+    out.push({
+      key: 'singles', title: SINGLE_DOCS, doc: true, list: singles.flatMap((g) => g.items),
+      subs: singles.map((g) => ({ key: g.kind, title: g.label, list: g.items })), upload: up({ kind: 'other', label: '' }),
+    });
+  }
+  return out;
+}
+
 /** 묶음 블록 하나: 머리(형광 밑줄 큰 글자 + 장수) → 썸네일 격자(사진 3열 · 문서 2열, 넓으면 늘림) 또는 빈 글 → 「＋ 올리기」 */
 function GalleryGroup({ g, onOpen }: { g: Group; onOpen: (id: string) => void }) {
   const uid = useId();
+  const docGrid = (list: PhotoView[], cls = '') => (
+    <ul className={`grid grid-cols-2 gap-x-3 gap-y-4 md:grid-cols-3 ${cls}`}>
+      {list.map((p) => <li key={p.id} className="min-w-0"><DocTile p={p} onOpen={() => onOpen(p.id)} /></li>)}
+    </ul>
+  );
   return (
     <section aria-labelledby={`${uid}-h`} className={blockCls}>
-      <BlockHead id={`${uid}-h`} title={g.title} count={`${g.list.length}${g.doc ? '개' : '장'}`} />
+      <BlockHead id={`${uid}-h`} title={g.title} count={`${g.list.length}장`} />
       {g.list.length === 0 ? (
         <p className="border-t border-line px-5 py-3.5 text-base text-muted">{g.empty}</p>
+      ) : g.subs ? (
+        // 소제목(데일리 .grp-h — 14/700 요지색) + 그 묶음 문서
+        <div className="border-t border-line px-5 pb-4">
+          {g.subs.map((s) => (
+            <div key={s.key}>
+              <h3 className="pb-2 pt-4 text-sm font-bold text-sub">{s.title}</h3>
+              {docGrid(s.list)}
+            </div>
+          ))}
+        </div>
       ) : g.doc ? (
-        <ul className="grid grid-cols-2 gap-x-3 gap-y-4 border-t border-line px-5 py-4 md:grid-cols-3">
-          {g.list.map((p) => <li key={p.id} className="min-w-0"><DocTile p={p} onOpen={() => onOpen(p.id)} /></li>)}
-        </ul>
+        docGrid(g.list, 'border-t border-line px-5 py-4')
       ) : (
         <ul className="grid grid-cols-3 gap-1.5 border-t border-line px-5 py-4 sm:grid-cols-4 lg:grid-cols-5">
           {g.list.map((p) => <li key={p.id}><Thumb p={p} onOpen={() => onOpen(p.id)} /></li>)}
