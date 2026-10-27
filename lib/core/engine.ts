@@ -4,6 +4,7 @@ import { getStore } from './store.ts';
 import type { Op } from './validate.ts';
 import { applyQuestionOp, purgeQuestions, type GuestAnswerOp } from './questions.ts';
 import { applyTodoistOp, findByTodoistId, type TodoistEngineOp } from './todoist.ts';
+import { checkParent, childrenOf, dropDanglingParents, liveChildrenOf, PARENT_PROBLEM_MESSAGE, spanError, type ParentProblem } from './task-tree.ts';
 import type { LogEntry, MoneyItem, PlanState, ProgressDoc, PropertyItem, StepState, TaskItem } from './types.ts';
 
 export interface Actor { email: string; name: string }
@@ -84,6 +85,15 @@ function guardUpdate<T extends { id: string; version: number; updatedBy: string;
   return cur;
 }
 
+// 세부 항목 규칙 위반(400). error = 까닭 코드, message = 화면에 그대로 보일 문장
+function treeFail(code: ParentProblem | 'has_children' | 'step_mismatch', extra: Record<string, unknown> = {}): never {
+  throw new OpError(400, { error: code, message: PARENT_PROBLEM_MESSAGE[code], ...extra });
+}
+function spanFail(start: string | null | undefined, due: string | null | undefined) {
+  const message = spanError(start, due);
+  if (message) throw new OpError(400, { error: 'start_after_due', message });
+}
+
 // 엔진이 받는 연산: API · CLI 가 보내는 Op + 서버 안에서만 만드는 손님 답 · Todoist 동기화
 export type EngineOp = Op | GuestAnswerOp | TodoistEngineOp;
 
@@ -132,14 +142,26 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
     case 'task.add': {
       const live = Object.values(doc.tasks).filter((t) => !t.deletedAt).length;
       if (live >= MAX_TASKS) throw new OpError(400, { error: 'limit', message: '할 일이 너무 많습니다.' });
+      // 세부 항목: 부모가 살아 있고 세부 항목이 아니어야 한다. 단계는 부모를 따른다.
+      let stepId = op.stepId;
+      if (op.parentId) {
+        const c = checkParent(doc, op.parentId, null);
+        if (c.problem) treeFail(c.problem, { parentId: op.parentId });
+        if (stepId !== undefined && stepId !== c.parent.stepId) treeFail('step_mismatch', { parentStepId: c.parent.stepId });
+        stepId = c.parent.stepId;
+      }
+      if (stepId === undefined) throw new OpError(400, { error: 'invalid', message: '단계(stepId)가 필요합니다.' });
+      spanFail(op.start, op.due);
       const t: TaskItem = {
-        id: newId('t'), stepId: op.stepId, text: op.text,
+        id: newId('t'), stepId, text: op.text,
         due: op.due ?? null, done: false, doneBy: null, doneAt: null,
         version: 1, createdAt: iso, createdBy: actor.name, updatedAt: iso, updatedBy: actor.name,
         deletedAt: null, deletedBy: null,
         ...(op.kind ? { kind: op.kind } : {}),
         ...(op.note ? { note: op.note } : {}),
         ...(op.owner ? { owner: op.owner } : {}),
+        ...(op.start ? { start: op.start } : {}),
+        ...(op.parentId ? { parentId: op.parentId } : {}),
       };
       doc.tasks[t.id] = t;
       touch(doc, actor, iso, `할 일 추가: ${clip(t.text)}`);
@@ -155,9 +177,28 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
         const other = findByTodoistId(doc, op.patch.todoistId);
         if (other && other.id !== cur.id && !other.deletedAt) throw new OpError(409, { error: 'todoist_linked', kind: 'task', id: other.id, current: other });
       }
-      const next: TaskItem = { ...cur, ...op.patch, ...bump(cur) };
-      // 사람이 단계나 종류를 고르면 「자동으로 고름」 표시를 지운다
-      if (cur.autoFill && (op.patch.stepId !== undefined || op.patch.kind !== undefined)) next.autoFill = null;
+      // 세부 항목: 부모를 새로 정하면 그 부모의 단계로. 부모가 그대로인 세부 항목은 단계만 따로 옮길 수 없다(부모를 옮긴다).
+      const curParent = cur.parentId ?? null;
+      const nextParent = op.patch.parentId !== undefined ? op.patch.parentId : curParent;
+      let nextStep = op.patch.stepId ?? cur.stepId;
+      if (nextParent) {
+        if (nextParent !== curParent) {
+          const c = checkParent(doc, nextParent, cur.id);
+          if (c.problem) treeFail(c.problem, { parentId: nextParent });
+          if (liveChildrenOf(doc, cur.id).length) treeFail('has_children');
+          if (op.patch.stepId !== undefined && op.patch.stepId !== c.parent.stepId) treeFail('step_mismatch', { parentStepId: c.parent.stepId });
+          nextStep = c.parent.stepId;
+        } else {
+          const parent = own(doc.tasks, nextParent);
+          if (parent && op.patch.stepId !== undefined && op.patch.stepId !== parent.stepId) treeFail('step_mismatch', { parentStepId: parent.stepId });
+        }
+      }
+      spanFail(op.patch.start !== undefined ? op.patch.start : cur.start, op.patch.due !== undefined ? op.patch.due : cur.due);
+      const next: TaskItem = { ...cur, ...op.patch, stepId: nextStep, ...bump(cur) };
+      // 사람이 단계나 종류를 고르면(부모를 정해 단계가 바뀐 것 포함) 「자동으로 고름」 표시를 지운다
+      if (cur.autoFill && (op.patch.stepId !== undefined || op.patch.kind !== undefined || nextStep !== cur.stepId)) next.autoFill = null;
+      if (op.patch.start === null) delete next.start;
+      if (op.patch.parentId === null) delete next.parentId;
       if (op.patch.todoistId !== undefined && op.patch.todoistId !== cur.todoistId) {
         // 짝을 새로 적거나 끊으면 Todoist 쪽 기록을 비운다(짝 맞추기 도구로 적은 짝은 다음 반영 때 맞춰진다)
         next.todoistAt = null; next.todoistSent = null; delete next.todoistError;
@@ -170,6 +211,12 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
         next.doneAt = op.patch.done ? iso : null;
       }
       doc.tasks[cur.id] = next;
+      // 부모의 단계를 옮기면 세부 항목(지운 것 포함 — 되살릴 때 같은 단계)도 같이
+      if (nextStep !== cur.stepId) {
+        for (const c of childrenOf(doc, cur.id)) {
+          if (c.stepId !== nextStep) doc.tasks[c.id] = { ...c, stepId: nextStep, ...(c.autoFill ? { autoFill: null } : {}), ...bump(c) };
+        }
+      }
       touch(doc, actor, iso, `할 일 '${clip(next.text)}' ${toggleOnly ? (next.done ? '체크함' : '체크 해제') : linkOnly ? 'Todoist 짝 적음' : '수정함'}`);
       return { result: next };
     }
@@ -179,7 +226,10 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
       if (cur.deletedAt) return { result: cur };
       const next: TaskItem = { ...cur, deletedAt: iso, deletedBy: actor.name, ...bump(cur) };
       doc.tasks[cur.id] = next;
-      touch(doc, actor, iso, `할 일 '${clip(cur.text)}' 삭제`);
+      // 세부 항목도 같은 시각으로 같이 지운다(되살릴 때 이 시각으로 같이 지운 것만 찾는다)
+      const kids = liveChildrenOf(doc, cur.id);
+      for (const c of kids) doc.tasks[c.id] = { ...c, deletedAt: iso, deletedBy: actor.name, ...bump(c) };
+      touch(doc, actor, iso, `할 일 '${clip(cur.text)}' 삭제${kids.length ? `(세부 항목 ${kids.length}개 같이)` : ''}`);
       return { result: next };
     }
     case 'task.restore': {
@@ -187,8 +237,17 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
       if (!cur) throw new OpError(404, { error: 'not_found' });
       if (!cur.deletedAt) return { result: cur };
       const next: TaskItem = { ...cur, deletedAt: null, deletedBy: null, ...bump(cur) };
+      // 세부 항목 하나만 되살릴 때: 부모가 지워져 있으면 부모부터. 부모가 정리돼 없거나 세부 항목이 됐으면 맨 위 층으로 되살린다.
+      if (cur.parentId) {
+        const c = checkParent(doc, cur.parentId, cur.id);
+        if (c.problem === 'parent_deleted') treeFail('parent_deleted', { parentId: cur.parentId });
+        if (c.problem) delete next.parentId;
+      }
       doc.tasks[cur.id] = next;
-      touch(doc, actor, iso, `할 일 '${clip(cur.text)}' 복원`);
+      // 부모를 되살리면 그때 같이 지운 세부 항목도 같이
+      const kids = childrenOf(doc, cur.id).filter((c) => c.deletedAt && c.deletedAt === cur.deletedAt);
+      for (const c of kids) doc.tasks[c.id] = { ...c, deletedAt: null, deletedBy: null, ...bump(c) };
+      touch(doc, actor, iso, `할 일 '${clip(cur.text)}' 복원${kids.length ? `(세부 항목 ${kids.length}개 같이)` : ''}`);
       return { result: next };
     }
     case 'log.add': {
@@ -326,6 +385,8 @@ function purgeTrash(doc: ProgressDoc, now: number) {
     return new Set(trash.slice(0, Math.max(0, trash.length - MAX_TRASH)).map((x) => x.id));
   };
   for (const id of capTrash(Object.values(doc.tasks))) delete doc.tasks[id];
+  // 부모가 정리돼 없어진 세부 항목은 부모 표시만 지운다(맨 위 층으로)
+  dropDanglingParents(doc);
   for (const id of capTrash(Object.values(doc.property))) delete doc.property[id];
   const dropLog = capTrash(doc.log);
   if (dropLog.size) doc.log = doc.log.filter((l) => !dropLog.has(l.id));

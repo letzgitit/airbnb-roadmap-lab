@@ -5,6 +5,8 @@
 // - 보낼 때마다 문서를 다시 읽어 「지금 사이트 값 − Todoist 에 있다고 아는 값(todoistSent)」만 보낸다. 같은 할 일의 반영 둘이 순서가 뒤집혀도 마지막 상태로 모인다.
 // - 실패해도 사이트 쪽 쓰기는 되돌리지 않는다. 할 일에 todoistError 를 남기고, `progress.mjs todoist-sync` 로 다시 맞춘다.
 // - 웹훅에서 온 변화(task.fromTodoist)는 여기로 오지 않는다 → Todoist 에서 바뀐 것을 다시 Todoist 로 보내지 않는다.
+// - 세부 항목(parentId)은 Todoist 에 평평한 할 일로 보낸다(parent_id 없음). 시작일(start)은 보내지 않는다(siteState 에 없음).
+//   부모를 지우거나 되살리면 엔진이 세부 항목도 같이 바꾸므로, 그 세부 항목도 같이 보낸다(cascadeTargets).
 import { randomUUID } from 'node:crypto';
 import { mutateMany, readDoc, type EngineOp } from './engine.ts';
 import { getStore } from './store.ts';
@@ -126,6 +128,18 @@ export function targetsFromOps(applied: AppliedTaskOp[]): PushTarget[] {
   return [...map.values()];
 }
 
+// 부모 지우기 · 되살리기로 엔진이 같이 바꾼 세부 항목(같은 연산 시각에 고쳐진 것)도 보낼 목록에 넣는다
+export function cascadeTargets(applied: AppliedTaskOp[], doc: ProgressDoc): PushTarget[] {
+  const out: PushTarget[] = [];
+  for (const { op, result } of applied) {
+    if ((op.op !== 'task.delete' && op.op !== 'task.restore') || !isTask(result)) continue;
+    for (const c of Object.values(doc.tasks)) {
+      if (c.parentId === result.id && c.updatedAt === result.updatedAt) out.push({ id: c.id, intent: 'sync', fields: ['deleted'] });
+    }
+  }
+  return out;
+}
+
 async function record(op: Omit<TodoistSentOp, 'op'>) {
   const { outcomes } = await mutateMany([{ op: 'task.todoistSent', ...op }], TODOIST_ACTOR);
   return outcomes[0];
@@ -223,8 +237,13 @@ export async function pushTasks(targets: PushTarget[], over: Partial<TodoistConf
 }
 
 // 사이트에서 적용된 할 일 연산들을 Todoist 에 반영한다(mutate 라우트 · CLI apply 가 부른다)
-export function pushToTodoist(applied: AppliedTaskOp[], over: Partial<TodoistConfig> = {}): Promise<PushReport> {
-  return pushTasks(targetsFromOps(applied), over);
+export async function pushToTodoist(applied: AppliedTaskOp[], over: Partial<TodoistConfig> = {}): Promise<PushReport> {
+  const targets = targetsFromOps(applied);
+  if (applied.some((a) => a.op.op === 'task.delete' || a.op.op === 'task.restore') && todoistConfig(over)) {
+    const seen = new Set(targets.map((t) => t.id));
+    for (const t of cascadeTargets(applied, await readDoc())) if (!seen.has(t.id)) { seen.add(t.id); targets.push(t); }
+  }
+  return pushTasks(targets, over);
 }
 
 // ── 다시 맞추기(progress.mjs todoist-sync) ──

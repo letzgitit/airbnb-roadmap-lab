@@ -588,5 +588,75 @@ test('todoist-sync: 차이 · Todoist 에 없음 · 짝 없음 · Todoist 에만
   assert.deepEqual(fk.calls.map((c) => [c.path, c.body]), [['/api/v1/tasks/NEW1', { content: '사이트 제목' }]]);
 });
 
+// ── 시작일 · 세부 항목(1차: 사이트에만) ──
+test('세부 항목은 Todoist 에 평평하게 보냄(parent_id 없음) · 시작일은 보내지 않음 · 부모 지우기/되살리기는 세부 항목도 같이 보냄', async () => {
+  reset();
+  const fk = fakeTodoist();
+  const addP = opSchema.parse({ op: 'task.add', stepId: 7, text: '가구 들이기', start: '2026-11-10', due: '2026-11-20' });
+  const { result: p } = await mutate(addP, ME);
+  await pushToTodoist([{ op: addP, result: p }], FAKE(fk));
+  const addC = opSchema.parse({ op: 'task.add', parentId: p.id, text: '침대 주문', start: '2026-11-10', due: '2026-11-12' });
+  const { result: c } = await mutate(addC, ME);
+  await pushToTodoist([{ op: addC, result: c }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((x) => x.body), [
+    { content: '가구 들이기', labels: ['외도민'], due_date: '2026-11-20' },
+    { content: '침대 주문', labels: ['외도민'], due_date: '2026-11-12' },
+  ]);
+  // 시작일 · 부모만 바꾸면 Todoist 를 부르지 않는다
+  fk.calls.length = 0;
+  let cur = (await readDoc()).tasks[c.id];
+  const u = opSchema.parse({ op: 'task.update', id: c.id, baseVersion: cur.version, patch: { start: '2026-11-11' } });
+  const { result: c2 } = await mutate(u, ME);
+  await pushToTodoist([{ op: u, result: c2 }], FAKE(fk));
+  assert.equal(fk.calls.length, 0);
+  // 부모를 지우면 세부 항목도 Todoist 에서 지운다
+  const d = { op: 'task.delete', id: p.id };
+  const { result: pd } = await mutate(d, ME);
+  await pushToTodoist([{ op: d, result: pd }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((x) => `${x.method} ${x.path}`).sort(), ['DELETE /api/v1/tasks/NEW1', 'DELETE /api/v1/tasks/NEW2']);
+  // 되살리면 둘 다 다시 만든다(여전히 평평하게)
+  fk.calls.length = 0;
+  const r = { op: 'task.restore', id: p.id };
+  const { result: pr } = await mutate(r, ME);
+  await pushToTodoist([{ op: r, result: pr }], FAKE(fk));
+  assert.equal(fk.calls.filter((x) => x.method === 'POST' && x.path === '/api/v1/tasks').length, 2);
+  assert.ok(fk.calls.every((x) => !x.body || !('parent_id' in x.body)));
+  cur = (await readDoc()).tasks[c.id];
+  assert.equal(cur.parentId, p.id);
+  assert.equal(cur.start, '2026-11-11');
+});
+
+test('Todoist 갱신이 start · parentId 를 보존 · 마감일이 시작일보다 앞당겨지면 시작일을 맞춤 · Todoist 에서 부모를 지우면 세부 항목은 뗌', async () => {
+  reset();
+  const { result: p } = await mutate(opSchema.parse({ op: 'task.add', stepId: 7, text: '부모' }), ME);
+  const { result: c } = await mutate(opSchema.parse({ op: 'task.add', parentId: p.id, text: '세부', start: '2026-11-03', due: '2026-11-08' }), ME);
+  await mutate(opSchema.parse({ op: 'task.update', id: p.id, patch: { todoistId: 'TP' } }), ME);
+  await mutate(opSchema.parse({ op: 'task.update', id: c.id, patch: { todoistId: 'TC' } }), ME);
+  // 제목 · 마감일 · 완료를 Todoist 에서 바꿈
+  let r = await send(event('item:updated', { id: 'TC', content: '세부 고침', due: { date: '2026-11-09' } }));
+  assert.equal(r.body.action, 'updated');
+  let t = (await readDoc()).tasks[c.id];
+  assert.deepEqual([t.text, t.due, t.start, t.parentId, t.stepId], ['세부 고침', '2026-11-09', '2026-11-03', p.id, 7]);
+  r = await send(event('item:completed', { id: 'TC', content: '세부 고침', due: { date: '2026-11-09' }, checked: true }));
+  t = (await readDoc()).tasks[c.id];
+  assert.deepEqual([t.done, t.start, t.parentId], [true, '2026-11-03', p.id]);
+  // 마감일 지우기: 시작일은 그대로
+  await send(event('item:updated', { id: 'TC', content: '세부 고침', due: null, checked: true }));
+  t = (await readDoc()).tasks[c.id];
+  assert.deepEqual([t.due, t.start], [null, '2026-11-03']);
+  // 마감일을 시작일보다 앞으로 → 시작일을 마감일로
+  await send(event('item:updated', { id: 'TC', content: '세부 고침', due: { date: '2026-11-01' }, checked: true }));
+  t = (await readDoc()).tasks[c.id];
+  assert.deepEqual([t.due, t.start, t.parentId], ['2026-11-01', '2026-11-01', p.id]);
+  // Todoist 에서 부모를 지우면: 부모만 지우고 세부 항목은 맨 위 층으로(Todoist 에선 따로 있는 할 일)
+  r = await send(event('item:deleted', { id: 'TP', content: '부모', is_deleted: true }));
+  assert.equal(r.body.action, 'deleted');
+  const doc = await readDoc();
+  assert.notEqual(doc.tasks[p.id].deletedAt, null);
+  assert.equal(doc.tasks[c.id].deletedAt, null);
+  assert.equal('parentId' in doc.tasks[c.id], false);
+  assert.equal(doc.tasks[c.id].start, '2026-11-01');
+});
+
 test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 void DATA;
