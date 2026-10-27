@@ -73,8 +73,8 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 
 | 연산 | 필수 필드 | 비고 |
 |---|---|---|
-| `task.add` | `stepId`(1~14), `text`(1~200자) | `stepId`는 세부 항목(`parentId`)이면 빼도 된다(부모 단계를 따름). `start`(선택): 시작일 `YYYY-MM-DD` 또는 null. `parentId`(선택): 부모 할 일 id(`t_…`) — 아래 「시작일 · 세부 항목」. `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다). `note`(선택): 자세한 내용 ≤1000자(제목은 짧게, 길게 적을 것은 여기). `owner`(선택): `남편` `아내` `같이`. `guide`(선택): 참고(설명서) 마크다운 ≤6000자 — 아래 「참고(설명서)」 |
-| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기) `note`(빈 글 · null = 지우기) `guide`(참고 마크다운, 빈 글 · null = 지우기) `owner`(null = 지우기) `start`(시작일, null = 지우기) `parentId`(부모 할 일 id, null = 부모에서 떼기) `todoistId`(Todoist 짝, null = 짝 끊기). **`done`만, 또는 `todoistId`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
+| `task.add` | `stepId`(1~14), `text`(1~200자) | `stepId`는 세부 항목(`parentId`)이면 빼도 된다(부모 단계를 따름). `start`(선택): 시작일 `YYYY-MM-DD` 또는 null. `parentId`(선택): 부모 할 일 id(`t_…`) — 아래 「시작일 · 세부 항목」. `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다). `note`(선택): 자세한 내용 ≤1000자(제목은 짧게, 길게 적을 것은 여기). `owner`(선택): `남편` `아내` `같이`. `guide`(선택): 설명서 마크다운 ≤6000자 — 아래 「설명서」 |
+| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기) `note`(빈 글 · null = 지우기) `guide`(설명서 마크다운, 빈 글 · null = 지우기) `owner`(null = 지우기) `start`(시작일, null = 지우기) `parentId`(부모 할 일 id, null = 부모에서 떼기) `todoistId`(Todoist 짝, null = 짝 끊기). **`done`만, 또는 `todoistId`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
 | `task.delete` / `task.restore` | `id` | 소프트 삭제(30일 보관 후 정리) |
 | `step.update` | `stepId`, `baseVersion`, `patch` | `patch`: `status`(`todo` `doing` `done`) `targetDate` `note`(≤1000자). 아직 한 번도 안 고친 단계의 version은 0 |
 | `log.add` | `kind`(`결정` `통화` `일정` `메모`), `text`(≤1000자) | 「현황 메모/결정 기록」 |
@@ -105,14 +105,14 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 - Todoist: 세부 항목도 평평한 할 일로 보내고(`parent_id` 없음) 시작일은 보내지 않는다(1차). 아래 「Todoist 동기화」 표.
 - `get`은 세부 항목을 부모 밑에 `└`로, `export-md`는 두 칸 들여 쓴다. 시작일이 있으면 `시작 …` / `시작 ~ 마감 …`.
 
-### 참고(설명서) (`guide`)
+### 설명서 (`guide`)
 
 할 일마다 「왜 · 어떻게 하는지」 길게 적어 두는 설명서(2026-10-28). 새 홈 할 일 줄 제목 옆 물음표를 누르면 시트로 열린다. 선택이고, 없는 옛 할 일은 그대로 읽힌다.
 
 - 마크다운 ≤6000자. 앞뒤 공백만 지우고 줄바꿈은 그대로. 빈 글 · `null` = 지우기(키가 없어진다). 고칠 때 `baseVersion` 필수(다른 칸과 같은 규칙).
-- 화면이 읽는 모양: `## 소제목`(### = 작은 소제목) · `- 점 목록` · `1. 번호 목록` · `**굵게**` · `[글](https://…)`(새 창, 옆에 도메인) · `> 인용` = 「알아 두기」 옅은 면 상자 · `| 표 |` · `---`. 소제목은 「왜 해야 하나요 / 어떻게 하나요 / 준비물 / 알아 두면 좋은 것 / 자주 하는 실수」처럼.
+- 화면이 읽는 모양: `## 소제목`(### = 작은 소제목) · `- 점 목록` · `1. 번호 목록` · `**굵게**` · `[글](https://…)`(새 창, 글자에 도메인이 없으면 문단 끝에 「(도메인)」) · `> 인용` = 「알아 두기」 옅은 면 상자 · `| 표 |` · `---`. 소제목은 「왜 해야 하나요 / 어떻게 하나요 / 준비물 / 알아 두면 좋은 것 / 자주 하는 실수」처럼.
 - **Todoist 로 보내지 않는다**(메모 `note`만 description 으로 간다). Todoist 쪽 고침이 와도 `guide`는 그대로.
-- `get`은 「📖 참고(설명서) n자」만 보이고, 전문은 `get --json`. `export-md`에는 넣지 않는다.
+- `get`은 「📖 설명서 n자」만 보이고, 전문은 `get --json`. `export-md`에는 넣지 않는다.
 - 예: `{ "op": "task.update", "id": "t_xxxxxxxxxxxx", "baseVersion": 4, "patch": { "guide": "## 왜 해야 하나요\n…\n\n## 어떻게 하나요\n1. …" } }`
 
 - 「사용자 체크리스트 항목」은 **할 일(task)과 같은 항목**입니다. `checklist.add/update/delete/restore`는 `task.*`의 별칭입니다.

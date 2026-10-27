@@ -27,7 +27,8 @@ export interface SheetProps {
 
 // 공개 안내 시트(단계 · 주의사항 · 대화 예시)가 쓰는 공용 시트:
 // 폰은 아래에서 올라오는 시트(위쪽 둥근 모서리), 넓은 화면은 가운데 720px 카드.
-export function Sheet({ open, shown, title, eyebrow, subtitle, belowTitle, tabs, footer, children, onClose, beforeClose, bodyRef, bodyClassName = 'bg-surface' }: SheetProps) {
+// wide: 머리 양옆 24px(본문도 24px인 시트 — 할 일 설명서). 기본은 16px(공개 안내 · 그날 창은 본문이 16px이라 맞춘다).
+export function Sheet({ open, shown, title, eyebrow, subtitle, belowTitle, tabs, footer, children, onClose, beforeClose, bodyRef, bodyClassName = 'bg-surface', wide = false }: SheetProps & { wide?: boolean }) {
   const uid = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const askRef = useRef<() => void>(() => {});
@@ -72,7 +73,7 @@ export function Sheet({ open, shown, title, eyebrow, subtitle, belowTitle, tabs,
       <div className="absolute inset-0 bg-black/50 dark:bg-black/60" onClick={() => askRef.current()} />
       <div className={`absolute inset-x-0 bottom-0 top-[calc(40px+env(safe-area-inset-top))] flex flex-col overflow-hidden rounded-t-panel bg-surface shadow-2xl transition-transform duration-300 ease-out ${shown ? '' : 'translate-y-full'} md:relative md:top-auto md:mx-auto md:mt-[7vh] md:h-[85vh] md:max-w-content md:rounded-panel`}>
         <div className="shrink-0 border-b border-line bg-surface">
-          <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
+          <div className={`flex items-center justify-between gap-3 pb-3 pt-4 ${wide ? 'pl-6 pr-4' : 'px-4'}`}>
             <div className="min-w-0">
               {eyebrow && <div className="mb-1.5 flex items-center gap-2">{eyebrow}</div>}
               <h2 id={`${uid}-title`} className="text-xl font-bold text-ink">{title}</h2>

@@ -29,9 +29,9 @@ const taskOwner = z.union([z.enum(TASK_OWNERS), z.null()], { error: `맡은 사�
 // 할 일 자세한 내용: ≤1000자, 빈 글 · null = 지우기
 export const TASK_NOTE_MAX = 1000;
 const taskNote = z.union([z.string().trim().max(TASK_NOTE_MAX, `자세한 내용은 ${TASK_NOTE_MAX}자 이하로 입력하세요.`), z.null()]);
-// 할 일 참고(설명서): 마크다운 ≤6000자, 빈 글 · null = 지우기. 줄바꿈은 그대로 둔다(앞뒤 공백만 지움).
+// 할 일 설명서(guide): 마크다운 ≤6000자, 빈 글 · null = 지우기. 줄바꿈은 그대로 둔다(앞뒤 공백만 지움).
 export const TASK_GUIDE_MAX = 6000;
-const taskGuide = z.union([z.string().trim().max(TASK_GUIDE_MAX, `참고(설명서)는 ${TASK_GUIDE_MAX}자 이하로 입력하세요.`), z.null()]);
+const taskGuide = z.union([z.string().trim().max(TASK_GUIDE_MAX, `설명서는 ${TASK_GUIDE_MAX}자 이하로 입력하세요.`), z.null()]);
 // Todoist 할 일 id(영숫자) 또는 null(짝 끊기)
 export const todoistId = z.union([z.string().regex(/^[A-Za-z0-9]{1,64}$/, 'Todoist id 형식이 올바르지 않습니다.'), z.null()]);
 // 세부 항목의 부모 할 일 id(t_…) 또는 null(부모에서 떼기)

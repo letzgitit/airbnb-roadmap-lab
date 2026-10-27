@@ -43,9 +43,11 @@ import { LineIcon } from '@/components/ui/LineIcon';
  */
 type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; guide: string; place: string };
 
-export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, onEditChange, onToggle, onGone }: {
+export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, hideDate = false, onEditChange, onToggle, onGone }: {
   t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
   depth?: 0 | 1; parentTitle?: string; simple?: boolean;
+  /** 쉬운 모양: 보조 줄의 「10월 28일(수)까지」를 숨긴다(달력 그날 목록처럼 머리가 이미 그 날짜를 말할 때). 남은 날 배지는 남긴다 */
+  hideDate?: boolean;
   onEditChange: (id: string, open: boolean) => void; onToggle: (t: TaskItem) => void; onGone: () => void;
 }) {
   const t = task as TaskWithNote; // 외도민판 · 지산판 같은 코드(autoFill 은 지산판에선 늘 비어 있다)
@@ -188,8 +190,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               </label>
             )}
             <NoteField value={note} onChange={setNote} />
-            {/* 참고(설명서): 접혀 있다가 펼쳐 쓰는 큰 칸(부부가 직접 고친다) */}
-            <GuideField value={guide} onChange={setGuide} />
+            {/* 설명서: 접혀 있다가 펼쳐 쓰는 큰 칸(부부가 직접 고친다) */}
+            <GuideField value={guide} onChange={setGuide} title={text} />
             {/* 쉬운 모양: 메모 사진도 여기서 붙인다(바로 올라가고, 저장 단추와 상관없다) */}
             {simple && !deleted && <TaskPhotos taskId={t.id} stepId={t.stepId} />}
             {/* 메모 속 전화번호는 눌러서 바로 건다(메모 글은 그대로) */}
@@ -241,11 +243,10 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     const ask = t.kind === '문의';
     const hasGuide = !!t.guide?.trim();
     const dateWord = spanDate(t.start, t.due) ?? (t.due ? `${longDate(t.due)}까지` : null);
-    // 제목 16/600(세부 항목은 16/500)
-    const titleCls = `block break-words text-base ${depth ? 'font-medium' : 'font-semibold'} ${t.done ? 'text-muted line-through' : 'text-ink'}`;
+    // 제목 16/600(세부 항목은 16/500) — 아래 첫 줄에서 바로 준다
     const sub = (
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm font-normal text-muted">
-        {dateWord && <span className="whitespace-nowrap tabular-nums">{dateWord}</span>}
+        {dateWord && !hideDate && <span className="whitespace-nowrap tabular-nums">{dateWord}</span>}
         {ask && !t.done && <Badge tone="info" className="py-0.5">문의 필요</Badge>}
         {phase === 'prep' && <span className="whitespace-nowrap">{PHASE_WORD.prep}</span>}
         {parentTitle && <span className="min-w-0 truncate">‘{parentTitle}’의 세부 항목</span>}
@@ -264,16 +265,19 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
         </label>
         <div className="min-w-0 flex-1">
           {/* 첫 줄: 제목 + 오른쪽 남은 날 배지. 제목을 누르면 메모만 펼치고 접는다(메모도 사진도 없으면 누르는 것이 아니다) */}
-          {/* 참고(설명서)가 있으면 제목 바로 옆에 물음표 단추(44px 누르는 칸, 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않음) */}
+          {/* 설명서가 있으면 제목 글 바로 뒤(두 줄로 꺾여도 마지막 낱말 뒤)에 물음표 — 제목을 글 흐름(inline)으로 두고 단추를 이어 붙인다.
+              메모를 펼치는 제목은 글 흐름 안에 있어야 해서 button 대신 role="button" 글(Enter · Space 로도 펼침) */}
           <div className="flex items-start gap-2">
-            {hasMemo ? (
-              <button type="button" aria-expanded={noteOpen} className={`min-w-0 text-left ${hasGuide ? '' : 'flex-1'}`} onClick={() => setNoteOpen((v) => !v)}>
-                <span className={titleCls}>{t.text}</span>
-                <span className="sr-only">{noteOpen ? '메모 접기' : '메모 펼치기'}</span>
-              </button>
-            ) : <span className={`min-w-0 ${hasGuide ? '' : 'flex-1'} ${titleCls}`}>{t.text}</span>}
-            {hasGuide && <GuideButton title={t.text} guide={t.guide as string} className="-my-2.5 -ml-2.5 -mr-1" />}
-            {hasGuide && <span className="flex-1" aria-hidden />}
+            <div className={`min-w-0 flex-1 break-words text-base ${depth ? 'font-medium' : 'font-semibold'} ${t.done ? 'text-muted line-through' : 'text-ink'}`}>
+              {hasMemo ? (
+                <span role="button" tabIndex={0} aria-expanded={noteOpen} className="cursor-pointer rounded-sm"
+                  onClick={() => setNoteOpen((v) => !v)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setNoteOpen((v) => !v); } }}>
+                  {t.text}<span className="sr-only">{noteOpen ? ' 메모 접기' : ' 메모 펼치기'}</span>
+                </span>
+              ) : <span>{t.text}</span>}
+              {hasGuide && <GuideButton title={t.text} guide={t.guide as string} />}
+            </div>
             {dl && !t.done && <Badge tone={tone} className="-mt-0.5 shrink-0">{dl.rel}</Badge>}
           </div>
           {/* 둘째 줄: 보조 글자 + 오른쪽 단추(전화 · 고치기 · 지우기). 단추 칸은 44px 이고 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않는다 */}
