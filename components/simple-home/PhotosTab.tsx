@@ -166,15 +166,15 @@ function GalleryGroup({ g, onOpen }: { g: Group; onOpen: (id: string) => void })
       {g.list.length === 0 ? (
         <p className="border-t border-line px-5 py-3.5 text-base text-muted">{g.empty}</p>
       ) : g.subs ? (
-        // 소제목(데일리 .grp-h — 14/700 요지색) + 그 묶음 문서
-        <div className="border-t border-line px-5 pb-4">
+        // 한 장짜리 묶음마다 칸 하나: 소제목(데일리 .grp-h — 14/700 요지색) + 그 문서. 칸은 다른 문서 격자와 같은 2열(넓으면 3열)
+        <ul className="grid grid-cols-2 gap-x-3 gap-y-4 border-t border-line px-5 py-4 md:grid-cols-3">
           {g.subs.map((s) => (
-            <div key={s.key}>
-              <h3 className="pb-2 pt-4 text-sm font-bold text-sub">{s.title}</h3>
-              {docGrid(s.list)}
-            </div>
+            <li key={s.key} className="min-w-0">
+              <h3 className="truncate pb-1.5 text-sm font-bold text-sub">{s.title}</h3>
+              <DocTile p={s.list[0]} onOpen={() => onOpen(s.list[0].id)} />
+            </li>
           ))}
-        </div>
+        </ul>
       ) : g.doc ? (
         docGrid(g.list, 'border-t border-line px-5 py-4')
       ) : (

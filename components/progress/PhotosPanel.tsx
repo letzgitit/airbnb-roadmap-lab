@@ -295,7 +295,7 @@ export function PhotoSearchFields({ placeholder = '설명 · 앨범 · 단계', 
           onChange={(e) => setText(e.target.value)}
           onCompositionStart={() => { composing.current = true; }}
           onCompositionEnd={(e) => { composing.current = false; setQuery(e.currentTarget.value.trim()); }}
-          className="min-h-11 w-full rounded-control border border-line-strong bg-surface pl-9 pr-11 text-base font-semibold text-ink placeholder:font-normal placeholder:text-muted focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink [&::-webkit-search-cancel-button]:hidden" />
+          className={`min-h-11 w-full rounded-control border border-line-strong bg-surface pl-9 ${text ? 'pr-11' : 'pr-2'} text-base font-semibold text-ink placeholder:font-normal placeholder:text-muted focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink [&::-webkit-search-cancel-button]:hidden`} />
         {text && (
           <button type="button" aria-label="검색어 지우기" onClick={() => { setText(''); setQuery(''); }}
             className="absolute right-0 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:text-ink">
