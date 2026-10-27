@@ -26,20 +26,21 @@ const HEADERS = {
 // 그래서 부모가 자기 창 높이를 알려 주면(room3d:vh, 부모 창에서 온 것만) --pvh(창 높이의 1%)로 바꿔 쓴다. 새 창으로 열면 알림이 없어 원래 1vh 그대로.
 const HEIGHT_SCRIPT = `<script>(function(){var b=document.body,r=document.documentElement,last=0;function p(){try{parent.postMessage({type:'room3d:height',h:Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height))+2},'*')}catch(e){}}addEventListener('message',function(e){var d=e.data;if(e.source!==parent||parent===window||!d||d.type!=='room3d:vh'||typeof d.h!=='number'||!isFinite(d.h)||d.h<200)return;var h=Math.round(d.h);if(h===last)return;last=h;r.style.setProperty('--pvh',h/100+'px')});addEventListener('load',p);if(window.ResizeObserver)new ResizeObserver(p).observe(b);p();})();</script>`;
 
-// 시안의 크림 · 오커 · 테라코타 · 둘째 서체를 사이트 값(DESIGN.md 토큰 — app/globals.css 시안 B 값의 사본, 그쪽을 바꾸면 같이 바꾼다)으로 덮는다. 시안의 :root 와 같은 선택자를 뒤에 두어 이긴다.
+// 시안의 크림 · 오커 · 테라코타 · 둘째 서체를 사이트 값(DESIGN.md 토큰 — app/globals.css 의 데일리 형광펜 · 노랑 띠 값의 사본, 그쪽을 바꾸면 같이 바꾼다)으로 덮는다.
+// 시안의 :root 와 같은 선택자를 뒤에 두어 이긴다. 바탕 · 면은 사이트 블록과 같은 흰 면(다크 #1c1e21), 장면 바탕은 사이트 바탕 회색.
 // 장면 위 이름표(.lbl)는 늘 흰 바탕이라 밝은 값으로 고정한다. 제목(h1)은 하위 탭 「3D 시안」과 겹쳐 숨긴다.
-// 「누르는 것」 색(--accent)은 사이트처럼 검정(다크는 흰 면 + 어두운 글자). 빨강은 쓰지 않는다(빨강은 한 화면 주 단추 하나뿐).
+// 「누르는 것」 색(--accent)은 사이트처럼 검정(다크는 흰 면 + 어두운 글자). 형광은 쓰지 않는다(누르지 않는 표시에만 쓰는 색).
 const LIGHT_VARS =
-  '--bg:#ffffff;--surface:#fff;--surface-2:#f7f7f7;--chip:#f2f2f2;--scene-bg:#f7f7f7;--line:#dddddd;--text:#222222;--muted:#6a6a6a;--accent:#222222;--accent-ink:#fff;--link:#222222;--warn:#c13515;--pad-bg:rgba(255,255,255,.86);--pad-ink:#222222;--raised:#fff;color-scheme:light';
+  '--bg:#ffffff;--surface:#fff;--surface-2:#f2f2f2;--chip:#f2f2f2;--scene-bg:#f2f2f2;--line:#e4e4e4;--text:#262626;--muted:#6b6b6b;--accent:#000000;--accent-ink:#fff;--link:#000000;--warn:#c92a2a;--pad-bg:rgba(255,255,255,.86);--pad-ink:#000000;--raised:#fff;color-scheme:light';
 const DARK_VARS =
-  '--bg:#121212;--surface:#121212;--surface-2:#1c1c1c;--chip:#262626;--scene-bg:#1c1c1c;--line:#3a3a3a;--text:#f7f7f7;--muted:#b0b0b0;--accent:#f7f7f7;--accent-ink:#121212;--link:#f7f7f7;--warn:#ffb4a3;--pad-bg:rgba(28,28,28,.86);--pad-ink:#f7f7f7;--raised:#2e2e2e;color-scheme:dark';
+  '--bg:#1c1e21;--surface:#1c1e21;--surface-2:#2a2c30;--chip:#2a2c30;--scene-bg:#131416;--line:#2e3033;--text:#e9e9e9;--muted:#949494;--accent:#ffffff;--accent-ink:#131416;--link:#ffffff;--warn:#ff5a5f;--pad-bg:rgba(28,30,33,.86);--pad-ink:#ffffff;--raised:#33363b;color-scheme:dark';
 // --raised = 칸 묶음에서 고른 칸(어두운 화면에서도 묶음 바탕보다 밝게 떠 보이게)
 // --link = 어두운 바탕 위 글자 단추(상태 줄 「저장」)도 4.5:1 넘게. color-scheme = 안 고른 체크박스 · 고르기 칸도 어두운 화면 모양으로
 const SITE_STYLE =
   `<style>:root{${LIGHT_VARS}}` +
   `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${DARK_VARS}}}` +
   `:root[data-theme="dark"]{${DARK_VARS}}` +
-  `body{font-family:'Wanted Sans Variable','Wanted Sans','Pretendard Variable','Pretendard',-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}` +
+  `body{font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Helvetica Neue','Malgun Gothic','Noto Sans KR',sans-serif}` +
   // 체크박스는 사이트와 같은 강조색(DESIGN.md 2.2 · globals.css)
   `input[type=checkbox]{accent-color:var(--accent)}` +
   `h1{display:none}` +
@@ -48,7 +49,7 @@ const SITE_STYLE =
   `.stage{container-type:inline-size}` +
   `#view{height:min(calc(var(--pvh,1vh)*64),72cqw);min-height:220px}#view.walk{height:calc(var(--pvh,1vh)*64);min-height:380px}` +
   `@media (max-width:600px){#view{height:min(calc(var(--pvh,1vh)*62),72cqw)}#view.walk{height:calc(var(--pvh,1vh)*62);min-height:360px}}` +
-  `.lbl{color:#222222}.lbl small{color:#6a6a6a}.lbl.issue{background:#fff0ee;color:#c13515;border-color:#c13515}</style>`;
+  `.lbl{color:#000000}.lbl small{color:#6b6b6b}.lbl.issue{background:#fdecec;color:#c92a2a;border-color:#c92a2a}</style>`;
 
 const note = (title: string) =>
   `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${title}</title></head>` +

@@ -1,100 +1,115 @@
 @import "tailwindcss";
 @import "@fortawesome/fontawesome-free/css/all.min.css";
-/* 글꼴: Wanted Sans 가변 글꼴(npm wanted-sans, SIL OFL 1.1 — 라이선스 전문은 node_modules/wanted-sans/fonts/OFL.txt, 글꼴 CSS 머리에도 있다).
-   글자 묶음별로 쪼갠 파일이라 화면에 쓰인 묶음만 받는다. 대체 글꼴은 Pretendard(npm pretendard). 둘 다 이 사이트에서 직접 내려준다(외부 CDN 없음) */
-@import "wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.css";
-@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+/* 글꼴: 시스템 고딕 그대로(웹 글꼴을 받지 않는다 — 주money 데일리와 같은 줄). 2026-10-28 Wanted Sans · Pretendard 를 뺐다 */
 
 /* 화면 모드(시스템 / 라이트 / 다크). <html class="dark"> 는 layout.tsx 의 인라인 스크립트와 ThemeToggle 이 붙인다. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* 디자인 기준: 시안 B(에어비앤비 결, 2026-10-28) — DESIGN.md 2 · 3 · 4 · 5장.
-   흰 바탕 + 진한 검정 글자 중심, 회색 세 단, 포인트 빨강(brand)은 한 화면 주 단추 한 곳에만, 그림자 없음. */
+/* 디자인 기준: 주money 데일리 「형광펜」(밝게) · 「노랑 띠」(어둡게) — DESIGN.md 2 · 3 · 4 · 5장.
+   값의 정본은 jumoney-daily/src/styles/daily/themes.css 의 [data-theme="marker"] · [data-theme="bd-yellow"].
+   회색 바탕 위 흰 면(블록), 각진 면 · 그림자 없음. 형광은 「누르지 않는 표시」(머리 띠 · 블록 머리 밑줄)에만, 누르는 것은 검정. */
 @theme {
   --color-snow: #fff;             /* 다크에서도 늘 흰색이어야 하는 글자(빨강 면 위) */
 
   /* ── 면 · 선 · 글자. 다크는 아래 .dark 에서 값만 바꾼다 ── */
-  --color-page: #ffffff;          /* 화면 바탕 */
-  --color-surface: #ffffff;       /* 카드 · 시트 · 창의 면 */
-  --color-sunken: #f7f7f7;        /* 옅은 면: 「가장 급한 일」 · 「일주일 안에 할 일」 카드, 펼친 폼, 보조 단추 */
-  --color-strong: #f2f2f2;        /* 썸네일 면 · 보통 배지 바탕 */
+  --color-page: #f2f2f2;          /* 화면 바탕(블록 사이 회색 띠) — 데일리 --page */
+  --color-surface: #ffffff;       /* 블록 · 시트 · 창의 면 — 데일리 --row */
+  --color-sunken: #f2f2f2;        /* 면 위 옅은 칸: 꼬리표 바탕 · 보조 단추 · 누를 때 — 데일리 --chip-bg */
+  --color-strong: #e4e4e4;        /* 썸네일 빈 면 · 한 단계 진한 옅은 칸 */
   --color-raised: #ffffff;        /* sunken 위에 올라온 면(Segmented 고른 칸) */
-  --color-line: #ebebeb;          /* 나누는 선 */
-  --color-line-strong: #dddddd;   /* 카드 테두리 · 입력칸 테두리 · 옅은 카드 안 줄 사이 선 */
-  --color-ink: #222222;           /* 본문 글자 · 고른 탭 · 검정 단추 면 */
-  --color-ink-soft: #3f3f3f;      /* 긴 설명 */
-  --color-muted: #6a6a6a;         /* 날짜 · 개수 같은 보조 줄 */
-  --color-faint: #929292;         /* 장식 · 꺼짐(읽을 정보엔 쓰지 않는다) */
+  --color-line: #e4e4e4;          /* 나누는 선 — 데일리 --line */
+  --color-line-strong: #c4c4c4;   /* 입력칸 · 펼친 폼 테두리(흰 면 위에서 한 단계 진하게) */
+  --color-ink: #000000;           /* 제목 · 고른 탭 · 검정 단추 면 — 데일리 --ink */
+  --color-ink-soft: #262626;      /* 본문 글자 — 데일리 --text */
+  --color-sub: #555555;           /* 요지 글(제목 아래 설명 · 메모 첫 줄) — 데일리 --sub */
+  --color-muted: #6b6b6b;         /* 날짜 · 개수 같은 메타 — 데일리 --meta */
+  --color-faint: #9a9a9a;         /* 장식 · 꺼짐(읽을 정보엔 쓰지 않는다) */
 
-  /* 「누르는 것」 색 = 검정(ink). 주 단추 · 체크박스 · 링크 · 포커스 고리. 빨강은 아래 brand 한 곳 */
-  --color-accent: #222222;
-  --color-accent-hover: #000000;
-  --color-accent-ink: #222222;
-  --color-accent-soft: #f2f2f2;   /* 「지금」 줄 바탕 */
-  --color-accent-vivid: #222222;  /* 그림 채움(링 · 게이지) */
+  /* 형광: 누르지 않는 표시에만(머리 띠 칠 · 블록 머리 밑줄 · 잠깐 강조). 위 글자는 늘 검정 */
+  --color-marker: #edfc47;
+  --color-on-marker: #000000;
+  --color-head-mark: #edfc47;     /* 블록 머리 글자 밑 짧은 밑줄(다크는 없음 — 데일리 bd-yellow) */
+
+  /* 「누르는 것」 색 = 검정(ink). 주 단추 · 체크 · 고른 날 · 포커스 고리 — 데일리 --cta-bg · --seg-bg */
+  --color-accent: #000000;
+  --color-accent-hover: #262626;
+  --color-accent-ink: #000000;
+  --color-accent-soft: #f2f2f2;   /* 「지금」 줄 바탕(예전 화면) */
+  --color-accent-vivid: #000000;  /* 그림 채움(링 · 게이지) */
   --color-on-accent: #ffffff;     /* accent 면 위 글자(다크에서는 어두운 글자) */
-  /* 포인트 빨강: 한 화면 주 단추 한 곳(「남은 일 보기」)에만 */
-  --color-brand: #e00b41;
-  --color-brand-hover: #c00936;
+  /* 예전 포인트 빨강 자리. 2026-10-28 데일리 결로 바꾸며 쓰는 곳이 없어졌다 — 남은 클래스가 깨지지 않게 검정과 같게 둔다 */
+  --color-brand: #000000;
+  --color-brand-hover: #262626;
   --color-on-brand: #ffffff;
 
-  /* 상태(배지 글자 · 면): 경고(기한 지남) · 주의(곧 마감) · 안내(문의 필요) */
-  --color-danger: #c13515;
-  --color-danger-hover: #a12d12;
-  --color-danger-ink: #c13515;
-  --color-danger-soft: #fff0ee;
-  --color-danger-line: #ffcdc2;
-  --color-warn-ink: #8a5300;
-  --color-warn-soft: #fff6e5;
-  --color-info-ink: #2a5bb8;
-  --color-info-soft: #eef4ff;
-  --color-plus: #077f48;          /* 들어오는 돈(돈 흐름에서만) */
+  /* 상태: 위험(기한 지남 — 데일리 --rise) · 주의(곧 마감 — 검정 테두리) · 안내(문의 필요 — 데일리 --fall) */
+  --color-danger: #c92a2a;
+  --color-danger-hover: #a82222;
+  --color-danger-ink: #c92a2a;
+  --color-danger-soft: #fdecec;
+  --color-danger-line: #f1b5b5;
+  --color-warn-ink: #000000;
+  --color-warn-soft: #f2f2f2;
+  --color-info-ink: #1864ab;
+  --color-info-soft: #eaf2fa;
+  --color-plus: #1864ab;          /* 들어오는 돈(돈 흐름에서만) — 데일리 하락 파랑과 같은 값 */
 
-  /* 예전 홈(/classic) 요약 맨 위 「첫 손님까지」 카드: 청록 면 대신 옅은 회색 카드 + 검정 글자 */
-  --color-hero: #f7f7f7;
-  --color-on-hero: #222222;
-  --color-hero-2: #222222;
-  --color-hero-track: #dddddd;
-  --color-hero-sub: #6a6a6a;
+  /* 예전 홈(/classic) 요약 맨 위 「첫 손님까지」 카드: 회색 바탕 위 흰 면(다른 블록과 같은 면) */
+  --color-hero: #ffffff;
+  --color-on-hero: #000000;
+  --color-hero-2: #000000;
+  --color-hero-track: #d4d4d4;
+  --color-hero-sub: #6b6b6b;
   /* 그림(막대 · 길): 바탕 막대 · 진행 채움 · 오늘 선 · 마감 깃발 · 늦음 */
-  --color-track: #ebebeb;
-  --color-progress: #222222;
-  --color-today: #2a5bb8;
-  --color-milestone: #222222;
-  --color-late: #c13515;
+  --color-track: #e4e4e4;
+  --color-progress: #000000;
+  --color-today: #1864ab;
+  --color-milestone: #000000;
+  --color-late: #c92a2a;
   --color-on-type: #14171c;       /* 종류색 면 위 숫자 */
 
-  /* 글꼴 */
-  --font-sans: 'Wanted Sans Variable', 'Wanted Sans', 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  /* 글꼴: 데일리와 같은 시스템 고딕 줄 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Helvetica Neue', 'Malgun Gothic', '맑은 고딕', 'Noto Sans KR', sans-serif;
 
-  /* 글자 크기(DESIGN.md 3.1): Tailwind 이름은 그대로, 값만 바꾼다(text-[..px] 임의 값은 쓰지 않는다).
-     본문 16 · 보조 최소 14. xs(12)는 예전 홈의 빽빽한 그림(간트 · 달력)과 새 홈 달력 칸 이름에만 */
+  /* 글자 크기(DESIGN.md 3.1, 데일리 --f13 ~ --f28): Tailwind 이름에 값을 맞춘다(text-[..px] 임의 값은 쓰지 않는다).
+     본문 16 · 보조 14 · 메타(날짜 · 개수 · 꼬리표) 13. xs(12)는 예전 홈의 빽빽한 그림(간트 · 달력)에만 */
   --text-xs: 0.75rem;     --text-xs--line-height: 1rem;          /* 12 / 16 */
-  --text-sm: 0.875rem;    --text-sm--line-height: 1.25rem;       /* 14 / 20 보조 · 배지 · 탭 · 아래 메뉴 */
-  --text-base: 1rem;      --text-base--line-height: 1.5rem;      /* 16 / 24 본문 · 할 일 · 단추 */
-  --text-lg: 1.125rem;    --text-lg--line-height: 1.625rem;      /* 18 / 26 입력칸 글자 · 작은 카드 제목 */
-  --text-xl: 1.25rem;     --text-xl--line-height: 1.5rem;        /* 20 / 24 묶음 제목 · 카드 제목 · 시트 제목 */
-  --text-2xl: 1.375rem;   --text-2xl--line-height: 1.625rem;     /* 22 / 26 머리글 · 페이지 제목 */
-  --text-title: 1.625rem; --text-title--line-height: 2rem;       /* 26 / 32 「가장 급한 일」 카드 제목 */
-  --text-display: 1.75rem; --text-display--line-height: 2.25rem; /* 28 / 36 오늘 날짜 큰 제목 · 큰 숫자 */
+  --text-meta: 0.8125rem; --text-meta--line-height: 1.25rem;     /* 13 / 20 날짜 · 개수 · 꼬리표 — 데일리 --f13 */
+  --text-sm: 0.875rem;    --text-sm--line-height: 1.375rem;      /* 14 / 22 보조 · 요지 · 메모 첫 줄 — 데일리 --f14 */
+  --text-cta: 0.9375rem;  --text-cta--line-height: 1.375rem;     /* 15 / 22 단추 · 접는 줄 · 단추 줄 — 데일리 --f15 */
+  --text-base: 1rem;      --text-base--line-height: 1.5rem;      /* 16 / 24 본문 · 할 일 · 탭 */
+  --text-lg: 1.125rem;    --text-lg--line-height: 1.625rem;      /* 18 / 26 입력칸 글자 */
+  --text-head: 1.1875rem; --text-head--line-height: 1.5rem;      /* 19 / 24 블록 머리(밝게) — 데일리 --f19 */
+  --text-xl: 1.25rem;     --text-xl--line-height: 1.625rem;      /* 20 / 26 시트 · 창 제목 */
+  --text-2xl: 1.375rem;   --text-2xl--line-height: 1.75rem;      /* 22 / 28 제호 · 블록 머리(어둡게) — 데일리 --f22 */
+  --text-title: 1.5625rem; --text-title--line-height: 2rem;      /* 25 / 32 큰 숫자 */
+  --text-display: 1.75rem; --text-display--line-height: 2.25rem; /* 28 / 36 페이지 제목 · 큰 숫자 */
 
-  /* 모서리: 단추 8 · 썸네일 18 · 카드 20 · 배지 동그라미(rounded-full). 내용 폭 하나(max-w-content) */
-  --radius-control: 8px;
-  --radius-thumb: 18px;
-  --radius-panel: 20px;
+  /* 모서리: 면 · 상자는 각지게(panel 0). 둥근 건 꼬리표 6 · 썸네일 6 · 단추 10 — 데일리 --radius 10 의 칩 · 썸네일 · 단추 */
+  --radius-chip: 6px;
+  --radius-control: 10px;
+  --radius-thumb: 6px;
+  --radius-panel: 0px;
+  /* 내용 폭: 보통 720, 홈의 PC(1024px 이상) 본문 + 곁 칸 1080 */
   --container-content: 720px;
+  --container-wide: 1080px;
 }
 
-/* 화면 양옆 여백: 24px, 가로로 눕힌 아이폰이면 노치 · 홈 막대 안전 영역만큼 */
+/* 화면 양옆 여백: 20px(데일리 --gutter), 가로로 눕힌 아이폰이면 노치 · 홈 막대 안전 영역만큼 */
 @utility px-safe {
-  padding-left: max(24px, env(safe-area-inset-left));
-  padding-right: max(24px, env(safe-area-inset-right));
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
 }
 
-/* 단계 종류 색(분류색, DESIGN.md 2.3): 진한 색(점 · 막대 · 길 위 원) · -soft 옅은 면 · -ink 옅은 면 위 글자 · -edge 옅은 막대 테두리 · -done 끝난 막대 */
+/* 블록 머리 글자 밑 짧은 형광 밑줄(데일리 .sec-h h2 > span — 글자 폭만큼, 글자 아랫부분에 겹치게). 다크는 밑줄 대신 크게(text-2xl) */
+@utility head-mark {
+  box-shadow: inset 0 -0.3125rem 0 var(--color-head-mark);
+}
+
+/* 단계 종류 색(분류색, DESIGN.md 2.3 — 예전 화면 그림에만): 진한 색 · -soft 옅은 면 · -ink 옅은 면 위 글자 · -edge 옅은 막대 테두리 · -done 끝난 막대 */
 :root {
   color-scheme: light;
-  --card-shadow: rgba(0, 0, 0, 0.16); /* 떠 있는 상자(검색 결과)의 그림자 색. 카드에는 그림자를 쓰지 않는다 */
+  --card-shadow: rgba(0, 0, 0, 0.16); /* 떠 있는 상자(검색 결과 · 메뉴)의 그림자 색. 블록에는 그림자를 쓰지 않는다 */
   --type-prep: #c78500;      --type-prep-soft: #f6ebd6;      --type-prep-ink: #775000;      --type-prep-edge: #e3c280;      --type-prep-done: #dddddd;
   --type-milestone: #2b7ef0; --type-milestone-soft: #ddeafd; --type-milestone-ink: #1a4c90; --type-milestone-edge: #95bef8; --type-milestone-done: #dddddd;
   --type-critical: #e8458b;  --type-critical-soft: #fbe1ec;  --type-critical-ink: #8b2953;  --type-critical-edge: #f4a2c5;  --type-critical-done: #dddddd;
@@ -108,19 +123,19 @@
   --color-white: #fff;
   --color-slate-50: #f7f7f7;
   --color-slate-100: #f2f2f2;
-  --color-slate-200: #ebebeb;
-  --color-slate-300: #dddddd;
-  --color-slate-400: #929292;
-  --color-slate-500: #6a6a6a;
+  --color-slate-200: #e4e4e4;
+  --color-slate-300: #d4d4d4;
+  --color-slate-400: #9a9a9a;
+  --color-slate-500: #6b6b6b;
   --color-slate-600: #555555;
-  --color-slate-700: #3f3f3f;
-  --color-slate-800: #2d2d2d;
-  --color-slate-900: #222222;
-  --color-slate-950: #111111;
+  --color-slate-700: #3a3a3a;
+  --color-slate-800: #262626;
+  --color-slate-900: #111111;
+  --color-slate-950: #000000;
 }
 
-/* 다크: 색 토큰을 다시 정의한다. 클래스(bg-white · text-slate-500 …)는 그대로 두고 값만 바뀐다.
-   중립 회색은 뒤집는다 — white = 카드 면, slate-50~100 = 한 단계씩 밝은 면, slate-200~300 = 테두리, 500~900 = 밝은 글자.
+/* 다크(데일리 「노랑 띠」 bd-yellow): 색 토큰을 다시 정의한다. 클래스(bg-white · text-slate-500 …)는 그대로 두고 값만 바뀐다.
+   바탕보다 면이 밝다(#131416 / #1c1e21). 머리 띠는 다크에서도 형광 + 검정 글자. 블록 머리 형광 밑줄은 없다.
    단계 종류 옅은 면(-soft) = 종류색 24% + 카드 면, 테두리(-edge) = 45%. */
 .dark {
   color-scheme: dark;
@@ -131,101 +146,105 @@
   --type-setup: #ff8c42;     --type-setup-soft: #4d3424;     --type-setup-ink: #ffba8e;     --type-setup-edge: #824e2f;     --type-setup-done: #3a3a3a;
   --type-admin: #a98bfb;     --type-admin-soft: #39344f;     --type-admin-ink: #cbb9fd;     --type-admin-edge: #5b4e82;     --type-admin-done: #3a3a3a;
   --type-open: #3ccb74;      --type-open-soft: #21422f;      --type-open-ink: #8ae0ac;      --type-open-edge: #2a6b45;      --type-open-done: #3a3a3a;
-  --color-page: #121212;
-  --color-surface: #121212;
-  --color-sunken: #1c1c1c;
-  --color-strong: #262626;
-  --color-raised: #2e2e2e;
-  --color-line: #2a2a2a;
-  --color-line-strong: #3a3a3a;
-  --color-ink: #f7f7f7;
-  --color-ink-soft: #dddddd;
-  --color-muted: #b0b0b0;         /* 바탕 8.6:1 · 옅은 면 7.9:1 · 썸네일 면 7.0:1 · 올라온 면 6.3:1 */
-  --color-faint: #7a7a7a;
-  --color-accent: #f7f7f7;
-  --color-accent-hover: #dddddd;
-  --color-accent-ink: #f7f7f7;
-  --color-accent-soft: #262626;
-  --color-accent-vivid: #f7f7f7;
-  --color-on-accent: #121212;
-  --color-brand: #e00b41;
-  --color-brand-hover: #f0164d;
-  --color-on-brand: #ffffff;
-  --color-danger: #c13515;
-  --color-danger-hover: #d23d1b;
-  --color-danger-ink: #ffb4a3;
-  --color-danger-soft: #3a1a14;
-  --color-danger-line: #6b2a1d;
-  --color-warn-ink: #f3cf86;
-  --color-warn-soft: #33270f;
-  --color-info-ink: #a9c6ff;
-  --color-info-soft: #18243b;
-  --color-plus: #4fd98a;
-  --color-hero: #1c1c1c;
-  --color-on-hero: #f7f7f7;
-  --color-hero-2: #f7f7f7;
-  --color-hero-track: #3a3a3a;
-  --color-hero-sub: #b0b0b0;
-  --color-track: #2e2e2e;
-  --color-progress: #dddddd;
-  --color-today: #a9c6ff;
-  --color-milestone: #f7f7f7;
-  --color-late: #ff7a5c;
+  --color-page: #131416;
+  --color-surface: #1c1e21;
+  --color-sunken: #2a2c30;
+  --color-strong: #33363b;
+  --color-raised: #33363b;
+  --color-line: #2e3033;
+  --color-line-strong: #4a4d52;
+  --color-ink: #ffffff;
+  --color-ink-soft: #e9e9e9;
+  --color-sub: #b4b4b4;
+  --color-muted: #949494;         /* 면 6.1:1 · 꼬리표 바탕 5.0:1 — 데일리 bd-yellow --meta */
+  --color-faint: #6e7176;
+  --color-head-mark: transparent;
+  --color-accent: #ffffff;
+  --color-accent-hover: #e9e9e9;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #2a2c30;
+  --color-accent-vivid: #ffffff;
+  --color-on-accent: #131416;
+  --color-brand: #ffffff;
+  --color-brand-hover: #e9e9e9;
+  --color-on-brand: #131416;
+  --color-danger: #c92a2a;
+  --color-danger-hover: #d93636;
+  --color-danger-ink: #ff5a5f;
+  --color-danger-soft: #3a1c1e;
+  --color-danger-line: #6b2a2d;
+  --color-warn-ink: #ffffff;
+  --color-warn-soft: #2a2c30;
+  --color-info-ink: #4da3ff;
+  --color-info-soft: #1a2738;
+  --color-plus: #4da3ff;
+  --color-hero: #1c1e21;
+  --color-on-hero: #ffffff;
+  --color-hero-2: #ffffff;
+  --color-hero-track: #4a4d52;
+  --color-hero-sub: #b4b4b4;
+  --color-track: #33363b;
+  --color-progress: #e9e9e9;
+  --color-today: #4da3ff;
+  --color-milestone: #ffffff;
+  --color-late: #ff5a5f;
   --color-on-type: #14171c;
-  --color-white: #121212;
-  --color-slate-50: #1c1c1c;
-  --color-slate-100: #262626;
-  --color-slate-200: #2a2a2a;
-  --color-slate-300: #3a3a3a;
-  --color-slate-400: #8a8a8a;
-  --color-slate-500: #b0b0b0;
-  --color-slate-600: #b8b8b8;
-  --color-slate-700: #dddddd;
-  --color-slate-800: #ebebeb;
-  --color-slate-900: #f7f7f7;
-  --color-slate-950: #fafafa;
+  --color-white: #1c1e21;
+  --color-slate-50: #222428;
+  --color-slate-100: #2a2c30;
+  --color-slate-200: #2e3033;
+  --color-slate-300: #4a4d52;
+  --color-slate-400: #7e8186;
+  --color-slate-500: #949494;
+  --color-slate-600: #b4b4b4;
+  --color-slate-700: #d4d4d4;
+  --color-slate-800: #e9e9e9;
+  --color-slate-900: #ffffff;
+  --color-slate-950: #ffffff;
   /* 경고 상자: 연한 빨강 바탕은 어두운 틴트로 */
-  --color-red-50: #3a1a14;
-  --color-red-100: #45201a;
-  --color-red-200: #6b2a1d;
+  --color-red-50: #3a1c1e;
+  --color-red-100: #45201f;
+  --color-red-200: #6b2a2d;
 }
 
 /* 다크에서도 밝은 값을 쓰는 면(사진 위 배지 · 사진 크게 보기 · 차트 말풍선): 토큰을 밝은 화면 값으로 되돌린다(slate 는 위 묶음) */
 .dark .keep-light {
   color-scheme: light;
   --card-shadow: rgba(0, 0, 0, 0.16);
-  --color-page: #ffffff;
+  --color-page: #f2f2f2;
   --color-surface: #ffffff;
-  --color-sunken: #f7f7f7;
-  --color-strong: #f2f2f2;
+  --color-sunken: #f2f2f2;
+  --color-strong: #e4e4e4;
   --color-raised: #ffffff;
-  --color-line: #ebebeb;
-  --color-line-strong: #dddddd;
-  --color-ink: #222222;
-  --color-ink-soft: #3f3f3f;
-  --color-muted: #6a6a6a;
-  --color-faint: #929292;
-  --color-accent: #222222;
-  --color-accent-hover: #000000;
-  --color-accent-ink: #222222;
+  --color-line: #e4e4e4;
+  --color-line-strong: #c4c4c4;
+  --color-ink: #000000;
+  --color-ink-soft: #262626;
+  --color-sub: #555555;
+  --color-muted: #6b6b6b;
+  --color-faint: #9a9a9a;
+  --color-head-mark: #edfc47;
+  --color-accent: #000000;
+  --color-accent-hover: #262626;
+  --color-accent-ink: #000000;
   --color-accent-soft: #f2f2f2;
-  --color-accent-vivid: #222222;
+  --color-accent-vivid: #000000;
   --color-on-accent: #ffffff;
-  --color-danger: #c13515;
-  --color-danger-hover: #a12d12;
-  --color-danger-ink: #c13515;
-  --color-danger-soft: #fff0ee;
-  --color-danger-line: #ffcdc2;
-  --color-warn-ink: #8a5300;
-  --color-warn-soft: #fff6e5;
-  --color-info-ink: #2a5bb8;
-  --color-info-soft: #eef4ff;
-  --color-plus: #077f48;
-  --color-track: #ebebeb;
-  --color-progress: #222222;
-  --color-today: #2a5bb8;
-  --color-milestone: #222222;
-  --color-late: #c13515;
+  --color-danger: #c92a2a;
+  --color-danger-hover: #a82222;
+  --color-danger-ink: #c92a2a;
+  --color-danger-soft: #fdecec;
+  --color-danger-line: #f1b5b5;
+  --color-warn-ink: #000000;
+  --color-warn-soft: #f2f2f2;
+  --color-info-ink: #1864ab;
+  --color-info-soft: #eaf2fa;
+  --color-plus: #1864ab;
+  --color-track: #e4e4e4;
+  --color-progress: #000000;
+  --color-today: #1864ab;
+  --color-milestone: #000000;
+  --color-late: #c92a2a;
 }
 
 /* Tailwind v4 에서는 비층 CSS 가 유틸리티를 이기므로 components 층에 둔다 */
@@ -234,10 +253,12 @@
   body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     background-color: var(--color-page);
-    color: var(--color-ink);
+    color: var(--color-ink-soft);
     font-size: var(--text-base);
     line-height: var(--text-base--line-height);
+    font-variant-numeric: tabular-nums;
     -webkit-tap-highlight-color: transparent;
     /* 한글은 낱말 단위로 줄바꿈하고, 칸보다 긴 덩어리(주소 등)만 어디서든 끊는다 */
     word-break: keep-all;
@@ -262,7 +283,7 @@
   /* 검색 결과 상자 */
   .search-dropdown {
     background: var(--color-white);
-    border-radius: 16px;
+    border-radius: var(--radius-control);
     box-shadow: 0 12px 24px -8px var(--card-shadow);
     max-height: 300px;
     overflow-y: auto;
@@ -293,4 +314,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--color-accent);
 }
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; background-image: none; background-color: color-mix(in srgb, var(--color-slate-400) 18%, transparent); }
+}
+
+/* 이번 주 할 일에서 눌러 내려온 할 일 줄: 잠깐 형광으로 칠했다가 빠진다(누르는 것이 아니라 「여기예요」 표시) */
+@keyframes task-flash {
+  0%, 35% { background-color: color-mix(in srgb, var(--color-marker) 55%, transparent); }
+  100% { background-color: transparent; }
+}
+.task-flash { animation: task-flash 1.8s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .task-flash { animation: none; outline: 2px solid var(--color-ink); outline-offset: -2px; }
 }

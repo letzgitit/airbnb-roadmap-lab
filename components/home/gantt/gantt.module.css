@@ -21,8 +21,8 @@
 .tbtn svg { width: 18px; height: 18px; }
 .chips { padding: 8px 10px 8px; }
 
-/* ── 날짜 머리(머리글 띠 바로 밑에 붙음) ── */
-.axisWrap { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 20; background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
+/* ── 날짜 머리(화면 맨 위에 붙음 — 2026-10-28부터 머리 띠는 따라오지 않는다) ── */
+.axisWrap { position: sticky; top: env(safe-area-inset-top); z-index: 20; background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
 .axis { position: relative; height: 52px; will-change: transform; }
 .axM { position: absolute; top: 6px; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--ink); padding: 0 4px 0 6px; white-space: nowrap; background: var(--surface); z-index: 2; }
 .axM::before { content: ''; position: absolute; left: 0; top: -6px; height: 52px; border-left: 1px solid var(--line-strong); }
