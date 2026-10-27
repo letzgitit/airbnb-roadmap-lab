@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: '외도민',
     start_url: '/',
     display: 'standalone',
-    background_color: '#0B7285',
-    theme_color: '#0B7285',
+    background_color: '#007684',
+    theme_color: '#007684',
     icons: [
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },

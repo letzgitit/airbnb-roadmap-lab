@@ -27,6 +27,8 @@ const shortPin = (label: string) => label.split(/\s*·\s*/)[0];
 const ONE_CELL: Record<string, string> = { h1: '@min-[44px]:hidden', h2: '@min-[52px]:hidden', n1: '@min-[32px]:hidden', n2: '@min-[40px]:hidden' };
 const ONE_CELL_WIDE: Record<string, string> = { h1: '@min-[44px]:inline', h2: '@min-[52px]:inline', n1: '@min-[32px]:inline', n2: '@min-[40px]:inline' };
 const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--type-prep)';
+/** 단계 띠 바탕: 종류색 옅은 면(--type-*-soft — 위 ink 글자 4.5:1 이상) */
+const softOf = (type: string) => (type in TYPE_COLOR ? `var(--type-${type}-soft)` : 'var(--type-prep-soft)');
 const monthStart = (iso: string) => `${iso.slice(0, 7)}-01`;
 const addMonths = (first: string, n: number) => { const d = toDate(first); d.setMonth(d.getMonth() + n, 1); return isoOf(d); };
 
@@ -135,7 +137,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
                     className={`@container absolute flex h-4 items-center overflow-hidden px-1 text-xs font-normal whitespace-nowrap text-ink ${head ? 'rounded-l-control' : ''} ${tail ? 'rounded-r-control' : ''}`}
                     style={{
                       top: lane * LANE, left: `calc(${(col / 7) * 100}% + ${head ? 2 : 0}px)`, width: `calc(${(span / 7) * 100}% - ${(head ? 2 : 0) + (tail ? 2 : 0)}px)`,
-                      backgroundColor: `color-mix(in srgb, ${colorOf(r.type)} 26%, var(--color-surface))`,
+                      backgroundColor: softOf(r.type),
                       opacity: r.done ? 0.55 : 1,
                     }}>
                     {head && <span className="mr-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: colorOf(r.type) }} />}
