@@ -2,8 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Redis } from '@upstash/redis';
 import { redisEnv, sanitize } from './store';
+import { parseVariants } from './room3d-layouts';
 
-// 꾸미기 › 3D 시안에서 두 사람이 고른 상태(어느 시안 · 켠 항목 id · 문 열림)를 하나 저장한다.
+// 꾸미기 › 3D 시안에서 두 사람이 고른 상태(어느 시안 · 켠 항목 id · 문 열림 · 항목별 모양 · 치수 보기)를 하나 저장한다.
 // 항목 이름 · 값은 여기 없다(공개 저장소). 3D 시안 HTML(private/)이 id를 정하고, 여기서는 모양만 검사한다.
 // 값(가격)은 private/room3d-prices.json 에만 있고, 로그인한 사람에게만 라우트가 실어 준다.
 export const ROOM3D_STATE_KEY = 'oedomin:room3d:state';
@@ -16,6 +17,8 @@ export interface Room3dState {
   concept: (typeof CONCEPTS)[number];
   on: string[];
   doors: Partial<Record<(typeof DOORS)[number], boolean>>;
+  variants?: Record<string, string>;   // 항목별 고른 모양(창 가리개 등) — 이름 붙인 배치와 같은 꼴
+  dims?: boolean;                      // 「치수 보기」를 켰나
 }
 export interface Room3dSaved extends Room3dState { at: string; by: string }
 
@@ -33,7 +36,13 @@ export function parseRoom3dState(raw: unknown): Room3dState | null {
       doors[k as (typeof DOORS)[number]] = b;
     }
   }
-  return { concept: v.concept as Room3dState['concept'], on: [...new Set(v.on as string[])].sort(), doors };
+  const variants = parseVariants(v.variants);
+  if (variants === null) return null;
+  if (v.dims !== undefined && typeof v.dims !== 'boolean') return null;
+  const s: Room3dState = { concept: v.concept as Room3dState['concept'], on: [...new Set(v.on as string[])].sort(), doors };
+  if (variants) s.variants = variants;
+  if (typeof v.dims === 'boolean') s.dims = v.dims;
+  return s;
 }
 
 const DATA_FILE = path.join(process.cwd(), '.data', 'room3d-state.json');

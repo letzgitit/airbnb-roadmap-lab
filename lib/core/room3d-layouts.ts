@@ -5,7 +5,7 @@ import { Redis } from '@upstash/redis';
 import { redisEnv, sanitize } from './store';
 
 // 꾸미기 › 3D 시안에서 가구를 옮긴 배치를 이름 붙여 여러 개 저장한다. 로그인한 두 사람이 같이 본다.
-// 고른 상태(oedomin:room3d:state)와 따로 둔다. 배치 하나 = { 이름, 저장한 사람, 시각, 가구별 [옮긴 x, 옮긴 z, 90° 돌린 횟수] }.
+// 고른 상태(oedomin:room3d:state)와 따로 둔다. 배치 하나 = { 이름, 저장한 사람, 시각, 가구별 [옮긴 x, 옮긴 z, 90° 돌린 횟수], 항목별 고른 모양(있으면) }.
 // 가구 id · 옮긴 거리는 3D 시안 HTML(private/)이 정하고, 여기서는 모양 · 상한만 검사한다(공개 저장소라 집 치수는 코드에 없다).
 // 벽에 거는 것(선반 · 액자 · 벽등 …)도 같은 꼴로 적는다 — 시안마다 따로인 id(w-시안-이름), 돌린 횟수 = 바라보는 벽 방향. 그래서 묶음 수 상한이 바닥 가구보다 넉넉하다.
 // Redis 해시 한 개(필드 = 배치 id)라 두 사람이 동시에 다른 배치를 고쳐도 서로 덮어쓰지 않는다.
@@ -18,7 +18,24 @@ const UNIT_RE = /^[a-z0-9-]{1,40}$/;
 const LAYOUT_ID_RE = /^l-[0-9a-f]{8}$/;
 
 export type Room3dMove = [number, number, number];          // [옮긴 x, 옮긴 z, 90° 돌린 횟수 0~3]
-export interface Room3dLayout { units: Record<string, Room3dMove> }
+// variants = 항목별로 고른 모양(예: 창 가리개 모양). 없으면(옛 배치) 3D 시안이 처음 모양으로 연다
+export interface Room3dLayout { units: Record<string, Room3dMove>; variants?: Record<string, string> }
+
+const MAX_VARIANTS = 40;
+const VARIANT_RE = /^[a-z0-9-]{1,20}$/;
+/** 고른 모양 지도: { 항목 id: 모양 이름 } — 짧은 영문 소문자 · 숫자 · - 만, 40개까지. 없으면 undefined, 틀리면 null */
+export function parseVariants(raw: unknown): Record<string, string> | null | undefined {
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length > MAX_VARIANTS) return null;
+  const out: Record<string, string> = {};
+  for (const [id, v] of entries) {
+    if (!UNIT_RE.test(id) || typeof v !== 'string' || !VARIANT_RE.test(v)) return null;
+    out[id] = v;
+  }
+  return out;
+}
 export interface Room3dLayoutItem { id: string; name: string; by: string; at: string; layout: Room3dLayout }
 
 export class LayoutError extends Error {
@@ -52,7 +69,9 @@ export function parseLayout(raw: unknown): Room3dLayout | null {
     const m: Room3dMove = [Math.round(dx), Math.round(dz), r];
     if (m[0] || m[1] || m[2]) units[id] = m;
   }
-  return { units };
+  const variants = parseVariants((raw as Record<string, unknown>).variants);
+  if (variants === null) return null;
+  return variants ? { units, variants } : { units };
 }
 
 export const isLayoutId = (v: unknown): v is string => typeof v === 'string' && LAYOUT_ID_RE.test(v);

@@ -10,7 +10,7 @@ import { textBtn } from '@/components/progress/bits';
 // 로그인 쿠키로 현황 API 를 부르거나 이 화면을 건드리지 못하게. 그래서 높이는 iframe 이 postMessage 로 알려 주고, 화면 모드는 ?theme= 로 넘긴다.
 // 고른 상태(시안 · 켠 항목 · 문)도 iframe 이 저장하지 못하니 이 화면이 맡는다: 로그인했으면 /api/decor/room3d-state 로 불러와
 // room3d:restore · room3d:auth(값) 로 넘기고, iframe 이 room3d:state 로 알려 주면 저장한다. 로그인 안 했으면 저장 없이 기본안.
-// iframe 쪽 출처가 null 이라 '*' 로만 보낼 수 있다 — 그래서 상태(항목 id · 문 · 시안)와 값 표만 싣는다.
+// iframe 쪽 출처가 null 이라 '*' 로만 보낼 수 있다 — 그래서 상태(항목 id · 문 · 시안 · 항목별 모양 · 치수 보기)와 값 표만 싣는다.
 // 가구 배치(이름 붙여 저장한 것)도 같은 길: iframe 이 room3d:layout-op 로 부탁 → 이 화면이 /api/decor/room3d-layouts 를 불러 room3d:layout-res 로 돌려준다.
 // 배치에는 가구 묶음 id · 옮긴 거리 · 돌린 횟수와 이름 · 저장한 사람 · 시각만 있다.
 const MIN_H = 480;
@@ -38,7 +38,7 @@ function exitFs(setFs: (f: Fs) => void) {
   }
   setFs('off');
 }
-type SavedState = { concept: string; on: string[]; doors: Record<string, boolean> };
+type SavedState = { concept: string; on: string[]; doors: Record<string, boolean>; variants?: Record<string, string>; dims?: boolean };
 type Saved = { member: boolean; state: SavedState | null; prices: Record<string, [number, number]>; layouts: unknown[] | null };
 
 // 이름 붙여 저장한 가구 배치(/api/decor/room3d-layouts). iframe 이 room3d:layout-op 로 부탁하면 이 화면이 대신 부르고
@@ -82,6 +82,7 @@ async function runLayoutOp(op: LayoutOp): Promise<Record<string, unknown>> {
 
 const ID_RE = /^[a-z0-9-]{1,40}$/;
 const DOOR_KEYS = ['big', 'small', 'util', 'bath', 'ent'];
+const VARIANT_RE = /^[a-z0-9-]{1,20}$/;
 // iframe · 서버에서 온 값을 그대로 믿지 않고 모양만 골라 담는다
 function asState(v: unknown): SavedState | null {
   if (!v || typeof v !== 'object') return null;
@@ -92,7 +93,17 @@ function asState(v: unknown): SavedState | null {
   if (o.doors && typeof o.doors === 'object') {
     for (const k of DOOR_KEYS) { const b = (o.doors as Record<string, unknown>)[k]; if (typeof b === 'boolean') doors[k] = b; }
   }
-  return { concept: o.concept, on: o.on as string[], doors };
+  const s: SavedState = { concept: o.concept, on: o.on as string[], doors };
+  // 항목별 고른 모양(창 가리개 등): 짧은 이름만, 40개까지. 모양이 틀린 칸은 뺀다(나머지 상태는 그대로)
+  if (o.variants && typeof o.variants === 'object' && !Array.isArray(o.variants)) {
+    const variants: Record<string, string> = {};
+    for (const [id, k] of Object.entries(o.variants as Record<string, unknown>).slice(0, 40)) {
+      if (ID_RE.test(id) && typeof k === 'string' && VARIANT_RE.test(k)) variants[id] = k;
+    }
+    s.variants = variants;
+  }
+  if (typeof o.dims === 'boolean') s.dims = o.dims;
+  return s;
 }
 function asPrices(v: unknown): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {};
