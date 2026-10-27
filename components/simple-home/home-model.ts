@@ -5,14 +5,14 @@ import type { PhotoView } from '@/lib/core/photos';
 import type { ProgressDoc, PropertyItem, QuestionItem, TaskItem, TaskKind } from '@/lib/core/types';
 
 // 「뉴스」 탭은 2026-10-28 뺐다(규정 소식은 예전 화면 · 단계 창에 그대로 있다).
-// icon = 탭 위 선 아이콘 이름(components/ui/LineIcon). 뜻이 바로 통하는 물건으로: 서류 = 문서, 인테리어 = 소파, 사진 · 문서 = 카메라,
+// icon = 탭 위 선 아이콘 이름(components/ui/LineIcon). 뜻이 바로 통하는 물건으로: 서류 = 문서, 인테리어 = 소파, 사진 = 카메라,
 // 에어비앤비 = 침대(숙소 — 예전 열쇠는 뜻이 안 통했다), 연락처 = 전화, 달력 = 달력.
-// 「사진」 탭은 2026-10-28 「사진 · 문서」로(안에 하위 탭 「사진」 「문서」 — 받아 둔 서류가 「문서」로 옮겨 왔다)
+// 「사진」 탭 안에 하위 탭 「사진」 「문서」(받아 둔 서류가 「문서」로 옮겨 왔다). 탭 이름은 집에서 쓰는 말 그대로 「사진」(390px 에 여섯 탭이 다 들어가게)
 export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts' | 'calendar';
 export const TABS: { id: TabId; label: string; icon: 'doc' | 'sofa' | 'camera' | 'bed' | 'phone' | 'calendar' }[] = [
   { id: 'docs', label: '서류', icon: 'doc' },
   { id: 'interior', label: '인테리어', icon: 'sofa' },
-  { id: 'photos', label: '사진 · 문서', icon: 'camera' },
+  { id: 'photos', label: '사진', icon: 'camera' },
   { id: 'airbnb', label: '에어비앤비', icon: 'bed' },
   { id: 'contacts', label: '연락처', icon: 'phone' },
   { id: 'calendar', label: '달력', icon: 'calendar' },
@@ -149,6 +149,8 @@ export interface CardSummary {
   deadline: string | null;
   /** 할 일이 있고 다 끝냈거나, 맡은 단계가 다 「완료」 */
   finished: boolean;
+  /** 안 끝난 할 일 중 가장 이른 마감(「가장 급한 일」 고르기 · 표시). 없으면 null */
+  nextDue: string | null;
 }
 
 /**
@@ -160,7 +162,9 @@ export function summarize(card: CardDef, tasks: TaskItem[], doc: Pick<ProgressDo
   const open = tasks.filter((t) => !t.done);
   const late = open.filter((t) => t.due && daysBetween(today, t.due) < 0).length;
   const soon = open.filter((t) => t.due && daysBetween(today, t.due) >= 0 && daysBetween(today, t.due) <= 6).length;
-  const lastDue = open.map((t) => t.due).filter((d): d is string => !!d).sort().pop() ?? null;
+  const dues = open.map((t) => t.due).filter((d): d is string => !!d).sort();
+  const lastDue = dues[dues.length - 1] ?? null;
+  const nextDue = dues[0] ?? null;
   let deadline: string | null = null;
   if (!card.match) {
     const fixed = card.fixedWords ? fixedDates(doc.property).find((f) => card.fixedWords!.some((w) => f.text.includes(w))) : undefined;
@@ -171,7 +175,23 @@ export function summarize(card: CardDef, tasks: TaskItem[], doc: Pick<ProgressDo
   }
   const stepsDone = !card.match && card.steps.every((s) => doc.steps[String(s)]?.status === 'done');
   const finished = stepsDone || (tasks.length > 0 && open.length === 0);
-  return { total: tasks.length, done: tasks.length - open.length, late, soon, deadline, finished };
+  return { total: tasks.length, done: tasks.length - open.length, late, soon, deadline, finished, nextDue };
+}
+
+/**
+ * 「가장 급한 일」 카드 고르기: 카드 마감이 아니라 **카드 안 안 끝난 할 일 중 가장 급한 것** 기준.
+ * 기한 지난 할 일이 있는 카드 먼저 → 그다음 가장 이른 할 일 마감 순 → 같으면 앞 카드.
+ * 날짜 있는 안 끝난 할 일이 없으면 null. 그래서 위 「일주일 안에 할 일」 맨 앞 할 일이 든 카드가 「가장 급한 일」이 된다.
+ */
+export function urgentCard(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'late' | 'nextDue'>>): string | null {
+  let best: { id: string; late: boolean; due: string } | null = null;
+  for (const c of cards) {
+    const s = sums[c.id];
+    if (!s?.nextDue) continue;
+    const cur = { id: c.id, late: s.late > 0, due: s.nextDue };
+    if (!best || (cur.late && !best.late) || (cur.late === best.late && cur.due < best.due)) best = cur;
+  }
+  return best?.id ?? null;
 }
 
 /**

@@ -79,8 +79,9 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
           <div className="min-w-0">
             <h3 id={`${uid}-t`} className="mt-1.5 text-title font-bold tracking-[-0.015em] text-ink">{card.title}</h3>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-ink-soft">
-              <span>{summary.deadline ? `${longDate(summary.deadline)}까지` : '날짜 미정'}</span>
-              <StateBadge summary={summary} today={today} />
+              {/* 가장 급한 카드는 카드 마감이 아니라 안 끝난 할 일 중 가장 이른 마감(위 「일주일 안에 할 일」과 같은 날)을 보인다 */}
+              <span>{summary.nextDue ? `${longDate(summary.nextDue)}까지` : '날짜 미정'}</span>
+              <StateBadge summary={summary} today={today} date={summary.nextDue} />
             </p>
           </div>
           {summary.total > 0 && (
@@ -113,8 +114,9 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
             {card.sub && <span className="mt-0.5 block text-sm font-normal text-muted">{card.sub}</span>}
             <span className="mt-1.5 block text-base text-ink-soft">{summary.deadline ? `${longDate(summary.deadline)}까지` : '날짜 미정'}</span>
           </span>
-          <span className="flex shrink-0 flex-col items-end gap-1.5">
-            <StateBadge summary={summary} today={today} />
+          {/* 오른쪽: 상태 배지와 진행 숫자를 한 줄로 */}
+          <span className="flex shrink-0 items-center gap-2">
+            <StateBadge summary={summary} today={today} date={summary.deadline} />
             <span className={`text-base tabular-nums ${summary.total ? 'font-semibold text-ink' : 'font-normal text-muted'}`} aria-hidden>{progressText(summary)}</span>
             <span className="sr-only">{progressSr(summary)}</span>
           </span>
@@ -127,12 +129,12 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
   );
 }
 
-/** 카드 상태 배지 하나: 다 했으면 「다 했어요」, 기한 지난 일이 있으면 「기한 지난 일 n개」(경고), 아니면 마감까지 남은 날(3일 안 주의 · 그 밖 회색) */
-function StateBadge({ summary, today }: { summary: CardSummary; today: string }) {
+/** 카드 상태 배지 하나: 다 했으면 「다 했어요」, 기한 지난 일이 있으면 「기한 지난 일 n개」(경고), 아니면 date 까지 남은 날(3일 안 주의 · 그 밖 회색) */
+function StateBadge({ summary, today, date }: { summary: CardSummary; today: string; date: string | null }) {
   if (summary.finished) return <Badge tone="neutral"><LineIcon name="check" className="size-4" stroke={2.4} />다 했어요</Badge>;
   if (summary.late > 0) return <Badge tone="danger">기한 지난 일 {summary.late}개</Badge>;
-  if (!summary.deadline) return null;
-  const rel = relDay(summary.deadline, today);
-  const tone: BadgeTone = rel.tone === 'late' ? 'danger' : daysBetween(today, summary.deadline) <= SOON_DAYS ? 'warn' : 'neutral';
+  if (!date) return null;
+  const rel = relDay(date, today);
+  const tone: BadgeTone = rel.tone === 'late' ? 'danger' : daysBetween(today, date) <= SOON_DAYS ? 'warn' : 'neutral';
   return <Badge tone={tone}>{rel.text}</Badge>;
 }

@@ -18,7 +18,7 @@ import { PhotosTab, type PhotoSub } from './PhotosTab';
 import { DocsLink } from './ReceivedDocs';
 import { TaskCard } from './TaskCard';
 import {
-  AIRBNB_CARDS, DOC_CARDS, DONE_STEPS, INTERIOR_CARDS, TABS, WEEK_MAX, askOnly, dateParts, isAsk, sortCards, summarize, tabCounts, tasksByCard, weekTasks,
+  AIRBNB_CARDS, DOC_CARDS, DONE_STEPS, INTERIOR_CARDS, TABS, WEEK_MAX, askOnly, dateParts, isAsk, sortCards, summarize, tabCounts, tasksByCard, urgentCard, weekTasks,
   type CardDef, type TabId,
 } from './home-model';
 
@@ -29,13 +29,33 @@ const PHOTO_SUB_KEY = 'home:photos-sub';
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 저장이 막혀도 이번 화면에는 적용 */ } };
 
-/** 위 탭 줄(시안 B): 선 아이콘 26 위 + 14px 이름, 고른 탭 = ink + 2px 검정 밑줄, 나머지 muted. 폰에서 넘치면 옆으로 밀린다 */
-export function HomeTabBar({ tab, onPick, late = {}, idBase, tabsRef }: {
-  tab: TabId | null; onPick?: (t: TabId) => void; late?: Partial<Record<TabId, number>>; idBase?: string; tabsRef?: React.Ref<HTMLDivElement>;
+/**
+ * 위 탭 줄(시안 B): 선 아이콘 26 위 + 14px 이름, 고른 탭 = ink + 2px 검정 밑줄, 나머지 muted. 칸 사이 16px — 390px 폰에서 여섯 탭이 다 들어간다.
+ * 더 좁은 폰에서 넘치면 옆으로 밀리고, 오른쪽(왼쪽)에 더 있다는 흐림을 깐다. 고른 탭은 늘 화면 안으로 끌어온다.
+ */
+export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
+  tab: TabId | null; onPick?: (t: TabId) => void; late?: Partial<Record<TabId, number>>; idBase?: string;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setMore({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => { el.removeEventListener('scroll', check); window.removeEventListener('resize', check); };
+  }, []);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
   return (
-    <div ref={tabsRef} role={onPick ? 'tablist' : undefined} aria-label={onPick ? '한눈에 보기' : undefined} aria-hidden={onPick ? undefined : true}
-      className="flex gap-6.5 overflow-x-auto border-b border-line px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="relative">
+    {more.left && <span className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-page to-transparent" aria-hidden />}
+    {more.right && <span className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-page to-transparent" aria-hidden />}
+    <div ref={ref} role={onPick ? 'tablist' : undefined} aria-label={onPick ? '한눈에 보기' : undefined} aria-hidden={onPick ? undefined : true}
+      className="flex gap-4 overflow-x-auto border-b border-line px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {TABS.map((t) => {
         const on = t.id === tab;
         const cls = `relative flex shrink-0 flex-col items-center gap-1.5 whitespace-nowrap pb-2.5 pt-1 text-sm font-semibold transition-colors ${on ? 'text-ink' : 'text-muted hover:text-ink'}`;
@@ -56,6 +76,7 @@ export function HomeTabBar({ tab, onPick, late = {}, idBase, tabsRef }: {
           : <span key={t.id} className={cls}>{body}</span>;
       })}
     </div>
+    </div>
   );
 }
 
@@ -71,7 +92,6 @@ export function SimpleHome({ content }: { content: Content }) {
   const { steps } = useSite();
   const { ensure } = usePhotos();
   const uid = useId();
-  const tabsRef = useRef<HTMLDivElement>(null);
   // 할 일 메모 사진 · 받아 둔 문서 개수를 보이려고 사진 목록도 처음에 한 번 받는다
   useEffect(() => { ensure(); }, [ensure]);
   const [tab, setTab] = useState<TabId>(() => {
@@ -94,10 +114,6 @@ export function SimpleHome({ content }: { content: Content }) {
     pick(t);
   };
   const today = todayStr();
-  // 폰에서 탭 줄이 옆으로 밀릴 때 고른 탭이 화면 안에 오게
-  useEffect(() => {
-    tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [tab]);
 
   // 탭 아이콘 옆 빨강 점: 그 탭에 기한 지난 안 끝난 일이 있나
   const late = useMemo(() => {
@@ -116,7 +132,7 @@ export function SimpleHome({ content }: { content: Content }) {
       <h1 className="sr-only">우리 준비 한눈에</h1>
       {/* 탭 줄: 머리글(60px) 바로 밑에 붙어 따라온다. 화면 양옆 24px 여백 밖까지 선을 긋는다 */}
       <div className="sticky top-[calc(60px+env(safe-area-inset-top))] z-30 -mx-6 -mt-4 mb-2 bg-page">
-        <HomeTabBar tab={tab} onPick={pick} late={late} idBase={uid} tabsRef={tabsRef} />
+        <HomeTabBar tab={tab} onPick={pick} late={late} idBase={uid} />
       </div>
 
       <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-${tab}`}>
@@ -170,10 +186,13 @@ function CardsTab({ tab, cards, doc, steps, today, extra, afterFirst, focus = nu
   const groups = useMemo(() => tasksByCard(doc, cards), [doc, cards]);
   const sums = useMemo(() => Object.fromEntries(cards.map((c) => [c.id, summarize(c, groups[c.id], doc, today)])), [cards, groups, doc, today]);
   // 낱말 카드의 「그 밖」은 할 일이 없으면 숨긴다
-  // 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드. 가장 급한 카드(맨 앞, 안 끝났고 날짜 있음) 하나만 큰 옅은 카드
-  const sorted = sortCards(cards.filter((c) => c.match || c.id !== 'other' || groups[c.id].length > 0), sums);
-  const heroId = sorted[0] && !sums[sorted[0].id].finished && sums[sorted[0].id].deadline ? sorted[0].id : null;
+  // 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드.
+  // 「가장 급한 일」(큰 옅은 카드 하나) = 카드 마감이 아니라 안 끝난 할 일 중 가장 급한 할 일이 든 카드(urgentCard) — 맨 앞에 세운다
+  const visible = cards.filter((c) => c.match || c.id !== 'other' || groups[c.id].length > 0);
+  const heroId = urgentCard(visible, sums);
+  const sorted = sortCards(visible, sums);
   const { open, toggle } = useOpenCards(tab);
+  const [showEmpty, setShowEmpty] = useState(false);
   // 「문의 필요만 보기」: 문의 할 일이 있는 카드만, 그 카드는 펼친 채 문의 할 일(과 세부 항목 · 부모)만
   const [askOn, setAskOn] = useState(false);
   const askGroups = useMemo(() => Object.fromEntries(cards.map((c) => [c.id, askOnly(groups[c.id])])), [cards, groups]);
@@ -181,8 +200,12 @@ function CardsTab({ tab, cards, doc, steps, today, extra, afterFirst, focus = nu
   const shown = askOn ? sorted.filter((c) => askGroups[c.id].length > 0) : sorted;
   const { wd } = dateParts(today);
   const anchor = (id: string) => `home-card-${tab}-${id}`;
-  const heroFirst = !askOn && !!heroId && shown[0]?.id === heroId;
-  const rest = heroFirst ? shown.slice(1) : shown;
+  const heroFirst = !askOn && !!heroId;
+  const others = shown.filter((c) => !heroFirst || c.id !== heroId);
+  // 낱말 카드 탭(인테리어 · 에어비앤비): 할 일이 하나도 없는 카드는 맨 아래 접는 줄 「할 일 없는 묶음 n개」 안으로
+  const foldEmpty = !askOn && cards.some((c) => c.match);
+  const empty = foldEmpty ? others.filter((c) => sums[c.id].total === 0) : [];
+  const rest = foldEmpty ? others.filter((c) => sums[c.id].total > 0) : others;
   const card =(c: CardDef) => (
     <TaskCard key={c.id} card={c} cards={cards} tasks={askOn ? askGroups[c.id] : groups[c.id]} summary={sums[c.id]} steps={steps} today={today}
       open={askOn || open.has(c.id)} onToggleOpen={() => toggle(c.id)} hero={!askOn && c.id === heroId} anchorId={anchor(c.id)} />
@@ -207,10 +230,10 @@ function CardsTab({ tab, cards, doc, steps, today, extra, afterFirst, focus = nu
           <p className="text-base font-medium text-muted">오늘</p>
           <p className="mt-1 text-display font-bold tracking-[-0.015em] text-ink">{Number(today.slice(5, 7))}월 {Number(today.slice(8))}일 ({wd})</p>
         </div>
-        {/* 거르기 단추: 켜면 검정 면, 끄면 테두리만(동그란 알약) */}
+        {/* 거르기 단추: 작은 테두리 단추(모서리 8). 켜면 검정 면 */}
         {(askCount > 0 || askOn) && (
           <button type="button" aria-pressed={askOn} onClick={() => setAskOn((v) => !v)}
-            className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors ${askOn ? 'border-ink bg-ink text-surface' : 'border-line-strong bg-surface text-ink hover:border-ink'}`}>
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-control border px-3 text-sm font-semibold transition-colors ${askOn ? 'border-ink bg-ink text-surface' : 'border-line-strong bg-surface text-ink hover:border-ink'}`}>
             문의 필요만 보기<span className="font-normal tabular-nums">{askCount}</span>
           </button>
         )}
@@ -218,9 +241,17 @@ function CardsTab({ tab, cards, doc, steps, today, extra, afterFirst, focus = nu
       {askOn && shown.length === 0 && <p className="text-base text-muted">문의할 일이 없어요.</p>}
       {!askOn && <WeekBundle groups={groups} doc={doc} steps={steps} today={today} />}
       {/* 「가장 급한 일」 카드가 있으면 따로 세우고 바로 밑에 afterFirst(서류 탭: 받아 둔 문서 보기 한 줄), 나머지 카드는 16px 간격으로 한 묶음 */}
-      {heroFirst && <Fragment key={shown[0].id}>{card(shown[0])}{afterFirst}</Fragment>}
+      {heroFirst && heroId && <Fragment key={heroId}>{card(cards.find((c) => c.id === heroId)!)}{afterFirst}</Fragment>}
       {rest.length > 0 && <div className="flex flex-col gap-4">{rest.map(card)}</div>}
       {!heroFirst && !askOn && afterFirst}
+      {empty.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <Card>
+            <FoldRow label="할 일 없는 묶음" count={empty.length} open={showEmpty} onToggle={() => setShowEmpty((v) => !v)} controls={`${tab}-empty`} />
+          </Card>
+          {showEmpty && <div id={`${tab}-empty`} className="flex flex-col gap-4">{empty.map(card)}</div>}
+        </div>
+      )}
       {!askOn && extra}
     </div>
   );

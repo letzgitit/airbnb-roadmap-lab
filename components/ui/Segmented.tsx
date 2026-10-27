@@ -14,7 +14,7 @@ export function Segmented<T extends string>({ label, value, onChange, options }:
         const on = o.value === value;
         return (
           <button key={o.value} type="button" aria-pressed={on} onClick={() => onChange(o.value)}
-            className={`flex min-h-11 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-control px-3 text-base transition-colors ${on ? 'bg-raised font-bold text-ink shadow-sm dark:shadow-none' : 'font-semibold text-muted hover:text-ink'}`}>
+            className={`flex min-h-11 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-control px-3 text-base transition-colors ${on ? 'bg-raised font-semibold text-ink ring-1 ring-line-strong' : 'font-semibold text-muted hover:text-ink'}`}>
             <span>{o.label}</span>
             {o.dot && <><span className="size-1.5 rounded-full bg-accent-ink" aria-hidden /><span className="sr-only">(새 소식)</span></>}
             {o.count != null && <span className="font-normal text-muted">{o.count}</span>}

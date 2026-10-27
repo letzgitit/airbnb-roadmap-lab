@@ -10,6 +10,7 @@ import { Meta } from '@/components/ui/Meta';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { todayStr } from '@/lib/client/format';
+import { longDate } from '@/components/tasks/task-view';
 import { PROJECT_LABEL, VIA_LABEL, manwon, moneyRows, splitMark, type PlanItem, type PlanPayload } from '@/lib/plan';
 
 // 「자금 계획」(메뉴 「자금」, 2026-10-28 전 이름 「돈 · 다른 집」): 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길. 로그인 확인은 LoginGate(페이지)가 하고,
@@ -20,15 +21,7 @@ type State =
   | { kind: 'error' }
   | { kind: 'ready'; data: PlanPayload; today: string };
 
-const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
-
-function md(iso: string) {
-  const [, m, d] = iso.split('-');
-  return `${Number(m)}/${Number(d)}`;
-}
-function week(iso: string) {
-  return WEEK[new Date(`${iso}T00:00:00Z`).getUTCDay()];
-}
+// 날짜는 어디서나 「10월 29일(목)」 꼴(longDate)
 // 남은 돈 항목들(현금 · 마이너스 통장 여유). 화면에서는 점 없이 span 마다 12px 간격으로 나눠 보인다.
 function balanceParts(cash: number | null, credit: number | null) {
   const parts: string[] = [];
@@ -91,30 +84,33 @@ function MoneySection({ data }: { data: PlanPayload }) {
           <p className="px-4 py-3 text-base text-muted">돈 흐름이 아직 없어요.</p>
         ) : (
           <ul>
-            {rows.map(({ item, cash, credit }) => {
+            {rows.map(({ item, cash, credit }, i) => {
               const out = item.amount !== null && item.amount < 0;
-              const after = balanceParts(cash, credit).map((p, k) => (k === 0 ? `그 뒤 ${p}` : p));
+              // 「마이너스 통장 여유」는 값이 바뀐 줄에서만(바로 앞 줄 — 첫 줄은 지금 값 — 과 다를 때)
+              const prevCredit = i === 0 ? (data.plan?.credit ?? null) : rows[i - 1].credit;
+              const after = balanceParts(cash, credit !== prevCredit ? credit : null).map((p, k) => (k === 0 ? `그 뒤 ${p}` : p));
               const sub = [item.project === 'jisan' ? PROJECT_LABEL.jisan : '', ...after].filter(Boolean);
               return (
-                <li key={item.id} className={`px-4 py-3 ${cardRowCls}`}>
-                  <div className="flex items-start gap-3">
-                    <span className="w-12 shrink-0 pt-0.5 text-sm text-muted">{item.date ? md(item.date) : '미정'}</span>
-                    <span className="min-w-0 flex-1 text-base font-semibold text-ink">
-                      {item.text}
-                      {item.estimate && <span className="ml-1.5 inline-block align-middle"><Badge>추정</Badge></span>}
-                    </span>
+                <li key={item.id} className={`px-5 py-4 ${cardRowCls}`}>
+                  {/* 날짜는 「10월 29일(목)」 꼴로 제목 위에, 「추정」 배지는 늘 금액 옆 */}
+                  <p className="text-sm text-muted">{item.date ? longDate(item.date) : '날짜 미정'}</p>
+                  <div className="mt-0.5 flex items-start gap-3">
+                    <span className="min-w-0 flex-1 text-base font-semibold text-ink">{item.text}</span>
                     <span className="shrink-0 text-right">
-                      {item.amount === null ? (
-                        <span className="block pt-0.5 text-sm text-muted">금액 미정</span>
-                      ) : (
-                        <span className={`block text-base font-bold tabular-nums ${out ? 'text-ink' : 'text-plus'}`}>
-                          {out ? '−' : '+'}{manwon(item.amount)}
-                        </span>
-                      )}
+                      <span className="flex items-center justify-end gap-1.5">
+                        {item.estimate && <Badge className="py-0.5">추정</Badge>}
+                        {item.amount === null ? (
+                          <span className="text-base text-muted">금액 미정</span>
+                        ) : (
+                          <span className={`text-base font-bold tabular-nums ${out ? 'text-ink' : 'text-plus'}`}>
+                            {out ? '−' : '+'}{manwon(item.amount)}
+                          </span>
+                        )}
+                      </span>
                       <span className="block text-sm text-muted">{VIA_LABEL[item.via]}</span>
                     </span>
                   </div>
-                  {sub.length > 0 && <p className="mt-0.5 flex flex-wrap gap-x-3 pl-15 text-sm text-muted">{sub.map((s, k) => <span key={k}>{s}</span>)}</p>}
+                  {sub.length > 0 && <p className="mt-1 flex flex-wrap gap-x-3 text-sm text-muted">{sub.map((s, k) => <span key={k}>{s}</span>)}</p>}
                 </li>
               );
             })}
@@ -178,8 +174,8 @@ function Timeline({ id, items, today }: { id: string; items: PlanItem[]; today: 
   const todayMonth = today.slice(0, 7);
   const out: ReactNode[] = [];
   const todayLine = (
-    <li key="today" className={`flex items-center gap-2 px-4 py-2 ${cardRowCls}`} aria-label={`오늘 ${md(today)}`}>
-      <span className="text-sm font-bold text-accent-ink">오늘 {md(today)}</span>
+    <li key="today" className={`flex items-center gap-2 px-4 py-2 ${cardRowCls}`} aria-label={`오늘 ${longDate(today)}`}>
+      <span className="text-sm font-semibold text-ink">오늘 {longDate(today)}</span>
       <span className="h-0.5 flex-1 rounded-full bg-accent" aria-hidden />
     </li>
   );
@@ -202,8 +198,8 @@ function Timeline({ id, items, today }: { id: string; items: PlanItem[]; today: 
     const isLate = !it.done && it.due < today;
     out.push(
       <li key={`${it.src}-${it.id}`} className={`flex items-start gap-3 px-4 py-3 ${cardRowCls}`}>
-        <span className={`w-14 shrink-0 pt-0.5 text-sm ${isLate ? 'font-bold text-danger-ink' : 'text-muted'}`}>
-          {md(it.due)} {week(it.due)}
+        <span className={`w-25 shrink-0 whitespace-nowrap pt-0.5 text-sm tabular-nums ${isLate ? 'font-semibold text-danger-ink' : 'text-muted'}`}>
+          {longDate(it.due)}
         </span>
         <span className={`min-w-0 flex-1 text-base ${it.done ? 'text-muted line-through' : 'font-semibold text-ink'}`}>
           {it.done && <span className="sr-only">끝남 </span>}

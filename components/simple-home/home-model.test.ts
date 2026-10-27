@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
-  progressText, relDay, sortCards, summarize, tasksByCard,
+  progressText, relDay, sortCards, summarize, tasksByCard, urgentCard,
   TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos, docGroups,
 } from './home-model.ts';
 
@@ -27,8 +27,28 @@ test('받아 둔 서류: PDF + 서류 낱말 사진, 참고 · 다른 집은 빼
 });
 
 test('탭 여섯 개(뉴스 없음), 달력이 맨 끝, 에어비앤비는 침대 아이콘', () => {
-  assert.deepEqual(TABS.map((t) => t.label), ['서류', '인테리어', '사진 · 문서', '에어비앤비', '연락처', '달력']);
+  assert.deepEqual(TABS.map((t) => t.label), ['서류', '인테리어', '사진', '에어비앤비', '연락처', '달력']);
   assert.deepEqual(TABS.map((t) => t.icon), ['doc', 'sofa', 'camera', 'bed', 'phone', 'calendar']);
+});
+
+test('가장 급한 일: 카드 마감이 아니라 안 끝난 할 일 중 가장 급한 것 기준', () => {
+  const steps = { 4: { status: 'todo', targetDate: '2026-11-09' }, 8: { status: 'todo', targetDate: '2026-11-06' } } as never;
+  const today = '2026-10-28';
+  const doc = { steps, property: {} } as never;
+  // 전입신고 카드 마감은 11/9(D-12)지만 그 안 할 일이 11/2(D-5) → 안전 설비(카드 마감 11/6, 할 일 11/5)보다 급하다
+  const moveIn = summarize(DOC_CARDS[0], [T('a', 4, '견적', { due: '2026-11-02' }), T('b', 4, '치수')], doc, today);
+  const safety = summarize(DOC_CARDS[2], [T('c', 8, '소화기', { due: '2026-11-05' })], doc, today);
+  assert.equal(moveIn.deadline, '2026-11-09');
+  assert.equal(moveIn.nextDue, '2026-11-02');
+  const cards = [DOC_CARDS[2], DOC_CARDS[0]];
+  assert.equal(urgentCard(cards, { [DOC_CARDS[0].id]: moveIn, [DOC_CARDS[2].id]: safety }), 'move-in');
+  // 기한 지난 할 일이 있는 카드가 먼저
+  const lateSafety = summarize(DOC_CARDS[2], [T('c', 8, '소화기', { due: '2026-10-20' }), T('d', 8, '감지기', { due: '2026-11-20' })], doc, today);
+  assert.equal(urgentCard(cards, { [DOC_CARDS[0].id]: moveIn, [DOC_CARDS[2].id]: lateSafety }), 'safety');
+  // 날짜 있는 안 끝난 할 일이 없으면 없음
+  const none = summarize(DOC_CARDS[0], [T('b', 4, '치수'), T('e', 4, '끝', { due: '2026-11-01', done: true })], doc, today);
+  assert.equal(none.nextDue, null);
+  assert.equal(urgentCard([DOC_CARDS[0]], { [DOC_CARDS[0].id]: none }), null);
 });
 
 test('이번 주 꼭 할 일: 기한 지남 + 6일 뒤까지, 마감 이른 순 5개, 끝낸 일 · 날짜 없는 일은 빠짐', () => {

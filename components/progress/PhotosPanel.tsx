@@ -265,7 +265,8 @@ function Thumb({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
 
 // ── 우리 집 › 사진 화면 ──
 const NO_GROUP = -1;   // 최신순 · 오래된순의 「단계 묶음 없음」 표시(제목 줄 없음)
-export function PhotosPanel({ active }: { active: boolean }) {
+/** noUpload: 첫 줄 「＋ 사진 올리기」를 뺀다(새 홈 「모든 사진」 — 올리기는 위 공사 전 · 후 두 곳만) */
+export function PhotosPanel({ active, noUpload = false }: { active: boolean; noUpload?: boolean }) {
   const { steps, data, state, shown, sort, setSort, kind, setKind, query, setQuery, ensure, reload, view, upload, patch } = usePhotos();
   const [trashOpen, setTrashOpen] = useState(false);
   const trashId = useId();
@@ -302,10 +303,10 @@ export function PhotosPanel({ active }: { active: boolean }) {
     <>
       <Card as="section" aria-label="사진">
         {/* 첫 줄 「＋ 사진 올리기」 → 올리기 창(단계는 지금 단계로 골라 둔 채) */}
-        <AddButton label="사진 올리기" icon="fa-plus" onClick={() => upload()} />
+        {!noUpload && <AddButton label="사진 올리기" onClick={() => upload()} />}
 
         {has && (
-          <div className="space-y-2 border-t border-line px-4 py-3" role="search" aria-label="사진 찾기">
+          <div className={`space-y-2 px-4 py-3 ${noUpload ? '' : 'border-t border-line'}`} role="search" aria-label="사진 찾기">
             <p className="text-sm text-muted" aria-live="polite">
               {filtering ? `${shown.length}장 (전체 ${data.photos.length}장)` : `${shown.length}장`}
             </p>
