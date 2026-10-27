@@ -40,6 +40,8 @@ export function NoteField({ value, onChange }: { value: string; onChange: (v: st
 const labelCls = 'text-sm font-normal text-ink-soft';
 /** 쉬운 모양 이름표: 고정 폭 칸이라 입력칸 왼쪽 끝이 한 줄로 맞는다 */
 const simpleLabelCls = `w-28 shrink-0 ${labelCls}`;
+/** 쉬운 모양 날짜 칸: 남은 폭을 채우고, 날짜가 다 보일 폭(11rem)이 안 남으면 이름표 밑 줄로 내려간다(좁은 카드 안 폼) */
+const dateFitCls = `${dateCls} block w-full min-w-[11rem] flex-1 basis-[11rem]`;
 
 /**
  * 쉬운 모양(새 홈)의 날짜 칸 + 「문의 필요」: [언제부터(선택)] [언제까지] 두 줄(이름표는 고정 폭) + 체크 한 줄.
@@ -51,11 +53,12 @@ export function SimpleWhenFields({ start, onStart, due, onDue, ask, onAsk }: {
 }) {
   return (
     <div className="space-y-2">
-      <label className="flex items-center gap-2"><span className={simpleLabelCls}>언제부터(선택)</span>
-        <input type="date" className={dateCls} value={start} onChange={(e) => onStart(e.target.value)} />
+      {/* 이름표는 고정 폭, 입력칸은 남은 폭을 채운다. 좁은 카드 안 폼이면 입력칸이 이름표 밑 줄로 내려가 폼 밖으로 나가지 않는다 */}
+      <label className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><span className={simpleLabelCls}>언제부터(선택)</span>
+        <input type="date" className={dateFitCls} value={start} onChange={(e) => onStart(e.target.value)} />
       </label>
-      <label className="flex items-center gap-2"><span className={simpleLabelCls}>언제까지</span>
-        <input type="date" className={dateCls} value={due} onChange={(e) => onDue(e.target.value)} />
+      <label className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><span className={simpleLabelCls}>언제까지</span>
+        <input type="date" className={dateFitCls} value={due} onChange={(e) => onDue(e.target.value)} />
       </label>
       <label className="flex min-h-11 cursor-pointer items-center gap-2">
         <span className={simpleLabelCls}>문의 필요</span>
