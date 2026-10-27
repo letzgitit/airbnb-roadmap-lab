@@ -89,7 +89,7 @@ export const DOC_CARDS: CardDef[] = [
   { id: 'register', title: '외도민 등록 서류', short: '등록 서류', steps: [5, 9], addStep: 9, fixedWords: ['등록 신청', '신청', '접수'], sub: '구청에 내는 서류' },
   { id: 'safety', title: '안전 설비', steps: [8], addStep: 8, sub: '소화기 · 화재감지기 등 꼭 살 것' },
   { id: 'inspect', title: '현장 실사', steps: [12], addStep: 12, sub: '구청에서 집을 보러 오는 날' },
-  { id: 'biz', title: '사업자 등록', short: '사업자', steps: [13], addStep: 13, sub: '세무서에 하는 신고' },
+  { id: 'biz', title: '사업자 등록', short: '사업자등록', steps: [13], addStep: 13, sub: '세무서에 하는 신고' },
 ];
 /** 서류 탭 맨 아래 「끝난 일」로 접어 두는 단계(집 고르기 · 구청 확인 · 계약) */
 export const DONE_STEPS = [1, 2, 3];
@@ -105,16 +105,16 @@ export const INTERIOR_CARDS: CardDef[] = [
   { id: 'light', title: '조명', steps: [6, 7], addStep: 7, prefix: '조명', match: /조명|스위치|콘센트|전등|등기구|전구|천장등|벽등|램프/ },
   { id: 'buy', title: '살 것', steps: [6, 7], addStep: 6, prefix: '살 것', kind: '구매', sub: '가구 · 가전 · 커튼 같은 구매 목록',
     match: /구매|주문|구입|사기|살 것|가구|침대|매트리스|소파|식탁|의자|커튼|침구|이불|냉장고|세탁기|선반|거울/ },
-  { id: 'other', title: '그 밖에', short: '인테리어', steps: [6, 7], addStep: 7 },
+  { id: 'other', title: '그 밖에', short: '기타 공사', steps: [6, 7], addStep: 7 },
 ];
 
 // ── 에어비앤비 준비: 10 · 11 · 14단계 할 일을 낱말로 ──
 export const AIRBNB_CARDS: CardDef[] = [
   { id: 'listing', title: '숙소 이름 · 가격 정하기', short: '숙소 이름', steps: [10, 11, 14], addStep: 11, prefix: '숙소', match: /이름|가격|요금|리스팅|숙소 설명|소개글/ },
-  { id: 'guide', title: '손님 안내서', short: '안내서', steps: [10, 11, 14], addStep: 11, prefix: '안내서', sub: '와이파이 · 체크인 방법 같은 것', match: /안내|가이드|매뉴얼|하우스 ?룰|체크인|체크아웃|와이파이/ },
+  { id: 'guide', title: '손님 안내서', short: '손님 안내서', steps: [10, 11, 14], addStep: 11, prefix: '안내서', sub: '와이파이 · 체크인 방법 같은 것', match: /안내|가이드|매뉴얼|하우스 ?룰|체크인|체크아웃|와이파이/ },
   { id: 'supplies', title: '소모품 사기', short: '소모품', steps: [10, 11, 14], addStep: 14, prefix: '소모품', kind: '구매', sub: '휴지 · 수건 같은 생활용품',
     match: /휴지|수건|소모품|생활용품|어메니티|샴푸|린스|바디|세제|비누|칫솔|치약|봉투|슬리퍼|비품/ },
-  { id: 'other', title: '그 밖에', short: '에어비앤비', steps: [10, 11, 14], addStep: 10 },
+  { id: 'other', title: '그 밖에', short: '기타 준비', steps: [10, 11, 14], addStep: 10 },
 ];
 
 const live = (t: TaskItem) => !t.deletedAt;
@@ -222,20 +222,43 @@ export function summarize(card: CardDef, tasks: TaskItem[], doc: Pick<ProgressDo
   return { total: tasks.length, done: tasks.length - open.length, late, soon, deadline, finished };
 }
 
-/** 카드 순서: 안 끝난 카드 중 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드(각 묶음 안에서는 정의 순서) */
-export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'>>): CardDef[] {
-  const rank = (c: CardDef) => (sums[c.id].finished ? 2 : sums[c.id].deadline ? 0 : 1);
+/**
+ * 카드 순서: 기한 지난 일이 있는 안 끝난 카드 → 그 밖의 안 끝난 카드 중 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드
+ * (각 묶음 안에서는 마감 이른 순, 같으면 정의 순서). 맨 앞 카드가 청록 「가장 급한 일」이 된다.
+ */
+export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'> & { late?: number }>): CardDef[] {
+  const rank = (c: CardDef) => {
+    const s = sums[c.id];
+    if (s.finished) return 3;
+    if ((s.late ?? 0) > 0) return 0;
+    return s.deadline ? 1 : 2;
+  };
   return cards
     .map((c, i) => ({ c, i }))
     .sort((a, b) => rank(a.c) - rank(b.c) || (sums[a.c.id].deadline ?? '').localeCompare(sums[b.c.id].deadline ?? '') || a.i - b.i)
     .map((x) => x.c);
 }
 
-/** 「3개 중 1개 했어요」 */
+/** 카드 머리 진행 표시: 「1/3」(할 일이 없으면 「할 일 없음」). 화면 읽기 프로그램에는 progressSr 의 긴 말 */
 export function progressText(s: Pick<CardSummary, 'total' | 'done'>): string {
+  if (s.total === 0) return '할 일 없음';
+  return `${s.done}/${s.total}`;
+}
+/** 「3개 중 1개 했어요」(화면 읽기 프로그램용) */
+export function progressSr(s: Pick<CardSummary, 'total' | 'done'>): string {
   if (s.total === 0) return '할 일 없음';
   if (s.done === s.total) return `${s.total}개 다 했어요`;
   return `${s.total}개 중 ${s.done}개 했어요`;
+}
+
+// ── 문의 필요: 할 일 종류 「문의」(묻는 내용은 메모에) ──
+export const ASK_KIND = '문의';
+export const isAsk = (t: Pick<TaskItem, 'kind'>) => t.kind === ASK_KIND;
+/** 거르기 「문의 필요만 보기」: 문의 할 일과, 그 세부 항목 · 그 부모(줄이 고아가 되지 않게)만 남긴다 */
+export function askOnly(tasks: TaskItem[]): TaskItem[] {
+  const ask = new Set(tasks.filter(isAsk).map((t) => t.id));
+  const parents = new Set(tasks.filter((t) => ask.has(t.id) && t.parentId).map((t) => t.parentId as string));
+  return tasks.filter((t) => ask.has(t.id) || (t.parentId && ask.has(t.parentId)) || parents.has(t.id));
 }
 
 /** 탭 하나의 「기한 지남 · 다음 7일」 개수(탭 이름 옆 빨강 점, 탭 맨 위 한 줄) */
@@ -251,7 +274,7 @@ export function tabCounts(groups: Record<string, TaskItem[]>, today: string): { 
   return { late, soon };
 }
 
-// ── 이번 주 꼭 할 일: 서류 · 인테리어 · 에어비앤비 탭 맨 위 묶음 ──
+// ── 일주일 안에 할 일: 서류 · 인테리어 · 에어비앤비 탭 맨 위 묶음 ──
 export const WEEK_MAX = 5;
 /**
  * 그 탭의 안 끝난 할 일 중 기한 지남 + 오늘 ~ 6일 뒤 마감(세부 항목 포함). 마감 이른 순(= 기한 지난 것이 먼저), 같으면 만든 순.
@@ -284,6 +307,14 @@ export function calendarMarks(doc: Pick<ProgressDoc, 'tasks' | 'steps' | 'proper
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** 달력을 처음 열 달: 이번 달에 마감이 있으면 이번 달, 없으면 오늘에서 가장 가까운 마감이 있는 달(같으면 앞날 쪽), 마감이 하나도 없으면 이번 달 */
+export function startMonth(marks: Pick<CalendarMark, 'date'>[], today: string): string {
+  const here = monthOf(today);
+  if (marks.length === 0 || marks.some((m) => monthOf(m.date) === here)) return here;
+  const near = [...marks].sort((a, b) => Math.abs(daysBetween(today, a.date)) - Math.abs(daysBetween(today, b.date)) || b.date.localeCompare(a.date))[0];
+  return monthOf(near.date);
+}
+
 const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const addDays = (iso: string, n: number) => { const d = toDate(iso); d.setDate(d.getDate() + n); return isoOf(d); };
 /** 그 달 1일(「2026-10-28」 → 「2026-10-01」) */
@@ -311,6 +342,25 @@ export function guQuestions(doc: Pick<ProgressDoc, 'questions'>): QuestionItem[]
 export const AFTER_ALBUM = '공사 후';
 // 설명 · 묶음 이름에 이 낱말이 있으면 우리 집 사진이 아니라고 본다(참고 · 다른 집 · 시안 · 서류 캡처)
 const NOT_HOUSE = /참고|아님|다른 ?집|시안|예시 ?사진|등기|계약서|건축물|대장|서류|캡처|캡쳐|스크린샷|영수증|도면|평면도|문서|안내문/;
+
+// ── 받아 둔 서류(서류 탭): PDF 전부 + 설명 · 묶음 이름에 서류 낱말이 있는 사진. 참고 · 다른 집 · 시안은 서류가 아니다 ──
+const DOC_WORDS = /등기|계약서|건축물|대장|서류|캡처|캡쳐|스크린샷|영수증|도면|평면도|문서|안내문|신청서|동의서|증명|등본/;
+const NOT_DOC = /참고|다른 ?집|시안|예시 ?사진/;
+/** 서류를 올릴 때 묶음 이름(설명에 서류 낱말이 없어도 서류로 잡히게) */
+export const DOC_ALBUM = '서류';
+export function docPhotos(photos: PhotoView[]): PhotoView[] {
+  return photos.filter((p) => {
+    if (p.deletedAt) return false;
+    const text = `${p.album}\n${p.caption}`;
+    return p.kind === 'pdf' || (DOC_WORDS.test(text) && !NOT_DOC.test(text));
+  });
+}
+/** 단계별 묶음(단계 번호 순, 0 = 단계 없음은 맨 뒤). 묶음 안은 받은 순서 그대로 */
+export function docGroups(list: PhotoView[]): { stepId: number; items: PhotoView[] }[] {
+  const m = new Map<number, PhotoView[]>();
+  for (const p of list) m.set(p.stepId, [...(m.get(p.stepId) ?? []), p]);
+  return [...m.entries()].sort(([a], [b]) => (a === 0 ? 99 : a) - (b === 0 ? 99 : b)).map(([stepId, items]) => ({ stepId, items }));
+}
 
 /** 집 정보 「주소」 값에 든 호수(예: 「…101호」 → ['101']). 사진 설명에 다른 호수가 나오면 다른 집으로 본다 */
 export function ourUnits(property: Record<string, PropertyItem>): string[] {

@@ -22,7 +22,9 @@ export interface StepState {
   version: number; updatedAt: string; updatedBy: string;
 }
 // 할 일 종류(선택). 없는 할 일(옛 데이터 포함)은 종류를 보이지 않는다 — 옮기는 작업 없이 그대로 읽힌다.
-export const TASK_KINDS = ['결정', '연락', '일정 확정', '구매', '예약', '서류', '공사', '확인'] as const;
+// 「문의」 = 누구에게 물어봐야 하는 일(새 홈 「문의 필요」 표시 · 거르기, 2026-10-28 추가 — 묻는 내용은 메모에).
+//   사람이 붙이는 표시라 Todoist 자동 분류는 이 값을 고르지 않는다(todoist-classify CLASSIFY_KINDS).
+export const TASK_KINDS = ['결정', '연락', '일정 확정', '구매', '예약', '서류', '공사', '확인', '문의'] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 // 할 일 맡은 사람(선택). 없으면 키가 없다. Todoist 와는 맞추지 않는다.
 export const TASK_OWNERS = ['남편', '아내', '같이'] as const;

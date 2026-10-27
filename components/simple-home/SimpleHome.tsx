@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Content, ProgressDoc, TaskItem } from '@/lib/core/types';
 import { usePhotos } from '@/components/progress/PhotosPanel';
 import { todayStr } from '@/lib/client/format';
@@ -13,12 +13,13 @@ import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import { CalendarTab } from './CalendarTab';
 import { ContactsTab } from './ContactsTab';
-import { GuQuestions } from './GuQuestions';
 import { NewsTab } from './NewsTab';
 import { PhotosTab } from './PhotosTab';
+import { ReceivedDocs } from './ReceivedDocs';
 import { TaskCard } from './TaskCard';
 import {
-  AIRBNB_CARDS, DOC_CARDS, DONE_STEPS, INTERIOR_CARDS, TABS, WEEK_MAX, dateParts, sortCards, summarize, tabCounts, tasksByCard, weekTasks, type CardDef, type TabId,
+  AIRBNB_CARDS, DOC_CARDS, DONE_STEPS, INTERIOR_CARDS, TABS, WEEK_MAX, askOnly, dateParts, isAsk, sortCards, summarize, tabCounts, tasksByCard, weekTasks,
+  type CardDef, type TabId,
 } from './home-model';
 
 // 고른 탭 · 펼친 카드는 이 브라우저에만 기억한다(두 사람 화면이 서로 바뀌지 않게)
@@ -30,7 +31,7 @@ const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } ca
 /**
  * 새 홈(로그인한 두 사람): 엑셀 시트처럼 맨 위 탭 일곱 개 — 서류 · 인테리어 · 사진 · 에어비앤비 · 연락처 · 뉴스 · 달력.
  * 탭마다 큰 덩어리 카드(마감 날짜를 크게), 펼치면 그 자리에서 체크 · 추가 · 고치기 · 지우기 · 메모.
- * 서류 · 인테리어 · 에어비앤비 탭 맨 위에는 「이번 주 꼭 할 일」(기한 지남 + 일주일 안 마감, 급한 순 5개).
+ * 서류 · 인테리어 · 에어비앤비 탭 맨 위에는 「일주일 안에 할 일」(기한 지남 + 일주일 안 마감, 급한 순 5개).
  * 달력 탭은 카드 마감 날짜만 — 날짜를 눌러 카드를 고르면 그 탭으로 가서 그 카드를 펼친다.
  * 예전 홈(준비 일정 · 간트 · 달력)은 /classic 에 그대로 있고, 맨 아래 작은 「예전 화면」 글자로만 들어간다.
  */
@@ -87,7 +88,8 @@ export function SimpleHome({ content }: { content: Content }) {
               <button key={t.id} type="button" role="tab" id={`${uid}-${t.id}`} aria-selected={on} aria-controls={`${uid}-panel`} onClick={() => pick(t.id)}
                 className={`relative flex min-h-12 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap px-3 text-base transition-colors ${on ? 'font-bold text-ink' : 'font-semibold text-muted hover:text-ink'}`}>
                 {t.label}
-                {late[t.id] > 0 && <><span className="size-1.5 rounded-full bg-danger-ink" aria-hidden /><span className="sr-only">(기한 지남 있음)</span></>}
+                {/* 빨강 점은 지금 고른 탭이 아닐 때만(고른 탭은 카드가 「기한 지난 일 n개」로 말한다) */}
+                {!on && late[t.id] > 0 && <><span className="size-1.5 rounded-full bg-danger-ink" aria-hidden /><span className="sr-only">(기한 지남 있음)</span></>}
                 {on && <span className="absolute inset-x-1 bottom-0 h-[3px] rounded-full bg-ink" aria-hidden />}
               </button>
             );
@@ -96,7 +98,8 @@ export function SimpleHome({ content }: { content: Content }) {
       </div>
 
       <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-${tab}`}>
-        {tab === 'docs' && <CardsTab key="docs" tab="docs" cards={DOC_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)} extra={<><GuQuestions /><DoneSteps doc={doc} steps={steps} today={today} /></>} />}
+        {tab === 'docs' && <CardsTab key="docs" tab="docs" cards={DOC_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)}
+          afterFirst={<ReceivedDocs />} extra={<DoneSteps doc={doc} steps={steps} today={today} />} />}
         {tab === 'interior' && <CardsTab key="interior" tab="interior" cards={INTERIOR_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)} />}
         {tab === 'photos' && <PhotosTab />}
         {tab === 'airbnb' && <CardsTab key="airbnb" tab="airbnb" cards={AIRBNB_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)} />}
@@ -126,8 +129,10 @@ function useOpenCards(tab: string) {
   return { open, toggle };
 }
 
-function CardsTab({ tab, cards, doc, steps, today, extra, focus = null, onFocused }: {
+function CardsTab({ tab, cards, doc, steps, today, extra, afterFirst, focus = null, onFocused }: {
   tab: TabId; cards: CardDef[]; doc: ProgressDoc; steps: StepRef[]; today: string; extra?: ReactNode;
+  /** 맨 앞(가장 급한) 카드 바로 밑에 둘 것 */
+  afterFirst?: ReactNode;
   /** 달력에서 고른 카드 id: 그 카드로 내려가 머리에 포커스를 둔다 */
   focus?: string | null; onFocused?: () => void;
 }) {
@@ -135,9 +140,14 @@ function CardsTab({ tab, cards, doc, steps, today, extra, focus = null, onFocuse
   const sums = useMemo(() => Object.fromEntries(cards.map((c) => [c.id, summarize(c, groups[c.id], doc, today)])), [cards, groups, doc, today]);
   // 낱말 카드의 「그 밖」은 할 일이 없으면 숨긴다
   // 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드. 가장 급한 카드(맨 앞, 안 끝났고 날짜 있음) 하나만 청록 머리
-  const shown = sortCards(cards.filter((c) => c.match || c.id !== 'other' || groups[c.id].length > 0), sums);
-  const heroId = shown[0] && !sums[shown[0].id].finished && sums[shown[0].id].deadline ? shown[0].id : null;
+  const sorted = sortCards(cards.filter((c) => c.match || c.id !== 'other' || groups[c.id].length > 0), sums);
+  const heroId = sorted[0] && !sums[sorted[0].id].finished && sums[sorted[0].id].deadline ? sorted[0].id : null;
   const { open, toggle } = useOpenCards(tab);
+  // 「문의 필요만 보기」: 문의 할 일이 있는 카드만, 그 카드는 펼친 채 문의 할 일(과 세부 항목 · 부모)만
+  const [askOn, setAskOn] = useState(false);
+  const askGroups = useMemo(() => Object.fromEntries(cards.map((c) => [c.id, askOnly(groups[c.id])])), [cards, groups]);
+  const askCount = Object.values(groups).flat().filter((t) => isAsk(t) && !t.done).length;
+  const shown = askOn ? sorted.filter((c) => askGroups[c.id].length > 0) : sorted;
   const { wd } = dateParts(today);
   const anchor = (id: string) => `home-card-${tab}-${id}`;
   useEffect(() => {
@@ -154,19 +164,33 @@ function CardsTab({ tab, cards, doc, steps, today, extra, focus = null, onFocuse
   }, [focus]);
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm font-normal text-muted">오늘 {Number(today.slice(5, 7))}월 {Number(today.slice(8))}일 ({wd})</p>
-      <WeekBundle groups={groups} doc={doc} steps={steps} today={today} />
-      {shown.map((c) => (
-        <TaskCard key={c.id} card={c} cards={cards} tasks={groups[c.id]} summary={sums[c.id]} steps={steps} today={today}
-          open={open.has(c.id)} onToggleOpen={() => toggle(c.id)} hero={c.id === heroId} anchorId={anchor(c.id)} />
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <p className="text-sm font-normal text-muted">오늘 {Number(today.slice(5, 7))}월 {Number(today.slice(8))}일 ({wd})</p>
+        {/* 거르기 단추: 켜면 ink 면(고른 거르기 = ink, DESIGN 2.2), 끄면 테두리만 */}
+        {(askCount > 0 || askOn) && (
+          <button type="button" aria-pressed={askOn} onClick={() => setAskOn((v) => !v)}
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-bold transition-colors ${askOn ? 'border-ink bg-ink text-surface' : 'border-line-strong bg-surface text-ink hover:bg-sunken'}`}>
+            <i className="fas fa-circle-question" aria-hidden />문의 필요만 보기<span className="font-normal tabular-nums">{askCount}</span>
+          </button>
+        )}
+      </div>
+      {askOn && shown.length === 0 && <p className="text-base text-muted">문의할 일이 없어요.</p>}
+      {!askOn && <WeekBundle groups={groups} doc={doc} steps={steps} today={today} />}
+      {shown.map((c, i) => (
+        <Fragment key={c.id}>
+          <TaskCard card={c} cards={cards} tasks={askOn ? askGroups[c.id] : groups[c.id]} summary={sums[c.id]} steps={steps} today={today}
+            open={askOn || open.has(c.id)} onToggleOpen={() => toggle(c.id)} hero={c.id === heroId} anchorId={anchor(c.id)} />
+          {/* 가장 급한 카드 바로 밑(서류 탭: 받아 둔 서류) */}
+          {i === 0 && !askOn && afterFirst}
+        </Fragment>
       ))}
-      {extra}
+      {!askOn && extra}
     </div>
   );
 }
 
 /**
- * 「이번 주 꼭 할 일」: 그 탭의 기한 지남 + 일주일 안 마감, 급한 순 WEEK_MAX 개. 그 줄에서 바로 체크 · 고치기(같은 TaskRow 쉬운 모양).
+ * 「일주일 안에 할 일」: 그 탭의 기한 지남 + 일주일 안 마감, 급한 순 WEEK_MAX 개. 그 줄에서 바로 체크 · 고치기(같은 TaskRow 쉬운 모양, 휴지통 없음).
  * 없으면 숨긴다. 같은 할 일이 아래 카드에도 있다. 경고 말은 줄마다 한 번(「n일 지남」 · 「곧 마감」)만 — 묶음 이름에는 개수만.
  */
 function WeekBundle({ groups, doc, steps, today }: { groups: Record<string, TaskItem[]>; doc: ProgressDoc; steps: StepRef[]; today: string }) {
@@ -178,12 +202,12 @@ function WeekBundle({ groups, doc, steps, today }: { groups: Record<string, Task
   return (
     <Card as="section" aria-labelledby={`${uid}-h`}>
       <h3 id={`${uid}-h`} className="flex flex-wrap items-baseline gap-x-2 px-4 pt-3 pb-2 text-base font-bold text-ink">
-        이번 주 꼭 할 일
-        <span className="text-sm font-normal text-muted">{total > WEEK_MAX ? `${total}개 중 급한 ${list.length}개` : `${total}개`}</span>
+        일주일 안에 할 일
+        <span className="text-sm font-normal text-muted">{total > WEEK_MAX ? `${total}개 중 ${list.length}개만 보여요` : `${total}개`}</span>
       </h3>
       <ul className="border-t border-line">
         {list.map((t) => (
-          <TaskRow key={t.id} t={t} steps={steps} listStepId={null} scope="page" inset simple
+          <TaskRow key={t.id} t={t} steps={steps} listStepId={null} scope="page" inset simple noTrash
             parentTitle={t.parentId ? doc.tasks[t.parentId]?.text : undefined}
             onEditChange={reportEdit} onToggle={onToggle} onGone={() => undefined} />
         ))}

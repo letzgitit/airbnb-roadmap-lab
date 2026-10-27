@@ -325,6 +325,16 @@ test('낱말 규칙으로 단계 · 종류 고르기', () => {
   assert.equal(C.keywordKind('아무 말'), null);
 });
 
+test('종류 「문의」: 저장 검사는 받고, 자동 분류는 고르지 않는다(예전 값 그대로)', () => {
+  assert.ok(opSchema.safeParse({ op: 'task.update', id: 't_x', patch: { kind: '문의' } }).success);
+  assert.ok(opSchema.safeParse({ op: 'task.update', id: 't_x', patch: { kind: '구매' } }).success);
+  assert.ok(!opSchema.safeParse({ op: 'task.update', id: 't_x', patch: { kind: '아무거나' } }).success);
+  assert.ok(!C.CLASSIFY_KINDS.includes('문의'));
+  assert.equal(C.parseClaudeAnswer('{"step":2,"kind":"문의"}').kind, null);
+  assert.equal(C.parseClaudeAnswer('{"step":2,"kind":"연락"}').kind, '연락');
+  assert.equal(C.keywordKind('구청에 문의'), '연락');
+});
+
 test('단계 고르기: Claude API 성공 · 실패 · 시간 초과 · 이상한 답 → 낱말 규칙 → 기본 단계', async () => {
   const doc = { steps: { 1: { status: 'done' }, 2: { status: 'done' }, 3: { status: 'doing' } } };
   const ok = async (url, init) => {

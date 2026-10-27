@@ -4,8 +4,27 @@ import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
   newsGroups, progressText, relDay, shortSource, sortCards, summarize, tasksByCard,
-  TABS, addMonths, calendarMarks, monthWeeks, weekTasks,
+  TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos, docGroups,
 } from './home-model.ts';
+
+test('문의 필요만 보기: 문의 할 일 + 그 세부 항목 + 그 부모만', () => {
+  const list = [
+    T('a', 4, '부모', {}), T('b', 4, '문의 세부', { parentId: 'a', kind: '문의' }), T('c', 4, '그냥'),
+    T('d', 4, '문의 위', { kind: '문의' }), T('e', 4, '그 밑', { parentId: 'd' }), T('f', 4, '종류 다름', { kind: '연락' }),
+  ];
+  assert.deepEqual(askOnly(list).map((t: { id: string }) => t.id), ['a', 'b', 'd', 'e']);
+});
+
+test('받아 둔 서류: PDF + 서류 낱말 사진, 참고 · 다른 집은 빼고 단계별 묶음(0단계는 뒤)', () => {
+  const ph = (id: string, stepId: number, caption: string, kind = 'image', album = '') => ({ id, stepId, caption, kind, album, deletedAt: null });
+  const list = [
+    ph('a', 3, '등기부 캡처'), ph('b', 5, '', 'pdf'), ph('c', 0, '건축물대장'), ph('d', 7, '거실'), ph('e', 7, '참고 도면 다른 집'),
+    ph('f', 9, '', 'image', '서류'), { ...ph('g', 3, '계약서'), deletedAt: 'x' },
+  ];
+  const docs = docPhotos(list as never);
+  assert.deepEqual(docs.map((p) => p.id), ['a', 'b', 'c', 'f']);
+  assert.deepEqual(docGroups(docs).map((g) => `${g.stepId}:${g.items.map((p) => p.id).join('')}`), ['3:a', '5:b', '9:f', '0:c']);
+});
 
 test('탭 일곱 개, 달력이 맨 끝', () => {
   assert.equal(TABS.length, 7);
@@ -48,6 +67,15 @@ test('달력: 카드 마감 날짜만(카드 머리와 같은 값), 짧은 이�
     '2026-11-12 interior 욕실',
     '2026-11-12 airbnb 숙소 이름',
   ]);
+});
+
+test('달력을 처음 열 달: 이번 달에 마감 없으면 가장 가까운 마감이 있는 달', () => {
+  const today = '2026-10-28';
+  assert.equal(startMonth([], today), '2026-10-01');
+  assert.equal(startMonth([{ date: '2026-10-02' }, { date: '2026-12-01' }], today), '2026-10-01');
+  assert.equal(startMonth([{ date: '2026-11-09' }, { date: '2026-12-01' }], today), '2026-11-01');
+  assert.equal(startMonth([{ date: '2026-09-28' }, { date: '2026-11-30' }], today), '2026-09-01');  // 30일 전 < 33일 뒤
+  assert.equal(startMonth([{ date: '2026-09-27' }, { date: '2026-11-28' }], today), '2026-11-01'); // 같으면 앞날 쪽
 });
 
 test('달력 주: 월요일 시작, 앞뒤 달 날짜로 채움', () => {
@@ -116,7 +144,9 @@ test('카드 마감: 고정 일정 → 단계 목표일 → 할 일 마감', () 
   const safety = summarize(DOC_CARDS[2], [T('x', 8, '소화기', { due: '2026-10-20' }), T('y', 8, '감지기', { due: '2026-10-30', done: true })], { steps, property } as never, today);
   assert.equal(safety.deadline, '2026-11-06');
   assert.equal(safety.late, 1);
-  assert.equal(progressText(safety), '2개 중 1개 했어요');
+  assert.equal(progressText(safety), '1/2');
+  assert.equal(progressSr(safety), '2개 중 1개 했어요');
+  assert.equal(progressText({ total: 0, done: 0 }), '할 일 없음');
   const inspect = summarize(DOC_CARDS[3], [T('z', 12, '실사', { due: '2026-11-20' })], { steps, property } as never, today);
   assert.equal(inspect.deadline, '2026-11-20');
 });
@@ -128,6 +158,9 @@ test('카드 순서: 마감 이른 순 → 날짜 없음 → 다 끝냄', () => 
     d: { deadline: '2026-11-06', finished: false }, e: { deadline: null, finished: false },
   };
   assert.deepEqual(sortCards(cards, sums).map((c) => c.id), ['d', 'c', 'a', 'e', 'b']);
+  // 기한 지난 일이 있는 카드가 마감이 늦어도 맨 앞(청록 「가장 급한 일」), 다 끝낸 카드는 그래도 뒤
+  const late = { ...sums, c: { ...sums.c, late: 1 }, b: { ...sums.b, late: 2 } };
+  assert.deepEqual(sortCards(cards, late).map((c) => c.id), ['c', 'd', 'a', 'e', 'b']);
 });
 
 test('뉴스: 규정 소식 · 공지 · 구청 낱말은 「구청 · 정책」, 나머지는 기사 · 영상, 최근 순 · 같은 주소 한 번', () => {

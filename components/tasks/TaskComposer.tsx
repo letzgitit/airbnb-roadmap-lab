@@ -38,6 +38,33 @@ export function NoteField({ value, onChange }: { value: string; onChange: (v: st
 }
 
 const labelCls = 'text-sm font-normal text-ink-soft';
+/** 쉬운 모양 이름표: 고정 폭 칸이라 입력칸 왼쪽 끝이 한 줄로 맞는다 */
+const simpleLabelCls = `w-28 shrink-0 ${labelCls}`;
+
+/**
+ * 쉬운 모양(새 홈)의 날짜 칸 + 「문의 필요」: [언제부터(선택)] [언제까지] 두 줄(이름표는 고정 폭) + 체크 한 줄.
+ * 데이터는 시작일(start) · 마감일(due) 그대로, 문의 필요 = 할 일 종류 「문의」. 담당(owner)은 쉬운 모양에서 보이지 않는다(값은 그대로).
+ * 새 할 일 폼 · 고치는 폼이 같이 쓴다.
+ */
+export function SimpleWhenFields({ start, onStart, due, onDue, ask, onAsk }: {
+  start: string; onStart: (v: string) => void; due: string; onDue: (v: string) => void; ask: boolean; onAsk: (v: boolean) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-2"><span className={simpleLabelCls}>언제부터(선택)</span>
+        <input type="date" className={dateCls} value={start} onChange={(e) => onStart(e.target.value)} />
+      </label>
+      <label className="flex items-center gap-2"><span className={simpleLabelCls}>언제까지</span>
+        <input type="date" className={dateCls} value={due} onChange={(e) => onDue(e.target.value)} />
+      </label>
+      <label className="flex min-h-11 cursor-pointer items-center gap-2">
+        <span className={simpleLabelCls}>문의 필요</span>
+        <input type="checkbox" className="size-5 cursor-pointer" checked={ask} onChange={(e) => onAsk(e.target.checked)} />
+        <span className="text-sm font-normal text-muted">묻는 내용은 메모에</span>
+      </label>
+    </div>
+  );
+}
 
 /** 할 일 종류 고르기(선택). 빈 값 = 종류 없음. 새 할 일 · 고치는 폼이 같이 쓴다. */
 export function KindSelect({ value, onChange }: { value: TaskKind | ''; onChange: (v: TaskKind | '') => void }) {
@@ -61,7 +88,7 @@ export function KindSelect({ value, onChange }: { value: TaskKind | ''; onChange
  */
 export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', parentId, parentTitle, simple = false, prepare, dirtyKey }: {
   stepId: number; steps?: StepRef[]; scope: DirtyScope; onClose: () => void; initialDue?: string; parentId?: string; parentTitle?: string;
-  /** 새 홈(한눈에 보기)의 쉬운 폼: 제목 · 언제부터(시작일) · 마감일 · 담당 · 메모만(종류 칸 없음) */
+  /** 새 홈(한눈에 보기)의 쉬운 폼: 제목 · 언제부터(시작일) · 언제까지(마감일) · 문의 필요 · 메모만(종류 · 담당 칸 없음) */
   simple?: boolean;
   /** 보내기 직전에 제목 · 종류를 바꾼다(새 홈 낱말 카드: 「욕실: …」처럼 카드 이름을 앞에 붙여 그 카드에 남게) */
   prepare?: (text: string, kind: TaskKind | '') => { text: string; kind: TaskKind | '' };
@@ -104,17 +131,18 @@ export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', p
           </select>
         </label>
       )}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {/* 쉬운 모양은 「언제부터」(준비 시작일, 선택) — 데이터는 같은 시작일(start) */}
-        <label className={`flex items-center gap-2 ${labelCls}`}>{simple ? '언제부터' : '시작일'}
-          <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label={simple ? '언제부터(선택)' : '시작일'} />
-        </label>
-        <label className={`flex items-center gap-2 ${labelCls}`}>마감일
-          <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
-        </label>
-        {!simple && <KindSelect value={kind} onChange={setKind} />}
-        <OwnerSelect value={owner} onChange={setOwner} />
-      </div>
+      {simple ? <SimpleWhenFields start={start} onStart={setStart} due={due} onDue={setDue} ask={kind === '문의'} onAsk={(v) => setKind(v ? '문의' : '')} /> : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <label className={`flex items-center gap-2 ${labelCls}`}>시작일
+            <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label="시작일" />
+          </label>
+          <label className={`flex items-center gap-2 ${labelCls}`}>마감일
+            <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
+          </label>
+          <KindSelect value={kind} onChange={setKind} />
+          <OwnerSelect value={owner} onChange={setOwner} />
+        </div>
+      )}
       <NoteField value={note} onChange={setNote} />
       {err && <p role="alert" className="text-sm font-normal text-danger-ink">{err}</p>}
       <div className="flex justify-end">

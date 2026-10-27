@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Step } from '@/lib/core/types';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { firstGuest } from '@/components/home/summary-data';
@@ -8,26 +8,31 @@ import { FIXED_DAY0, toTimelineSteps } from '@/components/home/timeline-config';
 import { textBtn } from '@/components/ui/buttonCls';
 import { Card, cardRowCls } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/IconButton';
-import { addMonths, calendarMarks, dateParts, monthOf, monthWeeks, type CalendarMark, type TabId } from './home-model';
+import { addMonths, calendarMarks, dateParts, monthOf, monthWeeks, startMonth, type CalendarMark, type TabId } from './home-model';
 
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
-/** 칸 하나에 이름을 몇 개까지(나머지는 「+n」) */
-const PER_CELL = 2;
+/** 칸 하나에 이름을 몇 개까지(나머지는 이름 뒤 「+n」) */
+const PER_CELL = 1;
 
 /**
- * 달력 탭: 맨 위 「첫 손님까지 D-n」(예전 홈 요약 카드와 같은 계산) → 한 달 달력.
- * 칸에는 서류 · 인테리어 · 에어비앤비 카드의 마감 날짜만(카드 짧은 이름, 기한 지남 = 빨강, 다 한 카드 = 흐린 글자).
- * 마감이 있는 날을 누르면 달력 밑에 그날 마감인 카드 목록 → 누르면 그 탭으로 가서 그 카드를 펼친다(onOpenCard).
+ * 달력 탭: 맨 위 「첫 손님까지」 청록 띠(예전 홈 첫 손님 카드와 같은 계산 · 같은 면) → 한 달 달력.
+ * 처음 여는 달 = 이번 달, 이번 달에 마감이 없으면 가장 가까운 마감이 있는 달(startMonth).
+ * 칸에는 서류 · 인테리어 · 에어비앤비 카드의 마감 날짜만 — 카드 짧은 이름 하나(칸 폭에 안 들어가면 두 줄까지, 잘라 내지 않음),
+ * 더 있으면 「에어컨 +1」. 기한 지남 = 빨강, 다 한 카드 = 흐린 글자.
+ * 마감이 있는 날을 누르면 달력 밑에 그날 마감인 카드 목록(화면 안으로 끌어옴) → 누르면 그 탭으로 가서 그 카드를 펼친다(onOpenCard).
  * 오늘 숫자 = 강조색(「지금」), 고른 날 = ink 2px 고리(예전 홈 달력과 같은 모양).
  */
 export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today: string; onOpenCard: (tab: TabId, cardId: string) => void }) {
   const { doc } = useProgress();
   const uid = useId();
-  const [month, setMonth] = useState(() => monthOf(today));
+  const marks = useMemo(() => (doc ? calendarMarks(doc, today) : []), [doc, today]);
+  const [month, setMonth] = useState(() => startMonth(marks, today));
   const [picked, setPicked] = useState<string | null>(null);
+  const dayRef = useRef<HTMLDivElement>(null);
+  // 날을 고르면 그날 목록이 다 보이게
+  useEffect(() => { if (picked) dayRef.current?.scrollIntoView({ block: 'nearest' }); }, [picked]);
   const tl = useMemo(() => toTimelineSteps(steps), [steps]);
   const guest = useMemo(() => (doc ? firstGuest(tl, doc, today, FIXED_DAY0) : null), [tl, doc, today]);
-  const marks = useMemo(() => (doc ? calendarMarks(doc, today) : []), [doc, today]);
   if (!doc) return null;
 
   const byDay = new Map<string, CalendarMark[]>();
@@ -72,11 +77,11 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
                     <span className="flex min-w-0 flex-col gap-0.5 px-0.5 pb-1.5" aria-hidden>
                       {list.slice(0, PER_CELL).map((m) => (
                         <span key={`${m.tab}-${m.cardId}`}
-                          className={`block truncate text-xs ${m.late ? 'font-bold text-danger-ink' : m.finished ? 'font-normal text-muted line-through' : 'font-semibold text-ink'}`}>
+                          className={`line-clamp-2 block break-words text-xs leading-tight ${m.late ? 'font-bold text-danger-ink' : m.finished ? 'font-normal text-muted line-through' : 'font-semibold text-ink'}`}>
                           {m.short}
+                          {list.length > PER_CELL && <span className="font-normal text-muted no-underline"> +{list.length - PER_CELL}</span>}
                         </span>
                       ))}
-                      {list.length > PER_CELL && <span className="text-xs font-normal text-muted">+{list.length - PER_CELL}</span>}
                     </span>
                   </>
                 );
@@ -92,7 +97,7 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
         </div>
       </Card>
 
-      <div id={`${uid}-day`} aria-live="polite">
+      <div id={`${uid}-day`} ref={dayRef} aria-live="polite" className="scroll-mb-20">
         {picked ? (
           <Card as="section" aria-labelledby={`${uid}-dh`}>
             <h3 id={`${uid}-dh`} className="px-4 pt-3 pb-2 text-base font-bold text-ink">
@@ -106,7 +111,7 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
                     <span className="min-w-0 flex-1">
                       <span className={`block text-base font-semibold ${m.finished ? 'text-muted line-through' : 'text-ink'}`}>{m.title}</span>
                       <span className="mt-0.5 flex flex-wrap gap-x-3 text-sm font-normal text-muted">
-                        <span>{m.tabLabel} 탭</span>
+                        <span>{m.tabLabel}</span>
                         {m.late && <span className="font-bold text-danger-ink">기한 지남</span>}
                         {m.finished && <span>다 했어요</span>}
                       </span>
@@ -118,14 +123,17 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
             </ul>
           </Card>
         ) : (
-          <p className="text-sm font-normal text-muted">이름이 적힌 날을 누르면 그날 마감인 일이 나와요.</p>
+          <p className="text-sm font-normal text-muted">글자가 적힌 날을 누르면 그날까지 할 일이 나와요.</p>
         )}
       </div>
     </div>
   );
 }
 
-/** 맨 위 한 줄: 「첫 손님까지 D-23 · 11/30 (월)」(누르는 것이 아니라 청록 없이 ink) */
+/**
+ * 맨 위 띠: 「첫 손님까지 D-35 · 12/2 (수) 무렵」. 예전 홈 첫 손님 카드와 같은 청록 면(hero) — 달력 탭에서 청록 면은 이 한 곳(DESIGN 2.2).
+ * 달력 탭에는 「가장 급한 일」 카드가 없어서 한 화면에 한 곳이 지켜진다.
+ */
 function GuestLine({ guest }: { guest: ReturnType<typeof firstGuest> | null }) {
   if (!guest?.finish || guest.dday === null) {
     return <p className="text-base font-normal text-muted">단계에 날짜를 넣으면 첫 손님 날을 계산해요.</p>;
@@ -133,9 +141,10 @@ function GuestLine({ guest }: { guest: ReturnType<typeof firstGuest> | null }) {
   const { md, wd } = dateParts(guest.finish.date);
   const n = guest.dday;
   return (
-    <p className="flex flex-wrap items-baseline gap-x-2 text-ink">
-      <span className="text-lg font-bold">첫 손님까지 <span className="tabular-nums">{n > 0 ? `D-${n}` : n === 0 ? '오늘' : `${-n}일 지남`}</span></span>
-      <span className="text-sm font-normal text-ink-soft tabular-nums">{md} ({wd}){guest.finish.estimate ? ' 무렵' : ''}</span>
+    <p className="flex flex-wrap items-baseline gap-x-3 rounded-panel bg-hero px-4 py-3 text-on-hero">
+      <span className="text-base font-bold">첫 손님까지</span>
+      <span className="text-2xl font-bold tabular-nums">{n > 0 ? `D-${n}` : n === 0 ? '오늘' : `${-n}일 지남`}</span>
+      <span className="text-sm font-normal text-hero-sub tabular-nums">{md} ({wd}){guest.finish.estimate ? ' 무렵' : ''}</span>
     </p>
   );
 }

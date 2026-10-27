@@ -4,6 +4,9 @@
 import { STEP_COUNT, TASK_KINDS, type ProgressDoc, type Step, type TaskKind } from './types.ts';
 import type { StepGuess } from './todoist.ts';
 
+/** 자동 분류가 고를 수 있는 종류: 「문의」는 사람이 붙이는 표시라 뺀다(예전 분류 결과가 바뀌지 않게) */
+export const CLASSIFY_KINDS: readonly TaskKind[] = TASK_KINDS.filter((k) => k !== '문의');
+
 export const CLASSIFY_MODEL = 'claude-haiku-5-5';
 export const CLASSIFY_TIMEOUT_MS = 4000;
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
@@ -67,7 +70,7 @@ export function defaultStep(doc: ProgressDoc | null): number {
 
 function prompt(text: string, steps: StepLite[]): string {
   const list = steps.map((s) => `${s.id}. ${s.title} — ${s.summary}`).join('\n');
-  return `외국인관광 도시민박업(에어비앤비) 준비 과정의 14단계가 있다.\n${list}\n\n할 일 종류: ${TASK_KINDS.join(', ')}\n\n`
+  return `외국인관광 도시민박업(에어비앤비) 준비 과정의 14단계가 있다.\n${list}\n\n할 일 종류: ${CLASSIFY_KINDS.join(', ')}\n\n`
     + `할 일: "${text.replace(/"/g, "'")}"\n\n`
     + '이 할 일이 속할 단계 번호 하나와 종류 하나를 고른다. 종류가 애매하면 null. '
     + '다른 말 없이 JSON 한 줄만 답한다. 예: {"step":7,"kind":"공사"}';
@@ -81,7 +84,7 @@ export function parseClaudeAnswer(raw: string): { stepId: number; kind: TaskKind
   try { j = JSON.parse(m[0]) as Record<string, unknown>; } catch { return null; }
   const n = Number(j.step);
   if (!Number.isInteger(n) || n < 1 || n > STEP_COUNT) return null;
-  const kind = typeof j.kind === 'string' && (TASK_KINDS as readonly string[]).includes(j.kind) ? (j.kind as TaskKind) : null;
+  const kind = typeof j.kind === 'string' && (CLASSIFY_KINDS as readonly string[]).includes(j.kind) ? (j.kind as TaskKind) : null;
   return { stepId: n, kind };
 }
 
