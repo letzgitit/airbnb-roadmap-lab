@@ -1,4 +1,4 @@
-import App from '@/components/App';
+import { HomeSwitch } from '@/components/simple-home/HomeSwitch';
 import { loadContent } from '@/lib/content';
 import { loadAutoRefs, loadBlock, withRefs } from '@/lib/refs';
 
@@ -25,7 +25,7 @@ export default async function Page() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
-      <App content={{ ...content, steps }} />
+      <HomeSwitch content={{ ...content, steps }} />
     </>
   );
 }

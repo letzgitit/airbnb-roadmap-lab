@@ -30,12 +30,14 @@ import { KindSelect, NoteField, OwnerSelect, type StepRef, type TaskOwner, type 
  * - quietLate: 홈 「기한 지남」 묶음 안의 줄. 묶음 이름이 이미 빨강이라 날짜 보조 줄은 muted 로 둔다.
  * - depth: 1 = 부모 바로 밑의 세부 항목 줄(앞 칸을 24px 들여 쓰고 글자를 한 단계 작게).
  * - parentTitle: 부모가 이 목록에 없는 세부 항목이면 부모 제목(보조 줄에 「‘부모 제목’의 세부 항목」).
+ * - simple: 새 홈(한눈에 보기)의 쉬운 폼. 고치는 폼에 제목 · 마감일 · 담당 · 메모만 둔다(시작일 · 종류 · 넣을 곳은 그대로 둠).
+ *   보조 줄의 종류 · 「자동으로 고름」도 뺀다. 메모는 접힌 채 첫 줄만 보이고, 누르면 펼친다. 다음 7일 안 마감은 강조색으로.
  */
 type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; place: string };
 
-export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, onEditChange, onToggle, onGone }: {
+export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, onEditChange, onToggle, onGone }: {
   t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
-  depth?: 0 | 1; parentTitle?: string;
+  depth?: 0 | 1; parentTitle?: string; simple?: boolean;
   onEditChange: (id: string, open: boolean) => void; onToggle: (t: TaskItem) => void; onGone: () => void;
 }) {
   const t = task as TaskWithNote; // 외도민판 · 지산판 같은 코드(autoFill 은 지산판에선 늘 비어 있다)
@@ -49,6 +51,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const [owner, setOwner] = useState<TaskOwner | ''>('');
   const [place, setPlace] = useState(placeOf(t));
   const [err, setErr] = useState<string | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
   const [base, setBase] = useState(t.version);
   const [orig, setOrig] = useState<Form>({ text: '', start: '', due: '', kind: '', owner: '', note: '', place: placeOf(t) });
   const { busy, run } = useBusy();
@@ -135,16 +138,18 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             <AutoTextarea className={inputCls} rows={2} value={text} maxLength={200} autoFocus aria-label="할 일 내용"
               onChange={(e) => setText(oneLine(e.target.value))} onKeyDown={enterSubmit} />
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <label className="flex items-center gap-2 text-sm font-normal text-ink-soft">시작일
-                <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label="시작일" />
-              </label>
+              {!simple && (
+                <label className="flex items-center gap-2 text-sm font-normal text-ink-soft">시작일
+                  <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label="시작일" />
+                </label>
+              )}
               <label className="flex items-center gap-2 text-sm font-normal text-ink-soft">마감일
                 <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
               </label>
-              <KindSelect value={kind} onChange={setKind} />
+              {!simple && <KindSelect value={kind} onChange={setKind} />}
               <OwnerSelect value={owner} onChange={setOwner} />
             </div>
-            {!deleted && (
+            {!deleted && !simple && (
               <label className="block text-sm font-normal text-ink-soft">넣을 곳
                 <select className={`${inputCls} mt-1`} value={place} onChange={(e) => setPlace(e.target.value)} aria-label="넣을 곳">
                   <optgroup label="단계 할 일로">
@@ -189,6 +194,60 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
 
   const late = !!dl?.late && !t.done;
   const call = callNumber(t.note);
+  const startEdit = () => { fill(formOf(t as unknown as Record<string, unknown>)); setErr(null); setBase(t.version); ed.start(); };
+  if (simple) {
+    // 다음 7일 안(오늘 포함) 마감 = 강조색 700, 지남 = 빨강 700
+    const soon = !t.done && !late && !!t.due && (dl?.rel === '오늘' || /^D-[1-6]$/.test(dl?.rel ?? ''));
+    const noteLines = (t.note ?? '').trim();
+    const firstLine = noteLines.split('\n')[0];
+    const more = noteLines.includes('\n') || firstLine.length > 40;
+    return (
+      <li className={rowCls}>
+        <label className={`${leadCls} cursor-pointer ${depth ? 'ml-6' : ''}`}>
+          <input type="checkbox" className="size-5 cursor-pointer" checked={t.done} aria-label={`${t.text} 완료`}
+            onChange={(e) => { onToggle(t); void send({ op: 'task.update', id: t.id, patch: { done: e.target.checked } }); }} />
+        </label>
+        <div className="min-w-0 flex-1">
+          <button ref={textBtnRef} type="button" aria-label={`${t.text} 고치기`} className="block w-full py-3 text-left" onClick={startEdit}>
+            <span className={`block break-words ${depth ? 'text-sm font-normal text-ink' : rowText} ${t.done ? 'text-muted line-through' : ''}`}>{t.text}</span>
+            <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 text-sm font-normal text-muted empty:hidden">
+              {dateText && <span className={`whitespace-nowrap ${t.done ? '' : 'text-ink-soft'}`}>{dateText}</span>}
+              {dl && !t.done && <span className={`whitespace-nowrap ${late ? 'font-bold text-danger-ink' : soon ? 'font-bold text-accent-ink' : ''}`}>{dl.rel}</span>}
+              {t.owner && <span className="whitespace-nowrap">{t.owner}</span>}
+              {parentTitle && <span className="min-w-0 truncate">‘{parentTitle}’의 세부 항목</span>}
+              <EditBadge k={`task:${t.id}`} />
+            </span>
+          </button>
+          {/* 메모: 접힌 채 첫 줄만 살짝. 누르면 전부 펼치고, 속 전화번호는 바로 건다 */}
+          {noteLines && (
+            noteOpen ? (
+              <div className="-mt-1 pb-3">
+                <p className="whitespace-pre-wrap break-words text-sm font-normal leading-relaxed text-ink-soft">{noteLines}</p>
+                <div className="flex flex-wrap items-center gap-x-4">
+                  {[...new Set(phonesIn(noteLines))].map((p) => <a key={p} href={telHref(p)} className={`${textBtn} mx-0 tabular-nums`}><i className="fas fa-phone mr-1.5" aria-hidden />{p}</a>)}
+                  <button type="button" className={`${textBtn} mx-0`} aria-expanded="true" onClick={() => setNoteOpen(false)}>메모 접기</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" aria-expanded="false" aria-label={`메모 펼치기: ${firstLine}`} onClick={() => setNoteOpen(true)}
+                className="-mt-2 flex min-h-11 w-full items-center gap-1.5 pb-1 text-left text-sm font-normal text-muted">
+                <i className="far fa-note-sticky shrink-0" aria-hidden />
+                <span className="min-w-0 truncate">{firstLine}</span>
+                {more && <i className="fas fa-chevron-down shrink-0 text-xs" aria-hidden />}
+              </button>
+            )
+          )}
+        </div>
+        {call && (
+          <a href={telHref(call)} aria-label={`${t.text} 전화 걸기 ${call}`}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-accent-ink transition-colors hover:bg-sunken">
+            <i className="fas fa-phone" aria-hidden />
+          </a>
+        )}
+        <TrashButton label={`${t.text} 삭제`} onClick={() => void del()} />
+      </li>
+    );
+  }
   return (
     <li className={rowCls}>
       <label className={`${leadCls} cursor-pointer ${depth ? 'ml-6' : ''}`}>

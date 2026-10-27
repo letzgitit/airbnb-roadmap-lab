@@ -57,9 +57,10 @@ interface Ctx {
   canMove: (id: string, dir: -1 | 1) => boolean;
   ensure: () => void;
   reload: () => Promise<void>;
-  /** 크게 보기. stepId 를 주면 그 단계 사진 안에서만 넘긴다(단계 창 사진 줄) */
-  view: (id: string, stepId?: number) => void;
-  upload: (stepId?: number) => void;
+  /** 크게 보기. stepId 를 주면 그 단계 사진 안에서만 넘긴다(단계 창 사진 줄). ids 를 주면 그 사진들 안에서만(새 홈 사진 탭 — 순서 옮기기 없음) */
+  view: (id: string, stepId?: number, ids?: string[]) => void;
+  /** 올리기 창. album 을 주면 그 묶음 이름으로 올린다(새 홈 「공사 후」 칸) */
+  upload: (stepId?: number, album?: string) => void;
   patch: (id: string, method: 'PATCH' | 'DELETE', body?: Record<string, unknown>) => Promise<boolean>;
 }
 const C = createContext<Ctx | null>(null);
@@ -76,7 +77,9 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
   const [state, setState] = useState<Ctx['state']>('idle');
   const [viewId, setViewId] = useState<string | null>(null);
   const [viewStep, setViewStep] = useState<number | null>(null);
+  const [viewIds, setViewIds] = useState<string[] | null>(null);
   const [uploadStep, setUploadStep] = useState<number | null>(null);
+  const [uploadAlbum, setUploadAlbum] = useState('');
   const started = useRef(false);
 
   const reload = useCallback(async () => {
@@ -128,7 +131,11 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
     return steps.find((s) => st(s.id) === 'doing')?.id ?? steps.find((s) => st(s.id) !== 'done')?.id ?? steps[0]?.id ?? 1;
   }, [doc, steps]);
 
-  const viewList = useMemo(() => (viewStep === null ? shown : ordered.filter((p) => p.stepId === viewStep)), [shown, ordered, viewStep]);
+  // 크게 보기에서 넘기는 목록: 고른 사진 묶음(새 홈 사진 탭) → 한 단계(단계 창) → 사진 탭에 보이는 줄
+  const viewList = useMemo(() => {
+    if (viewIds) { const by = new Map(ordered.map((p) => [p.id, p])); return viewIds.map((id) => by.get(id)).filter((p): p is PhotoView => !!p); }
+    return viewStep === null ? shown : ordered.filter((p) => p.stepId === viewStep);
+  }, [shown, ordered, viewStep, viewIds]);
 
   // 같은 단계 사진을 기본 순서로 놓고 한 칸 옮긴 뒤, 그 단계 사진들의 position 을 그 순서대로 다시 매겨 한 번에 저장한다
   const canMove = useCallback((id: string, dir: -1 | 1) => {
@@ -168,8 +175,8 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
 
   const value = useMemo<Ctx>(() => ({
     steps, data, state, ordered, shown, sort, setSort, kind, setKind, query, setQuery, move, canMove, ensure, reload,
-    view: (id, stepId) => { setViewStep(stepId ?? null); setViewId(id); },
-    upload: (stepId) => setUploadStep(stepId ?? defaultStep),
+    view: (id, stepId, ids) => { setViewStep(stepId ?? null); setViewIds(ids ?? null); setViewId(id); },
+    upload: (stepId, album) => { setUploadAlbum(album ?? ''); setUploadStep(stepId ?? defaultStep); },
     patch,
   }), [steps, data, state, ordered, shown, sort, setSort, kind, setKind, query, move, canMove, ensure, reload, defaultStep, patch]);
 
@@ -178,9 +185,9 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
       {children}
       {viewIndex >= 0 && (
         <Lightbox list={viewList} index={viewIndex} steps={steps} onIndex={(i) => setViewId(viewList[i]?.id ?? null)} onClose={() => setViewId(null)}
-          onSave={(p, body) => patch(p.id, 'PATCH', body)} onDelete={remove} onMove={move} canMove={canMove} showMove={viewStep !== null || (sort === 'default' && !query.trim() && kind === 'all')} />
+          onSave={(p, body) => patch(p.id, 'PATCH', body)} onDelete={remove} onMove={move} canMove={canMove} showMove={!viewIds && (viewStep !== null || (sort === 'default' && !query.trim() && kind === 'all'))} />
       )}
-      {uploadStep !== null && <UploadDialog steps={steps} initialStep={uploadStep} onDone={() => void reload()} onClose={() => setUploadStep(null)} />}
+      {uploadStep !== null && <UploadDialog steps={steps} initialStep={uploadStep} album={uploadAlbum} onDone={() => void reload()} onClose={() => setUploadStep(null)} />}
     </C.Provider>
   );
 }
@@ -449,7 +456,7 @@ function StepSelect({ steps, value, onChange, id }: { steps: StepName[]; value: 
 }
 
 // ── 사진 올리기 창 ──
-function UploadDialog({ steps, initialStep, onDone, onClose }: { steps: StepName[]; initialStep: number; onDone: () => void; onClose: () => void }) {
+function UploadDialog({ steps, initialStep, album = '', onDone, onClose }: { steps: StepName[]; initialStep: number; album?: string; onDone: () => void; onClose: () => void }) {
   const uid = useId();
   const { toast, confirmDiscard } = useProgress();
   const [files, setFiles] = useState<File[]>([]);
@@ -485,6 +492,7 @@ function UploadDialog({ steps, initialStep, onDone, onClose }: { steps: StepName
         fd.append('file', blob, isPdf ? 'file.pdf' : 'photo.jpg');
         fd.append('stepId', String(stepId));
         fd.append('caption', caption);
+        if (album) fd.append('album', album);
         if (doc) fd.append('doc', '1');
         const res = await busyFetch('/api/photos', { method: 'POST', headers: { 'x-photos-upload': '1' }, body: fd }, { slow: true });
         const j = await res.json().catch(() => null);
@@ -516,7 +524,7 @@ function UploadDialog({ steps, initialStep, onDone, onClose }: { steps: StepName
         void submit();
       }}>
         <div className="flex items-center justify-between gap-3">
-          <h2 id={`${uid}-t`} className="text-xl font-bold text-ink">사진 올리기</h2>
+          <h2 id={`${uid}-t`} className="text-xl font-bold text-ink">{album ? `사진 올리기 · ${album}` : '사진 올리기'}</h2>
           <IconButton label="닫기" icon="fa-xmark" variant="filled" disabled={busy} onClick={() => void tryClose()} />
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
