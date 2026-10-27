@@ -6,15 +6,14 @@ import type { ProgressDoc } from '@/lib/core/types';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { btnGhost, btnPrimary, composerCls, dateCls } from '@/components/ui/buttonCls';
 import { Segmented } from '@/components/ui/Segmented';
+import { addDays, shiftLabel, shiftPatch } from '@/components/tasks/task-view';
 
 // 「이 날 이후 일정 밀기 · 당기기」: 고른 날(from) 이후의 안 끝난 할 일 마감일과 안 끝난 단계 목표일을 같은 날수만큼 옮긴다.
 // 미리 보기(무엇이 몇 개, 어떻게 바뀌나) → 「n개 옮기기」 → 기존 연산(task.update · step.update)으로 하나씩 저장.
 // 저장 뒤 알림의 「되돌리기」는 같은 것들을 같은 날수만큼 반대로 옮긴다(그 사이 누가 고쳤으면 충돌 창이 뜬다).
-const toDate = (iso: string) => new Date(`${iso}T00:00:00`);
-const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const addDays = (iso: string, n: number) => { const d = toDate(iso); d.setDate(d.getDate() + n); return isoOf(d); };
+// 할 일에 시작일이 있으면 시작일도 같은 날수만큼 같이 옮긴다(미리 보기 「10/28~10/30 → 11/4~11/6」, 되돌리기도 같이).
 
-interface Move { kind: 'task' | 'step'; id: string; stepId: number; label: string; date: string }
+interface Move { kind: 'task' | 'step'; id: string; stepId: number; label: string; date: string; start?: string | null }
 
 function targets(doc: ProgressDoc, from: string, titleOf: (id: number) => string): Move[] {
   const out: Move[] = [];
@@ -22,7 +21,7 @@ function targets(doc: ProgressDoc, from: string, titleOf: (id: number) => string
     if (s.status !== 'done' && s.targetDate && s.targetDate >= from) out.push({ kind: 'step', id: k, stepId: Number(k), label: `${k}단계 ${titleOf(Number(k))} 목표일`, date: s.targetDate });
   });
   Object.values(doc.tasks).forEach((t) => {
-    if (!t.deletedAt && !t.done && t.due && t.due >= from) out.push({ kind: 'task', id: t.id, stepId: t.stepId, label: t.text, date: t.due });
+    if (!t.deletedAt && !t.done && t.due && t.due >= from) out.push({ kind: 'task', id: t.id, stepId: t.stepId, label: t.text, date: t.due, start: t.start ?? null });
   });
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.stepId - b.stepId);
 }
@@ -52,8 +51,9 @@ export function ShiftDates({ from, titleOf, onClose, getDoc }: {
       if (!cur) break;
       if (m.kind === 'task') {
         const t = cur.tasks[m.id];
-        if (!t?.due) continue;
-        const r = await send({ op: 'task.update', id: t.id, baseVersion: t.version, patch: { due: addDays(t.due, d) } }, { quiet: true });
+        const patch = t ? shiftPatch(t, d) : null;
+        if (!t || !patch) continue;
+        const r = await send({ op: 'task.update', id: t.id, baseVersion: t.version, patch }, { quiet: true });
         if (r.ok) ok += 1;
       } else {
         const s = cur.steps[m.id];
@@ -94,7 +94,7 @@ export function ShiftDates({ from, titleOf, onClose, getDoc }: {
         <ul className="flex flex-col gap-1 text-sm font-normal text-ink-soft" aria-label="바뀌는 것 미리 보기">
           {list.slice(0, 6).map((m) => (
             <li key={`${m.kind}${m.id}`} className="flex min-w-0 gap-x-3">
-              <span className="shrink-0 whitespace-nowrap text-ink">{shortDate(m.date)} → {shortDate(addDays(m.date, delta))}</span>
+              <span className="shrink-0 whitespace-nowrap text-ink">{shiftLabel({ due: m.date, start: m.start }, delta)}</span>
               <span className="min-w-0 truncate text-muted">{m.label}</span>
             </li>
           ))}

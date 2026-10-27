@@ -1,0 +1,229 @@
+/* 홈 「단계」 탭 트리 간트(StepGantt · GanttRow · GanttForm). 시안 gantt-v2/mock.html 의 모양을 그대로 옮겼다.
+   색은 globals.css 토큰만 쓴다(아래 짧은 이름은 별칭). 줄마다 --c(종류색) · --cs(옅은 면) · --ci(옅은 면 위 글자)를 style 로 준다.
+   --vw = 보이는 폭(px). 이름 줄(nl)은 그 폭만큼 왼쪽에 붙어(sticky) 가로로 넘겨도 제자리, 막대 줄(bl)만 넘어간다. */
+.gantt {
+  --surface: var(--color-surface); --sunken: var(--color-sunken); --page: var(--color-page);
+  --line: var(--color-line); --line-strong: var(--color-line-strong);
+  --ink: var(--color-ink); --ink-soft: var(--color-ink-soft); --muted: var(--color-muted); --faint: var(--color-faint);
+  --accent: var(--color-accent); --accent-ink: var(--color-accent-ink); --accent-soft: var(--color-accent-soft); --on-accent: var(--color-on-accent);
+  --danger-ink: var(--color-danger-ink);
+  --today: var(--color-today); --milestone: var(--color-milestone); --on-type: var(--color-on-type);
+  position: relative;
+}
+.gantt svg { display: block; }
+
+/* ── 위 도구 줄 ── */
+.tools { display: flex; align-items: center; gap: 2px; padding: 10px 6px 4px 12px; }
+.zoom { width: 148px; flex: none; }
+.sp { flex: 1; }
+.tbtn { height: 44px; min-width: 44px; justify-content: center; padding: 0 8px; border-radius: 8px; color: var(--accent-ink); font-weight: 700; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.tbtn:hover { background: var(--sunken); }
+.tbtn svg { width: 18px; height: 18px; }
+.chips { padding: 8px 10px 8px; }
+
+/* ── 날짜 머리(머리글 띠 바로 밑에 붙음) ── */
+.axisWrap { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 20; background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
+.axis { position: relative; height: 52px; will-change: transform; }
+.axM { position: absolute; top: 6px; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--ink); padding: 0 4px 0 6px; white-space: nowrap; background: var(--surface); z-index: 2; }
+.axM::before { content: ''; position: absolute; left: 0; top: -6px; height: 52px; border-left: 1px solid var(--line-strong); }
+.axD { position: absolute; top: 28px; font-size: 12px; line-height: 16px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
+.axD.wk { transform: none; padding-left: 5px; }
+.axToday { position: absolute; top: 26px; transform: translateX(-50%); height: 20px; padding: 0 4px; background: var(--surface); color: var(--today); font-size: 12px; line-height: 20px; font-weight: 700; white-space: nowrap; z-index: 2; }
+.axPin { position: absolute; top: 4px; height: 20px; display: inline-flex; align-items: center; gap: 4px; padding-right: 4px; margin-left: -7px; color: var(--ink-soft); background: var(--surface); font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap; z-index: 1; }
+.axPin i { font-size: 12px; }
+button.axPin::after { content: ''; position: absolute; inset: -4px 0 -24px; }
+button.axPin:hover { text-decoration: underline; }
+
+/* ── 본문 ── */
+.gx { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; user-select: none; -webkit-user-select: none; }
+.canvas { position: relative; isolation: isolate; min-width: 100%; }
+.grid { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.gl.m { background: var(--line-strong); }
+.gl.faint { opacity: .55; }
+.wkend { position: absolute; top: 0; bottom: 0; background: var(--sunken); opacity: .6; }
+.pinline { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed var(--faint); }
+.today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--today); z-index: 3; pointer-events: none; }
+
+.r { position: relative; --rowbg: var(--surface); --rc1: color-mix(in srgb, var(--c) 55%, var(--surface)); --rc2: var(--line-strong); }
+.nl { position: sticky; left: 0; z-index: 4; width: var(--vw); display: flex; align-items: center; gap: 8px; padding-right: 12px; background: var(--rowbg); }
+.bl { position: relative; display: flex; }
+.gut { position: sticky; left: 0; width: 0; height: 100%; z-index: 1; flex: none; }
+.gutR { position: sticky; right: 0; margin-left: auto; width: 0; height: 100%; z-index: 2; flex: none; }
+.mask { border-radius: 8px; }
+
+/* 화면 밖 막대: 그쪽 가장자리에 24px 조각(화살표 없이). offL · offR 은 가로로 넘길 때 StepGantt 가 붙인다 */
+.stub { position: absolute; display: none; width: 24px; background: var(--c); }
+.gut .stub { left: 0; border-radius: 0 8px 8px 0; }
+.gutR .stub { right: 0; border-radius: 8px 0 0 8px; }
+.offL .gut .stub, .offR .gutR .stub { display: block; }
+.rPhase .stub { top: 4px; height: 14px; border-radius: 0 7px 7px 0; }
+.rPhase .gutR .stub { border-radius: 7px 0 0 7px; }
+.rTask .stub { top: 3px; height: 16px; }
+.rSub .stub { top: 3px; height: 10px; background: color-mix(in srgb, var(--c) 72%, var(--surface)); }
+.done .stub { background: var(--line-strong); }
+
+/* 트리 선 */
+.rail { position: absolute; width: 2px; margin-left: -1px; background: var(--rc); }
+.tick { position: absolute; height: 2px; margin-top: -1px; background: var(--rc); }
+.elbow { position: absolute; top: 0; margin-left: -1px; border: 0 solid var(--rc); border-left-width: 2px; border-bottom-width: 2px; border-bottom-left-radius: 9px; }
+.L1 { --rc: var(--rc1); }
+.L2 { --rc: var(--rc2); }
+.L2.rail { width: 1.5px; }
+.L2.tick { height: 1.5px; }
+.L2.elbow { border-left-width: 1.5px; border-bottom-width: 1.5px; }
+
+/* 1층: 단계 머리 띠 */
+.rPhase { --rowbg: var(--cs); background: var(--cs); cursor: pointer; }
+.rPhase .nl { height: 62px; padding-left: 68px; flex-direction: column; align-items: stretch; justify-content: center; gap: 2px; }
+.pTop { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pSub { display: flex; align-items: center; gap: 12px; font-size: 13px; line-height: 18px; color: var(--ci); padding-left: 2px; white-space: nowrap; }
+.pSub b { font-weight: 700; }
+.rPhase .bl { height: 30px; }
+.chevBtn { position: absolute; left: 0; top: 0; width: 44px; height: 62px; display: grid; place-items: start start; padding: 9px 0 0 4px; color: var(--ci); z-index: 3; border-radius: 8px; }
+.chevBtn svg { width: 24px; height: 24px; transition: transform .18s; }
+.shut .chevBtn svg { transform: rotate(-90deg); }
+.badge { position: absolute; left: 30px; top: 8px; width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: var(--on-type);
+  display: grid; place-items: center; font-size: 13px; line-height: 1; font-weight: 700; box-shadow: 0 0 0 2px var(--cs); z-index: 2; pointer-events: none; }
+.badge svg { width: 15px; height: 15px; }
+.badge.todo { background: var(--surface); color: var(--ci); box-shadow: inset 0 0 0 2px var(--c), 0 0 0 2px var(--cs); }
+.pName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; line-height: 24px; font-weight: 700; color: var(--ink); padding: 0 4px 0 2px; letter-spacing: -.01em; text-align: left; }
+.pName::after, .tName::after { content: ''; position: absolute; inset: 0; z-index: 1; }
+.pName:focus-visible, .tName:focus-visible { outline: none; }
+.pName:focus-visible::after, .tName:focus-visible::after { outline: 2px solid var(--accent-ink); outline-offset: -2px; border-radius: 8px; }
+.now { flex: none; font-size: 13px; line-height: 18px; font-weight: 700; color: var(--accent-ink); }
+/* 굵은 요약 막대 + 진행 채움 + ◆ 목표일 · 「목표 11/9」 */
+.sb { position: absolute; top: 4px; height: 14px; background: color-mix(in srgb, var(--c) 34%, var(--surface)); border-radius: 7px; overflow: hidden; z-index: 2; }
+:global(.dark) .sb { background: color-mix(in srgb, var(--c) 55%, var(--surface)); }
+.sb > i { display: block; height: 100%; background: var(--c); }
+.dia { position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px; background: var(--milestone); transform: rotate(45deg); box-shadow: 0 0 0 2.5px var(--cs); z-index: 3; }
+.diaL { position: absolute; top: 2px; margin-left: 12px; padding: 0 4px; font-size: 12px; line-height: 18px; font-weight: 700; color: var(--ink-soft); background: var(--cs); white-space: nowrap; z-index: 3; }
+.rPhase.done { --rowbg: var(--sunken); background: var(--sunken); }
+.rPhase.done .pName, .rPhase.done .chevBtn, .rPhase.done .pSub { color: var(--muted); }
+.rPhase.done .badge { background: var(--muted); color: var(--surface); box-shadow: 0 0 0 2px var(--sunken); }
+.rPhase.done .sb, .rPhase.done .sb > i { background: var(--line-strong); }
+.rPhase.done .dia { background: var(--faint); box-shadow: 0 0 0 2.5px var(--sunken); }
+.rPhase.done .diaL { color: var(--muted); background: var(--sunken); }
+.guest.rPhase .nl { padding-left: 50px; }
+.guest .badge { left: 14px; }
+/* 로그인 전: 진행이 없어 막대가 늘 「안 채운」 옅은 면이라 띠와 구분이 안 된다 → 종류색으로 칠하고 옅은 면 위 글자색 1px 테두리(그림 3:1) */
+.guest .sb { background: var(--c); box-shadow: inset 0 0 0 1px var(--ci); }
+:global(.dark) .guest .sb { background: var(--c); }
+
+/* 2층: 할 일 */
+.rTask .nl, .rSub .nl { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; }
+.tLine { display: flex; align-items: center; min-width: 0; height: 24px; }
+.kLine { display: flex; align-items: center; height: 26px; padding-top: 2px; }
+.rTask .nl { height: 32px; padding-left: 86px; padding-top: 7px; }
+.rTask.hasKids .nl { height: 58px; }
+.rTask .bl { height: 28px; }
+.rTask, .rSub { cursor: pointer; }
+.node { position: absolute; top: var(--my); width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 2px var(--c); display: grid; place-items: center; z-index: 2; pointer-events: none; }
+.node svg { width: 12px; height: 12px; color: var(--surface); }
+.node.nDone { background: var(--faint); box-shadow: none; }
+.node.late { box-shadow: inset 0 0 0 2px var(--danger-ink); }
+.nodeBtn { position: absolute; top: var(--my); width: 44px; height: 44px; margin: -22px 0 0 -22px; z-index: 5; border-radius: 50%; }
+.nodeBtn:hover + .node, .nodeBtn:focus-visible + .node { box-shadow: inset 0 0 0 3px var(--c); }
+.tName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 4px; text-align: left; font-size: 15px; line-height: 22px; color: var(--ink); }
+.tMeta { margin-left: auto; flex: none; display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 18px; color: var(--ink-soft); padding: 0 0 0 4px; }
+.dt { min-width: 44px; text-align: right; white-space: nowrap; }
+.dt.lw { color: var(--danger-ink); font-weight: 700; }
+.dt.tw { color: var(--accent-ink); font-weight: 700; }
+.who { flex: none; min-width: 26px; text-align: right; color: var(--muted); font-size: 13px; line-height: 18px; font-weight: 400; white-space: nowrap; }
+.kids { position: relative; z-index: 5; height: 22px; padding: 0 4px 0 8px; border-radius: 8px; background: var(--sunken); color: var(--ink-soft); font-size: 12px; line-height: 16px; font-weight: 700; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.kids b { font-weight: 400; color: var(--muted); margin-right: 2px; }
+.kids::after { content: ''; position: absolute; inset: -13px -4px; }
+.kids svg { width: 16px; height: 16px; transition: transform .18s; }
+.kids.kShut svg { transform: rotate(-90deg); }
+.tb { position: absolute; top: 3px; height: 16px; border-radius: 8px; background: var(--c); z-index: 2; overflow: hidden; }
+.tb.part { background: color-mix(in srgb, var(--c) 30%, var(--surface)); }
+.tb.part > .fill { display: block; height: 100%; background: var(--c); }
+.tb.pt { width: 16px; margin-left: -8px; }
+.tb.bDone { background: var(--line-strong); }
+.done.rTask .tName { color: var(--muted); font-weight: 400; }
+.done .tMeta, .done .who { color: var(--muted); }
+
+/* 3층: 세부 항목 */
+.rSub .nl { height: 26px; padding-left: 104px; padding-top: 5px; }
+.rSub .tLine { height: 20px; }
+.rSub .bl { height: 22px; }
+.rSub .node { width: 12px; height: 12px; margin: -6px 0 0 -6px; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 70%, var(--surface)); }
+.rSub .node.nDone { background: var(--faint); box-shadow: none; }
+.rSub .node.late { box-shadow: inset 0 0 0 2px var(--danger-ink); }
+.rSub .tName { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--ink-soft); }
+.rSub .tMeta, .rSub .who { font-size: 12px; line-height: 16px; }
+.rSub .tb { top: 3px; height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--c) 72%, var(--surface)); }
+.rSub .tb.pt { width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; }
+.rSub .tb.bDone { background: var(--line-strong); }
+.done.rSub .tName { color: var(--muted); }
+
+/* PC 막대 끌기(가운데 = 통째로, 양 끝 = 시작일 · 마감일만) */
+.drag { cursor: grab; }
+.drag .hd { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 1; }
+.drag .hd.hs { left: 0; }
+.drag .hd.he { right: 0; }
+.dragging { cursor: grabbing; box-shadow: 0 0 0 2px var(--ink); }
+.dragTip { position: absolute; top: -20px; padding: 0 6px; height: 18px; border-radius: 6px; background: var(--ink); color: var(--surface); font-size: 12px; line-height: 18px; font-weight: 700; white-space: nowrap; z-index: 6; pointer-events: none; transform: translateX(-50%); }
+
+/* 할 일 추가 줄(펼친 단계 끝) */
+.rAdd .nl { height: 44px; padding-left: 86px; }
+.addBtn { color: var(--accent-ink); font-weight: 700; display: inline-flex; align-items: center; height: 44px; padding: 0 4px; position: static; }
+.addBtn::after { content: ''; position: absolute; inset: 0; z-index: 1; }
+.addBtn:hover { text-decoration: underline; }
+.plus { position: absolute; top: var(--my); width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; z-index: 2; pointer-events: none; }
+.plus svg { width: 14px; height: 14px; }
+
+/* 접은 끝난 단계 · 묶음 사이 */
+.rFold .nl { height: 48px; padding: 0; }
+.foldBtn { width: 100%; height: 48px; display: flex; align-items: center; gap: 6px; padding: 0 16px; color: var(--ink-soft); text-align: left; }
+.foldBtn:hover { background: var(--sunken); }
+.foldBtn b { font-weight: 700; }
+.foldBtn span { color: var(--muted); }
+.chev2 { margin-left: auto; width: 22px; height: 22px; color: var(--muted); transition: transform .18s; }
+.foldOn .chev2 { transform: rotate(180deg); }
+.rGap { height: 8px; background: var(--page); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.rSep { height: 0; border-top: 1px solid var(--line); }
+
+/* 그 자리 편집 폼 */
+.fwrap { position: sticky; left: 0; width: var(--vw); z-index: 6; padding-top: 4px; padding-bottom: 12px; background: var(--surface); cursor: auto; }
+.fbox { position: relative; z-index: 1; margin-right: 12px; background: var(--sunken); border: 1px solid var(--line-strong); border-radius: 8px; padding: 16px; display: grid; gap: 12px; user-select: text; -webkit-user-select: text; }
+.fhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; line-height: 18px; color: var(--muted); min-width: 0; }
+.fhead b { color: var(--ink); font-weight: 700; flex: none; }
+.fhead span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.f { display: grid; gap: 4px; font-size: 12px; line-height: 16px; color: var(--muted); min-width: 0; }
+.two { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@container gform (min-width: 420px) { .two { grid-template-columns: 1fr 1fr; gap: 8px; } }
+.fbox { container: gform / inline-size; }
+.hint { font-size: 12px; line-height: 16px; color: var(--muted); }
+.check { height: 44px; display: inline-flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; color: var(--ink); justify-self: start; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+.acts { display: flex; align-items: center; gap: 8px; }
+.ibtn { width: 44px; height: 44px; border-radius: 8px; display: grid; place-items: center; color: var(--danger-ink); margin-left: auto; }
+.ibtn:hover { background: var(--surface); }
+.ibtn svg { width: 20px; height: 20px; }
+.addSub { justify-self: start; color: var(--accent-ink); font-weight: 700; height: 44px; display: inline-flex; align-items: center; gap: 6px; padding: 0 2px; }
+.addSub:hover { text-decoration: underline; }
+.addSub svg { width: 16px; height: 16px; }
+.ferr { color: var(--danger-ink); font-size: 13px; line-height: 18px; font-weight: 700; }
+
+/* 범례 */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 12px 16px 14px; border-top: 1px solid var(--line); font-size: 12px; line-height: 16px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.lgSb { width: 22px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--ink-soft) 50%, color-mix(in srgb, var(--ink-soft) 30%, var(--surface)) 50%); }
+.lgTb { width: 22px; height: 8px; border-radius: 4px; background: var(--ink-soft); }
+.lgSt { width: 22px; height: 4px; border-radius: 2px; background: var(--faint); }
+.lgDia { width: 9px; height: 9px; background: var(--milestone); transform: rotate(45deg); border-radius: 1px; margin: 0 2px; }
+.lgTd { width: 2px; height: 14px; background: var(--today); }
+.lgPin { width: 0; height: 14px; border-left: 1.5px dashed var(--faint); }
+
+.empty { padding: 28px 16px; color: var(--muted); text-align: center; font-size: 15px; line-height: 22px; }
+
+@media (hover: hover) and (min-width: 768px) {
+  .rTask:hover, .rSub:hover { --rowbg: var(--sunken); background: var(--sunken); }
+}
+@media (min-width: 768px) {
+  .tools { padding: 12px 16px 4px; }
+  .chips { padding: 4px 14px 6px; }
+  .dt { min-width: 92px; }
+  .fbox { max-width: 640px; }
+}

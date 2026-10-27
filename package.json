@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "seed": "node scripts/seed-progress.mjs",
-    "test": "node --test components/home/*.test.ts scripts/test-todoist.mjs scripts/test-task-tree.mjs"
+    "test": "node --test components/home/*.test.ts components/home/gantt/*.test.ts components/tasks/*.test.ts scripts/test-todoist.mjs scripts/test-task-tree.mjs"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "7.3.1",

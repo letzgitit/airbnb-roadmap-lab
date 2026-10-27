@@ -16,6 +16,7 @@ import { TYPE_COLOR } from '@/components/TimelineChart';
 import { TaskComposer, type StepRef, type TaskWithNote } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
+import { treeRows } from '@/components/tasks/task-view';
 import { ShiftDates } from './ShiftDates';
 import { DateStrip } from './DateStrip';
 import { axisOf, diffDays, pinsOf, stepRanges, toDate, type Pin, type TimelineStep } from './step-dates';
@@ -113,10 +114,11 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
   const indexOf = (id: number) => steps.findIndex((s) => s.id === id);
   const titleOf = (id: number) => steps.find((s) => s.id === id)?.title ?? '';
   const typeOf = (id: number) => steps.find((s) => s.id === id)?.type ?? '';
-  const row = (t: TaskItem, showStep = false) => (
-    <TaskRow key={t.id} t={t} steps={stepRefs} listStepId={null} showStep={showStep} scope="modal" inset
+  // 세부 항목은 같은 묶음 안에 부모가 있으면 바로 밑에 들여 쓰고, 없으면 맨 위 층 + 「‘부모’의 세부」
+  const rows = (list: TaskItem[], showStep: (t: TaskItem) => boolean = () => false) => treeRows(list, doc.tasks).map(({ item: t, depth, parentTitle }) => (
+    <TaskRow key={t.id} t={t} steps={stepRefs} listStepId={null} showStep={showStep(t)} scope="modal" inset depth={depth} parentTitle={parentTitle}
       quietLate={lateIds.has(t.id)} onEditChange={reportEdit} onToggle={onToggle} onGone={focusTop} />
-  );
+  ));
   const defaultStep = groupIds[0] ?? currentId ?? steps[0]?.id ?? 1;
 
   return (
@@ -149,7 +151,7 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
           <section aria-labelledby={`${uid}-late`} className={cardRowCls}>
             <h3 id={`${uid}-late`} className="px-4 pt-3 text-sm font-bold text-danger-ink">기한 지남</h3>
             {/* 바로 아래 같은 단계 머리가 있으면 단계 이름은 빼고 */}
-            <ul>{late.map((t) => row(t, !groupIds.includes(t.stepId)))}</ul>
+            <ul>{rows(late, (t) => !groupIds.includes(t.stepId))}</ul>
           </section>
         )}
         {groupIds.map((id) => {
@@ -164,7 +166,7 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
                   <i className="fas fa-chevron-right text-xs text-muted" aria-hidden />
                 </button>
               </h3>
-              {items.length > 0 && <ul>{items.map((t) => row(t))}</ul>}
+              {items.length > 0 && <ul>{rows(items)}</ul>}
             </section>
           );
         })}
@@ -172,7 +174,7 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
         {noDate.length > 0 && (
           <div className={cardRowCls}>
             <FoldRow label="날짜 없음" count={noDate.length} open={noDateOpen} onToggle={() => setShowNoDate((v) => !v)} controls={`${uid}-nodate`} />
-            {noDateOpen && <ul id={`${uid}-nodate`} className="border-t border-line">{noDate.map((t) => row(t, true))}</ul>}
+            {noDateOpen && <ul id={`${uid}-nodate`} className="border-t border-line">{rows(noDate, () => true)}</ul>}
           </div>
         )}
       </Card>

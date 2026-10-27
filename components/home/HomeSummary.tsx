@@ -11,6 +11,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import type { StepRef } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
+import { treeRows } from '@/components/tasks/task-view';
 import { toDate, type Pin, type TimelineStep } from './step-dates';
 import { dLabel, guestFinish, logWhen, summaryOf, type MoneyAccount, type OwnerFilter, type StepStateRow, type Summary } from './summary-data';
 import { Chevron, GuestPlan, GuestWeeks, MoneyBar, Ring, StepRoad, TypeDot, TypeLegend, useWidth, WeekChart } from './SummaryViz';
@@ -85,10 +86,11 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
 
   const s = summaryOf(steps, doc, today, { currentId, owner, marks, fixedDay0, isDone, editing });
   const stepRefs: StepRef[] = steps.map((x) => ({ id: x.id, title: x.title }));
-  const row = (t: TaskItem, late = false) => (
-    <TaskRow key={t.id} t={t} steps={stepRefs} listStepId={null} showStep scope="page" inset
+  // 세부 항목은 같은 묶음 안에 부모가 있으면 바로 밑에 들여 쓰고, 없으면 맨 위 층 + 「‘부모’의 세부」
+  const rows = (list: TaskItem[], late = false) => treeRows(list, doc.tasks).map(({ item: t, depth, parentTitle }) => (
+    <TaskRow key={t.id} t={t} steps={stepRefs} listStepId={null} showStep scope="page" inset depth={depth} parentTitle={parentTitle}
       quietLate={late} onEditChange={reportEdit} onToggle={onToggle} onGone={focusTodo} />
-  );
+  ));
   const nextOpen = moreNext || s.next7.some((t) => editing.has(t.id));
   const decideOpen = moreDecide || s.decide.slice(DECIDE_SHOWN).some((t) => editing.has(t.id));
   const nothingSoon = s.late.length + s.today.length + s.next7.length === 0;
@@ -204,7 +206,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
         {s.late.length > 0 && (
           <section aria-labelledby={`${uid}-late`}>
             <h4 id={`${uid}-late`} className={`${groupCls} text-danger-ink`}>기한 지남<span className="tabular-nums">{s.late.length}</span></h4>
-            <ul>{s.late.map((t) => row(t, true))}</ul>
+            <ul>{rows(s.late, true)}</ul>
           </section>
         )}
         {/* 「오늘」은 비어도 남긴다(다른 묶음이 하나라도 있을 때) — 오늘 마감이 없다는 것도 알릴 거리 */}
@@ -212,7 +214,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
           <section aria-labelledby={`${uid}-today`}>
             <h4 id={`${uid}-today`} className={`${groupCls} text-accent-ink`}>오늘{s.today.length > 0 && <span className="tabular-nums">{s.today.length}</span>}</h4>
             {s.today.length > 0
-              ? <ul>{s.today.map((t) => row(t))}</ul>
+              ? <ul>{rows(s.today)}</ul>
               : <p className="px-4 pt-1 pb-3 text-base text-muted">오늘 마감인 할 일이 없어요.</p>}
           </section>
         )}
@@ -221,7 +223,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
             {nextOpen && (
               <section id={`${uid}-next`} aria-labelledby={`${uid}-next-h`}>
                 <h4 id={`${uid}-next-h`} className={`${groupCls} text-ink-soft`}>다음 7일<span className="tabular-nums">{s.next7.length}</span></h4>
-                <ul>{s.next7.map((t) => row(t))}</ul>
+                <ul>{rows(s.next7)}</ul>
               </section>
             )}
             <button type="button" aria-expanded={nextOpen} aria-controls={`${uid}-next`} onClick={() => setMoreNext((v) => !v)} className={moreCls}>
@@ -246,8 +248,8 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
             </p>
             {s.decide.length > 0 && (
               <div className="border-t border-line">
-                <ul>{s.decide.slice(0, DECIDE_SHOWN).map((t) => row(t))}</ul>
-                {decideOpen && <ul id={`${uid}-decide-more`} className="border-t border-line">{s.decide.slice(DECIDE_SHOWN).map((t) => row(t))}</ul>}
+                <ul>{rows(s.decide.slice(0, DECIDE_SHOWN))}</ul>
+                {decideOpen && <ul id={`${uid}-decide-more`} className="border-t border-line">{rows(s.decide.slice(DECIDE_SHOWN))}</ul>}
               </div>
             )}
             {s.decide.length > DECIDE_SHOWN && (

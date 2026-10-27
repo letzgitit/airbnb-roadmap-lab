@@ -6,6 +6,7 @@ import { useProgress, type DirtyScope } from '@/components/progress/ProgressProv
 import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, dateCls, enterSubmit, inputCls, oneLine, useBusy, useDirty, useFormEsc,
 } from '@/components/progress/bits';
+import { START_AFTER_DUE, taskErrorMessage } from './task-errors';
 
 export interface StepRef { id: number; title: string }
 
@@ -54,30 +55,42 @@ export function KindSelect({ value, onChange }: { value: TaskKind | ''; onChange
  * 새 할 일 입력: 목록 첫 줄 「＋ 할 일 추가」를 누르면 그 자리에서 펼쳐진다. Enter = 추가, Esc = 취소(쓰던 글이 있으면 확인).
  * steps 를 주면(홈) 「단계」를 고르는 칸이 생기고 기본값은 stepId(지금 단계)다. 안 주면(단계 시트) stepId 로 고정.
  * initialDue: 마감일 칸의 처음 값(홈 타임라인에서 고른 날). 처음 값 그대로면 「쓰던 글」로 보지 않는다.
+ * parentId: 주면 그 할 일의 세부 항목으로 더한다(단계는 서버가 부모를 따른다 — stepId 를 보내지 않고 단계 칸도 없다).
+ *   parentTitle 은 폼 위 「‘제목’의 세부 항목」 안내에 쓴다.
+ * 저장 거절(시작일 > 마감일 · 부모 문제)은 알림 대신 폼 안 빨강 한 줄로 적는다(send quiet).
  */
-export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '' }: {
-  stepId: number; steps?: StepRef[]; scope: DirtyScope; onClose: () => void; initialDue?: string;
+export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', parentId, parentTitle }: {
+  stepId: number; steps?: StepRef[]; scope: DirtyScope; onClose: () => void; initialDue?: string; parentId?: string; parentTitle?: string;
 }) {
   const { send } = useProgress();
   const [text, setText] = useState('');
+  const [start, setStart] = useState('');
   const [due, setDue] = useState(initialDue);
   const [note, setNote] = useState('');
   const [owner, setOwner] = useState<TaskOwner | ''>('');
   const [kind, setKind] = useState<TaskKind | ''>('');
   const [sid, setSid] = useState(stepId);
+  const [err, setErr] = useState<string | null>(null);
   const { busy, run } = useBusy();
-  const dirty = text.trim() !== '' || due !== initialDue || kind !== '' || owner !== '' || note.trim() !== '';
-  useDirty(`form:add-task:${steps ? 'home' : stepId}`, dirty, scope);
+  const dirty = text.trim() !== '' || start !== '' || due !== initialDue || kind !== '' || owner !== '' || note.trim() !== '';
+  useDirty(`form:add-task:${parentId ? `sub:${parentId}` : steps ? 'home' : stepId}`, dirty, scope);
   const esc = useFormEsc(dirty, onClose);
   return (
     <form className={composerCls} onKeyDown={esc} onSubmit={(e) => {
       e.preventDefault();
       if (!text.trim()) return;
-      void run(() => send({ op: 'task.add', stepId: sid, text, due: due || null, ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(owner ? { owner } : {}) }, { onSuccess: () => { setText(''); setDue(initialDue); setKind(''); setOwner(''); setNote(''); onClose(); } }));
+      if (start && due && start > due) { setErr(START_AFTER_DUE); return; }
+      setErr(null);
+      const where = parentId ? { parentId } : { stepId: sid };
+      void run(() => send({ op: 'task.add', ...where, text, due: due || null, ...(start ? { start } : {}), ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(owner ? { owner } : {}) }, {
+        quiet: true,
+        onSuccess: () => { setText(''); setStart(''); setDue(initialDue); setKind(''); setOwner(''); setNote(''); onClose(); },
+      }).then((r) => setErr(taskErrorMessage(r))));
     }}>
+      {parentId && <p className={labelCls}>‘{parentTitle ?? '위 할 일'}’의 세부 항목</p>}
       <AutoTextarea className={inputCls} value={text} maxLength={200} autoFocus aria-label="새 할 일" placeholder="짧게 한 줄로(자세한 건 메모에)"
         onChange={(e) => setText(oneLine(e.target.value))} onKeyDown={enterSubmit} />
-      {steps && (
+      {steps && !parentId && (
         <label className={`block ${labelCls}`}>단계
           <select className={`${inputCls} mt-1`} value={sid} onChange={(e) => setSid(Number(e.target.value))}>
             {steps.slice(0, STEP_COUNT).map((s) => <option key={s.id} value={s.id}>{s.id}. {s.title}</option>)}
@@ -85,6 +98,9 @@ export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '' }:
         </label>
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <label className={`flex items-center gap-2 ${labelCls}`}>시작일
+          <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label="시작일" />
+        </label>
         <label className={`flex items-center gap-2 ${labelCls}`}>마감일
           <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
         </label>
@@ -92,6 +108,7 @@ export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '' }:
         <OwnerSelect value={owner} onChange={setOwner} />
       </div>
       <NoteField value={note} onChange={setNote} />
+      {err && <p role="alert" className="text-sm font-normal text-danger-ink">{err}</p>}
       <div className="flex justify-end">
         <div className="flex gap-2">
           <button type="button" className={btnGhost} onClick={onClose}>취소</button>

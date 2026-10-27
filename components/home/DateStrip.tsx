@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { shortDate } from '@/lib/client/format';
 import { addDays, diffDays, toDate, type DayMark, type Pin } from './step-dates';
+import { useDragScroll, useMedia } from './use-drag-scroll';
 
-// 가로로 넘겨 보는 날짜 띠(홈 타임라인과 그날 창이 같이 쓴다). 하루 한 칸 30px.
-//   dense(홈 「단계」 탭): 폰(640px 미만)에서는 하루 14px — 한 화면에 약 4주가 보인다. 칸이 좁아 요일 글자는 빼고(오늘은 선과 강조색 숫자,
+// 가로로 넘겨 보는 날짜 띠(지금은 그날 창 머리에서 쓴다 — 홈 「단계」 탭은 2026-10-27 트리 간트 components/home/gantt/ 로 바뀜). 하루 한 칸 30px.
+//   dense · fit 은 옛 홈 「단계」 탭용(지산판이 아직 쓸 수 있어 남겨 둠).
+//   dense: 폰(640px 미만)에서는 하루 14px — 한 화면에 약 4주가 보인다. 칸이 좁아 요일 글자는 빼고(오늘은 선과 강조색 숫자,
 //     고정 일정 날은 핀), 날짜 숫자는 주 첫날(월요일) · 오늘 · 고른 날에만 적는다(오늘 · 고른 날 바로 옆 월요일 숫자는 겹치지 않게 뺀다).
 //     날짜 칸은 띠 높이 전체(44px 넘게)를 누르는 칸으로 쓰고, 칸 사이가 붙어 있어 누른 자리에서 가장 가까운 날이 골린다.
 //   fit(로그인 전 단계 탭): 처음부터 끝까지 한 화면에 들게 하루 폭을 상자 폭 ÷ 날수로(4~30px, 폰은 약 7px) — 막대가 화면 밖으로 나가지 않는다.
@@ -23,9 +25,8 @@ export const DENSE_DAY = 14;
 const LEAD_DAYS = 1.5;
 // 640px 미만(폰)인가 — 화면 폭이 바뀌면 다시 그린다
 const NARROW_Q = '(max-width: 639.98px)';
-const subscribeNarrow = (cb: () => void) => { const m = window.matchMedia(NARROW_Q); m.addEventListener('change', cb); return () => m.removeEventListener('change', cb); };
 export function useNarrow(): boolean {
-  return useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW_Q).matches, () => false);
+  return useMedia(NARROW_Q);
 }
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 /** 그 주(월요일)의 이름: 목요일이 든 달의 몇째 주 */
@@ -74,8 +75,7 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [viewW, setViewW] = useState(0);
   const [sl, setSl] = useState(0);
-  const drag = useRef<{ x: number; left: number; id: number; moved: boolean } | null>(null);
-  const suppressClick = useRef(false);
+  const dragScroll = useDragScroll();
   const isPhone = useNarrow();
   const total = diffDays(first, last) + 1;
   const fitW = fit && viewW > 0 ? Math.max(4, Math.min(DAY, Math.floor(viewW / total))) : null;
@@ -114,29 +114,9 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
   const showNum = (d: string, i: number) => !narrow || special.includes(d)
     || (i % 7 === 0 && !special.some((s) => s !== d && Math.abs(diffDays(d, s)) * dayW < 22));
 
-  const onDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    drag.current = { x: e.clientX, left: e.currentTarget.scrollLeft, id: e.pointerId, moved: false };
-  };
-  const onMove = (e: PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d || d.id !== e.pointerId) return;
-    const delta = e.clientX - d.x;
-    if (!d.moved && Math.abs(delta) > 6) { d.moved = true; e.currentTarget.setPointerCapture(e.pointerId); }
-    if (d.moved) e.currentTarget.scrollLeft = d.left - delta;
-  };
-  const onUp = (e: PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    drag.current = null;
-    if (!d || d.id !== e.pointerId || !d.moved) return;
-    suppressClick.current = true;
-    window.setTimeout(() => { suppressClick.current = false; }, 0);
-  };
-
   return (
     <div ref={scrollRef} onScroll={(e) => setSl(e.currentTarget.scrollLeft)}
-      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-      onClickCapture={(e) => { if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); } }}
+      {...dragScroll}
       className={`overflow-x-auto overscroll-x-contain select-none ${className}`}>
       <div className="relative" style={{ width: total * dayW, minWidth: '100%' }}>
         {axisPins.map((p) => <span key={`l${p.date}${p.label}`} className="pointer-events-none absolute inset-y-0 z-10 block w-px bg-ink-soft" style={{ left: x(p.date) + dayW / 2 }} aria-hidden />)}

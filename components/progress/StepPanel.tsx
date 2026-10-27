@@ -8,6 +8,7 @@ import { FoldRow } from '@/components/ui/FoldRow';
 import { TaskComposer, type StepRef } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
+import { treeRows } from '@/components/tasks/task-view';
 import { useProgress } from './ProgressProvider';
 import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, EditBadge, inputCls, LastEdit, useBusy, useDirty, useEditing, useFormEsc,
@@ -48,9 +49,11 @@ export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] 
   const mine = all.filter((t) => t.stepId === stepId && !t.deletedAt);
   // 끝낸 줄에서 편집 폼이 열려 있으면 접지 않는다(쓰던 글이 사라지지 않게)
   const doneExpanded = showDone || done.some((t) => editing.has(t.id));
-  const row = (t: TaskItem) => (
-    <TaskRow key={t.id} t={t} steps={steps} listStepId={stepId} scope="modal" onEditChange={reportEdit} onToggle={onToggle} onGone={focusHeading} />
-  );
+  // 세부 항목은 부모 바로 밑에 들여 쓴다(부모가 다른 목록에 있으면 맨 위 층 + 「‘부모’의 세부」)
+  const rows = (list: TaskItem[]) => treeRows(list, doc.tasks).map(({ item: t, depth, parentTitle }) => (
+    <TaskRow key={t.id} t={t} steps={steps} listStepId={stepId} scope="modal" depth={depth} parentTitle={parentTitle}
+      onEditChange={reportEdit} onToggle={onToggle} onGone={focusHeading} />
+  ));
 
   return (
     <section aria-label="우리 할 일">
@@ -64,7 +67,7 @@ export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] 
             ? <TaskComposer stepId={stepId} scope="modal" onClose={closeComposer} />
             : <AddButton buttonRef={addRef} label="할 일 추가" onClick={() => setComposing(true)} />}
         </li>
-        {open.map(row)}
+        {rows(open)}
         {open.length === 0 && editing.size === 0 && (
           <li className="border-b border-line py-3 text-base text-muted">{done.length > 0 ? '남은 할 일이 없어요.' : '아직 할 일이 없어요.'}</li>
         )}
@@ -74,7 +77,7 @@ export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] 
           </li>
         )}
       </ul>
-      {doneExpanded && done.length > 0 && <ul id={doneId}>{done.map(row)}</ul>}
+      {doneExpanded && done.length > 0 && <ul id={doneId}>{rows(done)}</ul>}
     </section>
   );
 }

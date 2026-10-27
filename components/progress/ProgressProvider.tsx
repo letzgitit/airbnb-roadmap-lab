@@ -9,6 +9,7 @@ import { btnDanger, btnGhost, btnPrimary } from '@/components/ui/buttonCls';
 
 type Status = 'loading' | 'anon' | 'forbidden' | 'ready';
 export interface SendResult { ok: boolean; status: number; body: Record<string, unknown> | null }
+// quiet: 400 거절 문구를 알림으로 띄우지 않는다(부른 쪽이 r.body.error 로 직접 알린다).
 // onTakeLatest: 충돌 창에서 「최신 내용 받기」를 고르면 서버 최신값(current)으로 불린다. 열린 편집 칸을 그 값·version 으로 다시 채우는 데 쓴다.
 interface SendOpts { optimistic?: boolean; onSuccess?: () => void; quiet?: boolean; onTakeLatest?: (current: Record<string, unknown>) => void }
 interface Toast { id: number; msg: string; kind: 'info' | 'error'; action?: { label: string; run: () => void } }
@@ -202,7 +203,8 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       setSt(r.status === 401 ? 'anon' : 'forbidden');
       toast('로그인이 필요하거나 권한이 없어요.', { kind: 'error' });
     } else if ((r.status === 400 || r.status === 413) && typeof r.body?.message === 'string') {
-      toast(r.body.message, { kind: 'error' });
+      // quiet: 부른 쪽이 거절 까닭을 폼 안에 직접 적는다(간트 편집 폼 · 할 일 폼 — 같은 말이 두 번 뜨지 않게)
+      if (!opts?.quiet) toast(r.body.message, { kind: 'error' });
     } else {
       toast('저장에 실패했어요. 변경이 되돌려졌습니다.', { kind: 'error' });
     }

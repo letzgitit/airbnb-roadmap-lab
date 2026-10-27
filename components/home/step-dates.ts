@@ -1,7 +1,8 @@
 import type { ProgressDoc } from '@/lib/core/types';
+import { taskStart } from '../../lib/core/task-tree.ts';
 
 // 단계의 실제 기간(로그인 뒤 현황으로만 계산). 홈 타임라인(DateTimeline)과 단계 창 머리(StepModal)가 같이 쓴다.
-//   시작 = 그 단계 할 일 중 가장 이른 마감일. 없으면 출발일 + 공개 일정의 시작 날수.
+//   시작 = 그 단계 할 일 중 가장 이른 시작일(시작일이 없는 할 일은 마감일 — taskStart). 없으면 출발일 + 공개 일정의 시작 날수.
 //   끝   = 끝난 단계면 그 단계 할 일을 마지막으로 끝낸 날 → 없으면 아래와 같음. 그 밖엔 단계 목표일
 //          → 없으면 출발일 + 끝 날수와 그 단계 마지막 할 일 마감일 중 늦은 날. 시작이 끝보다 늦으면 시작 = 끝.
 //   출발일 = fixedDay0(콘텐츠 날수가 정해진 날에서 센 값, 예: 지산 2026-09-01) → 목표일이 있는 첫 단계(보통 1단계)의 목표일 − 그 단계 끝 날수
@@ -27,14 +28,15 @@ export function stepRanges(steps: TimelineStep[], doc: DocLike, today: string, f
     const firstSet = steps.find((s) => targetOf(s.id));
     if (firstSet) day0 = addDays(targetOf(firstSet.id)!, -firstSet.end);
   }
-  if (!day0) day0 = tasks.map((t) => t.due).filter((d): d is string => !!d).sort()[0] ?? today;
+  if (!day0) day0 = tasks.map(taskStart).filter((d): d is string => !!d).sort()[0] ?? today;
   const base = day0;
   return steps.map((s) => {
     const own = tasks.filter((t) => t.stepId === s.id);
+    const starts = own.map(taskStart).filter((d): d is string => !!d).sort();
     const dues = own.map((t) => t.due).filter((d): d is string => !!d).sort();
     const lastDone = own.map((t) => (t.done && t.doneAt ? isoOf(new Date(t.doneAt)) : null)).filter((d): d is string => !!d).sort().pop();
     const done = doc.steps[String(s.id)]?.status === 'done';
-    const start = dues[0] ?? addDays(base, s.start);
+    const start = starts[0] ?? addDays(base, s.start);
     const fallback = [addDays(base, s.end), dues[dues.length - 1] ?? ''].sort().pop()!;
     const end = (done && lastDone) || targetOf(s.id) || fallback;
     return { ...s, from: end < start ? end : start, to: end, done };

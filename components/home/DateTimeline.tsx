@@ -11,7 +11,7 @@ import type { TimelineType } from '@/lib/timeline';
 import type { UpdateItem } from '@/lib/core/types';
 import { HomeSummary } from './HomeSummary';
 import { MonthCalendar } from './MonthCalendar';
-import { StepBars } from './StepBars';
+import { StepGantt } from './gantt/StepGantt';
 import { axisOf, PUBLIC_DOC, type Pin, type TimelineStep } from './step-dates';
 
 export type { TimelineStep } from './step-dates';
@@ -21,11 +21,12 @@ export type { TimelineStep } from './step-dates';
 // [ 요약 | 단계 | 달력 ]  보기 고르기(Segmented)
 // 요약 탭 = HomeSummary(카드 여러 장 — 상자 밖에 그대로 쌓는다). 거르기 칩 · 고정 일정 줄 · 「기한 지남 n개」는 그리지 않는다
 //   (요약은 늘 전체. 칩 값은 기억해 두었다가 단계 · 달력으로 돌아가면 다시 적용된다).
-// 단계 · 달력 탭:
+// 단계 탭 = StepGantt(트리 간트, 자기 상자 — 시간 단위 · 거르기 칩 · 날짜 머리의 고정 일정 핀까지 그 안에. components/home/gantt/)
+// 달력 탭:
 // ┌ 상자 ──────────────────────────────────────────────
 // │ 단계 종류 거르기 칩(준비 · 계약 · 중요 · 설비 · 행정 · 운영, 여러 개 켜기 · 다 끄면 전체) — 두 탭에 같이 적용
 // │ 「고정 일정」 줄(핀 + 날짜 · 이름, 누르면 그날 창)
-// │ 단계 탭 = StepBars(날짜 띠 + 막대) / 달력 탭 = MonthCalendar(월 보기)
+// │ 달력 탭 = MonthCalendar(월 보기)
 // │ 기한 지난 안 끝난 할 일이 있으면 「기한 지남 n개」 한 줄(누르면 오늘 창)
 // └──────────────────────────────────────────────
 // 로그인 전(guest): 현황(할 일 · 목표일 · 고정 일정 · 단계 상태)을 받지 않으므로 빈 현황(PUBLIC_DOC)으로 그린다 — 단계 기간은
@@ -92,6 +93,9 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
           <HomeSummary steps={steps} currentId={currentId} onStep={onStep} onDay={openDay} onShowSteps={() => void pickView('steps')}
             marks={marks} fixedDay0={fixedDay0} guest={guest} updates={updates} onNotice={onNotice} />
         </div>
+      ) : view === 'steps' ? (
+        <StepGantt steps={steps} doc={doc} today={today} types={types} onTypes={pickTypes} currentId={currentId} onStep={onStep}
+          onPick={openDay} fixedDay0={fixedDay0} marks={marks} guest={guest} />
       ) : (
         <Card>
           <div className="border-b border-line px-2">
@@ -117,9 +121,7 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
             </div>
           )}
 
-          {view === 'steps'
-            ? <StepBars {...shared} currentId={currentId} onStep={onStep} />
-            : <MonthCalendar {...shared} />}
+          <MonthCalendar {...shared} />
 
           {lateCount > 0 && openDay && (
             <button type="button" onClick={() => openDay(today)}
