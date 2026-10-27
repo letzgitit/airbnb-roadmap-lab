@@ -62,11 +62,12 @@ export function dayRangeLabel(start: number, end: number): string {
   return s === e ? `${s}일째` : `${s}~${e}일째`;
 }
 
-// 공개 콘텐츠의 달(「2026-11」 · 「2026-11-03」) → 「11월」(올해가 아니면 「2025년 10월」). 꼴이 다르면 그대로
-export function monthLabel(ym: string, today: string): string {
-  const m = ym.match(/^(\d{4})-(\d{2})/);
-  if (!m) return ym;
-  return m[1] === today.slice(0, 4) ? `${Number(m[2])}월` : `${m[1]}년 ${Number(m[2])}월`;
+// 바뀐 규정의 날짜(「2026-11」 · 「2026-11-03」)와 그 뜻(시행 · 발표 …) → 「2026년 11월 시행」. 연도는 늘 붙인다(올해인지 헷갈리지 않게).
+// 뜻이 없으면 「2026년 11월」, 날짜 꼴이 다르면 그대로
+export function updateWhen(date: string, word?: string): string {
+  const m = date.match(/^(\d{4})-(\d{2})/);
+  const when = m ? `${m[1]}년 ${Number(m[2])}월` : date;
+  return word ? `${when} ${word}` : when;
 }
 
 // 화면에 보일 사람 이름: 시스템 계정 · 개발용 가짜 로그인 이름을 사람 말로 바꾼다(실제 이름은 MEMBER_NAMES 에서 온다).

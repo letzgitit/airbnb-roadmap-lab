@@ -11,7 +11,8 @@ export interface Step {
   checklist: string[]; warnings: string[];
 }
 export interface ScriptItem { who: string; situation: string; lines: string[]; tips: string[] }
-export interface UpdateItem { date: string; title: string; text: string; source: string; url: string }
+// date = 그 일이 일어난(일어날) 달 「2026-11」. dateWord = 그 날짜의 뜻(시행 · 발표 · 발의 · 건의 · 게시 · 적용 · 시작) — 항목마다 다르다
+export interface UpdateItem { date: string; dateWord?: string; title: string; text: string; source: string; url: string }
 export interface Content { steps: Step[]; scripts: ScriptItem[]; updates: UpdateItem[] }
 
 // 우리 현황 타입 (서버 저장 문서)

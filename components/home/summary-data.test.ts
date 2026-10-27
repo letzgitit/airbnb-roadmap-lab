@@ -135,13 +135,14 @@ test('글자 도우미: 남은 날 · 기록 때 · 로그인 전 첫 손님까�
   assert.deepEqual(guestFinish(STEPS, TODAY), { days: 30, date: '2026-11-26' });
 });
 
-test('날수 · 달 표기: 1부터 세고(0 → 1), 올해 달은 「11월」', async () => {
-  const { dayLabel, dayRangeLabel, monthLabel } = await import('../../lib/client/format.ts');
+test('날수 · 달 표기: 1부터 세고(0 → 1), 규정 날짜는 연도 + 뜻', async () => {
+  const { dayLabel, dayRangeLabel, updateWhen } = await import('../../lib/client/format.ts');
   assert.equal(dayRangeLabel(0, 12), '1~12일째');
   assert.equal(dayRangeLabel(12, 13), '12~13일째');
   assert.equal(dayRangeLabel(0, 0), '1일째');
   assert.equal(dayLabel('Day 0-12'), '1~12일째');
-  assert.equal(monthLabel('2026-11', TODAY), '11월');
-  assert.equal(monthLabel('2025-10', TODAY), '2025년 10월');
-  assert.equal(monthLabel('곧', TODAY), '곧');
+  assert.equal(updateWhen('2026-11', '시행'), '2026년 11월 시행');
+  assert.equal(updateWhen('2025-10', '발표'), '2025년 10월 발표');
+  assert.equal(updateWhen('2026-09'), '2026년 9월');
+  assert.equal(updateWhen('곧', '시행'), '곧 시행');
 });

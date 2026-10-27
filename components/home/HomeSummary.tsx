@@ -3,7 +3,7 @@
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { TaskItem, UpdateItem } from '@/lib/core/types';
-import { dayRangeLabel, monthLabel, shortDate, todayStr } from '@/lib/client/format';
+import { dayRangeLabel, shortDate, todayStr, updateWhen } from '@/lib/client/format';
 import { manwon, PROJECT_LABEL, VIA_LABEL } from '@/lib/plan';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { Badge } from '@/components/ui/Badge';
@@ -21,7 +21,7 @@ import { dLabel, guestFinish, logWhen, summaryOf, type OwnerFilter } from './sum
 
 // 홈 「요약」 탭(보기 고르기 [요약 | 단계 | 달력]의 첫 칸). 위에서 아래로 읽으면 브리핑이 끝나는 순서의 카드:
 //   로그인 = ① 남은 날 → ② 할 일 → ③ 정할 것 → ④ 지금 하는 단계 → ⑤ 최근 기록 → ⑥ 돈 (계산은 summary-data.ts)
-//   로그인 전 = 첫 손님까지(오늘 시작하면 약 n일 · 날짜) → 처음 세 단계 → 최근 바뀐 민박업 규정 — 공개 콘텐츠만 쓴다(현황을 받지 않는다)
+//   로그인 전 = 첫 손님까지(오늘 시작하면 n일쯤 걸려요 · 날짜 무렵) → 처음 세 단계 → 최근 바뀐 민박업 규정 — 공개 콘텐츠만 쓴다(현황을 받지 않는다)
 // 편집은 할 일 줄만 공통 줄(TaskRow) 그대로(체크 · 그 자리 고치기 · 전화 · 지우기). 나머지는 누르면 원래 자리
 //   (그날 창 · 단계 창 · 우리 집 › 질문 · 기록 · 돈)로 간다. 할 일 추가는 여기서 하지 않는다(그날 창 · 단계 창에서).
 // 한 할 일은 요약에 한 번만 나온다(②가 먼저, ③은 남은 결정만). 폰은 한 줄로 쌓고, PC(768px 이상)는 ①④ · ⑤⑥만 두 칸으로 짝짓는다.
@@ -331,7 +331,7 @@ function GuestSummary({ steps, onStep, onShowSteps, updates, onNotice }: {
       {/* 맨 위 구역 요약 문장(「오늘 시작하면 … 첫 손님을 받아요」)은 요약 탭에서 숨기고 이 카드 하나로 말한다 */}
       <Block id={`${uid}-finish`} title="첫 손님까지">
         <Card>
-          <p className="px-4 py-3 text-lg font-bold tabular-nums text-ink">오늘 시작하면 약 {finish.days}일 · {longDate(finish.date)}쯤</p>
+          <p className="px-4 py-3 text-lg font-bold tabular-nums text-ink">오늘 시작하면 {finish.days}일쯤 걸려요 · <span className="whitespace-nowrap">{longDate(finish.date)} 무렵</span></p>
         </Card>
       </Block>
 
@@ -365,7 +365,7 @@ function GuestSummary({ steps, onStep, onShowSteps, updates, onNotice }: {
                 <button type="button" onClick={() => onNotice(idx)} className={`${goRowCls} py-2`}>
                   <span className="min-w-0 flex-1">
                     <span className="block text-base font-semibold text-ink">{u.title}</span>
-                    <span className="block text-sm font-normal tabular-nums text-ink-soft">{monthLabel(u.date, today)}</span>
+                    <span className="block text-sm font-normal tabular-nums text-ink-soft">{updateWhen(u.date, u.dateWord)}</span>
                   </span>
                   <Chevron />
                 </button>
