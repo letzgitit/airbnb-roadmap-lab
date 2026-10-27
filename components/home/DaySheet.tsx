@@ -29,7 +29,7 @@ import { axisOf, diffDays, pinsOf, stepRanges, toDate, type Pin, type TimelineSt
 //   겹치는 단계는 할 일이 없어도 머리만. 머리를 누르면 그 단계 창으로 바뀐다) / 「날짜 없음 n개」(접음) / 「삭제한 할 일」
 // 할 일 줄은 단계 창 「우리 할 일」과 같은 TaskRow. 고치는 폼의 「쓰던 글」 범위는 시트(modal)라 닫을 때 확인 창이 뜬다.
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--prep-bar)';
+const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--type-prep)';
 const byDue = (a: TaskItem, b: TaskItem) =>
   (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.stepId - b.stepId || a.createdAt.localeCompare(b.createdAt);
 type OwnerFilter = '' | '남편' | '아내';

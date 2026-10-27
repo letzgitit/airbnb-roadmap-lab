@@ -56,7 +56,13 @@
   --page-bg: #f8fafc;   /* slate-50 */
   --page-fg: #1e293b;   /* slate-800 */
   --card-shadow: rgba(15, 23, 42, 0.18);
-  --prep-bar: #94a3b8;  /* 차트 「준비」 색 */
+  /* 단계 종류 색(분류색, DESIGN.md 2.2) — 흰 바탕 3:1 이상, 빨강(기한 지남) · 청록(강조) · 끝난 단계의 흐린 회색과 겹치지 않게 고른 한 벌 */
+  --type-prep: #9a6a3a;      /* 준비 · 갈색 4.7:1 */
+  --type-milestone: #1c7ed6; /* 계약 · 파랑 4.2:1 */
+  --type-critical: #e8590c;  /* 중요 · 주황 3.6:1 */
+  --type-setup: #a88300;     /* 설비 · 겨자 3.6:1 */
+  --type-admin: #7950f2;     /* 행정 · 보라 5.0:1 */
+  --type-open: #2b9348;      /* 운영 · 초록 3.9:1 */
 }
 
 /* 다크: 색 토큰을 다시 정의한다. 클래스(bg-white · text-slate-500 …)는 그대로 두고 값만 바뀐다.
@@ -67,7 +73,13 @@
   --page-bg: #111316;
   --page-fg: #dde0e5;
   --card-shadow: rgba(0, 0, 0, 0.6);
-  --prep-bar: #64748b;
+  /* 단계 종류 색: 어두운 면(#1a1d22)과 5:1 넘게 */
+  --type-prep: #c4925e;
+  --type-milestone: #4199e1;
+  --type-critical: #f76f1f;
+  --type-setup: #d6a91c;
+  --type-admin: #9b7cfa;
+  --type-open: #3fb760;
   --color-page: #111316;
   --color-surface: #1a1d22;
   --color-sunken: #22262c;

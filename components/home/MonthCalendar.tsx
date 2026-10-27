@@ -11,11 +11,11 @@ import { addDays, diffDays, isoOf, mondayOf, pinsOf, stepRanges, toDate, typeFil
 // 홈 「달력」 탭: 한 달을 월요일부터 일요일까지 주 단위로(날짜 띠의 주와 같은 기준).
 //   한 주 줄 = 날짜 숫자(오늘 = 강조색, 마지막으로 연 날 = ink 2px 테두리, 고정 일정 날은 숫자 옆 핀)
 //            → 단계 기간 띠(16px, 종류 색을 옅게 깐 면 + 시작하는 날에 진한 색 점, 이름은 띠 안에 12px. 주마다 겹치지 않게 줄을 나눈다)
-//              띠가 한 칸뿐이면 단계 번호만(말줄임표 없이).
+//              띠가 한 칸뿐이면 「5단계」(안 들어가면 「5.」, 말줄임표 없이). 여러 칸이 좁으면 「~10/30」을 먼저 빼고 이름만 말줄임.
 //            → 그날 고정 일정 이름(폰은 핀 + 앞 토막만) → 그날 마감 할 일
 //              넓은 화면(640px 이상): 할 일 글자 세 개까지(기한 지난 안 끝난 일 = 빨강 글자, 끝낸 일 = 흐린 글자 + 가운데 줄), 나머지는 「+n」.
 //              폰: 칸이 좁아 글자가 잘리므로 「할 일 2」처럼 개수 한 줄(기한 지난 안 끝난 일이 있으면 빨강).
-//   아무것도 없는 주(단계 띠 · 고정 일정 · 할 일 없음)는 줄 높이 44px. 단계 종류로 걸렀는데 그 달에 해당 단계가 없으면 「이번 달엔 ○○ 단계가 없어요.」
+//   아무것도 없는 주(단계 띠 · 고정 일정 · 할 일 없음)는 줄 높이 44px. 단계 종류로 걸렀는데 그 달에 해당 단계가 없으면 「이번 달엔 ○○ 할 일이 없어요.」
 //   날을 누르면 그날 창(DaySheet — 할 일 추가 · 고치기 · 날짜 바꾸기 · 지우기는 그 창이 맡는다). 로그인 전(onPick 없음)은 누를 수 없다.
 //   위 줄: ‹ 2026년 10월 › + 「오늘」(이번 달로).
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
@@ -23,7 +23,10 @@ const DOW_FULL = ['일', '월', '화', '수', '목', '금', '토'];
 const LANE = 18; // 단계 띠 한 줄(16px + 2px 틈)
 /** 폰 달력 칸의 고정 일정 이름: 「잔금 · 전입 · 신청」 → 「잔금」 */
 const shortPin = (label: string) => label.split(/\s*·\s*/)[0];
-const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--prep-bar)';
+// 한 칸 띠의 글자: 「5단계」가 들어가는 폭(띠 안쪽, 점이 있으면 점 12px 포함)부터 「5단계」, 아니면 「5.」 — 컨테이너 쿼리(띠 = @container)
+const ONE_CELL: Record<string, string> = { h1: '@min-[44px]:hidden', h2: '@min-[52px]:hidden', n1: '@min-[32px]:hidden', n2: '@min-[40px]:hidden' };
+const ONE_CELL_WIDE: Record<string, string> = { h1: '@min-[44px]:inline', h2: '@min-[52px]:inline', n1: '@min-[32px]:inline', n2: '@min-[40px]:inline' };
+const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--type-prep)';
 const monthStart = (iso: string) => `${iso.slice(0, 7)}-01`;
 const addMonths = (first: string, n: number) => { const d = toDate(first); d.setMonth(d.getMonth() + n, 1); return isoOf(d); };
 
@@ -72,7 +75,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
         {DOW.map((d) => <span key={d} className="py-1 text-center text-xs font-normal text-muted">{d}</span>)}
       </div>
       {types.length > 0 && inMonthRanges.length === 0 && (
-        <p className="border-b border-line px-4 py-3 text-base text-muted">{monthWord}엔 {types.map((t) => (TYPE_LABEL as Record<string, string>)[t] ?? t).join(' · ')} 단계가 없어요.</p>
+        <p className="border-b border-line px-4 py-3 text-base text-muted">{monthWord}엔 {types.map((t) => (TYPE_LABEL as Record<string, string>)[t] ?? t).join(' · ')} 할 일이 없어요.</p>
       )}
       <div role="group" aria-label={`${m.getMonth() + 1}월 달력`}>
         {weeks.map((mon) => {
@@ -129,7 +132,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
               <div className="pointer-events-none absolute inset-x-0 top-8" aria-hidden>
                 {lanes.map(({ r, lane, col, span, head, tail }) => (
                   <span key={r.id} title={`${r.id}. ${r.title}`}
-                    className={`absolute flex h-4 items-center overflow-hidden px-1 text-xs font-normal whitespace-nowrap text-ink ${head ? 'rounded-l-control' : ''} ${tail ? 'rounded-r-control' : ''}`}
+                    className={`@container absolute flex h-4 items-center overflow-hidden px-1 text-xs font-normal whitespace-nowrap text-ink ${head ? 'rounded-l-control' : ''} ${tail ? 'rounded-r-control' : ''}`}
                     style={{
                       top: lane * LANE, left: `calc(${(col / 7) * 100}% + ${head ? 2 : 0}px)`, width: `calc(${(span / 7) * 100}% - ${(head ? 2 : 0) + (tail ? 2 : 0)}px)`,
                       backgroundColor: `color-mix(in srgb, ${colorOf(r.type)} 26%, var(--color-surface))`,
@@ -137,8 +140,15 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
                     }}>
                     {head && <span className="mr-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: colorOf(r.type) }} />}
                     {span < 2
-                      ? <span className="whitespace-nowrap">{r.id}</span>
-                      : <span className="truncate">{r.id}. {r.title}{head && span >= 3 ? <span className="ml-1 text-ink-soft">{guest ? dayRangeLabel(r.start, r.end) : `~${shortDate(r.to)}`}</span> : null}</span>}
+                      // 한 칸: 「5단계」, 칸이 그보다 좁으면 「5.」(말줄임표 없이)
+                      ? <><span className={ONE_CELL[`${head ? 'h' : 'n'}${r.id >= 10 ? 2 : 1}`]}>{r.id}.</span><span className={`hidden ${ONE_CELL_WIDE[`${head ? 'h' : 'n'}${r.id >= 10 ? 2 : 1}`]}`}>{r.id}단계</span></>
+                      // 여러 칸: 이름 + 기간. 좁으면 기간을 먼저 뺀다 — 다음 줄로 밀려 잘려 나가고(반만 남지 않게), 이름만 말줄임
+                      : (
+                        <span className="flex h-4 min-w-0 flex-1 flex-wrap content-start items-center overflow-hidden">
+                          <span className="min-w-0 max-w-full truncate">{r.id}. {r.title}</span>
+                          {head && span >= 3 && <span className="ml-1 shrink-0 text-ink-soft">{guest ? dayRangeLabel(r.start, r.end) : `~${shortDate(r.to)}`}</span>}
+                        </span>
+                      )}
                   </span>
                 ))}
               </div>

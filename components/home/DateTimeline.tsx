@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { shortDate, todayStr } from '@/lib/client/format';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { Card } from '@/components/ui/Card';
@@ -32,7 +32,7 @@ export type { TimelineStep } from './step-dates';
 //   공개 일정 날수를 오늘부터 센 것이고(기간 글자는 「13~14일째」), 날짜는 누를 수 없다(그날 창 · 편집 없음). 개인 내용은 애초에 없다.
 // 고른 탭 · 칩은 이 브라우저에만 기억한다(localStorage, 못 쓰면 기본값 — 로그인 = 요약, 로그인 전 = 단계).
 // 요약 안 할 일 폼에 저장 안 한 글이 있으면 탭을 바꾸기 전에 확인 창(안 그러면 쓰던 글이 사라진다).
-type View = 'summary' | 'steps' | 'month';
+export type View = 'summary' | 'steps' | 'month';
 const VIEW_KEY = 'home:view';
 const TYPES_KEY = 'home:types';
 const recall = <T,>(key: string, ok: (v: unknown) => v is T, fallback: T): T => {
@@ -42,7 +42,7 @@ const remember = (key: string, v: unknown) => { try { localStorage.setItem(key, 
 const isView = (v: unknown): v is View => v === 'summary' || v === 'steps' || v === 'month';
 const isTypes = (v: unknown): v is TimelineType[] => Array.isArray(v) && v.every((x) => (TYPE_ORDER as string[]).includes(x));
 
-export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks = [], guest = false, updates = [], onNotice }: {
+export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks = [], guest = false, updates = [], onNotice, onViewChange }: {
   steps: TimelineStep[];
   currentId: number | null;
   /** 단계 창 열기(steps 배열의 순번) */
@@ -58,6 +58,8 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
   /** 로그인 전 요약의 「최근 바뀐 규정」(공개 콘텐츠)과 주의사항 창 열기 */
   updates?: UpdateItem[];
   onNotice?: (idx: number | null) => void;
+  /** 고른 탭이 바뀔 때(구역 요약 문장을 요약 탭에서 숨기려고) */
+  onViewChange?: (v: View) => void;
 }) {
   const progress = useProgress();
   const doc = guest ? PUBLIC_DOC : progress.doc;
@@ -66,11 +68,14 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
   // 이 컴포넌트는 브라우저에서만 그려진다(GuideSection 이 현황을 확인한 뒤) — 처음 값을 바로 localStorage 에서 읽어도 화면이 어긋나지 않는다
   const [view, setView] = useState<View>(() => recall(VIEW_KEY, isView, guest ? 'steps' : 'summary'));
   const [types, setTypes] = useState<TimelineType[]>(() => recall(TYPES_KEY, isTypes, []));
+  useEffect(() => { onViewChange?.(view); }, [view, onViewChange]);
   if (!doc) return null;
 
   const pickView = async (v: View) => {
     if (v === view) return;
-    if (view === 'summary' && progress.hasDirty('page') && !(await progress.confirmDiscard())) return;
+    if (view === 'summary' && progress.hasDirty('page') && !(await progress.confirm({
+      title: '저장 안 한 내용이 있어요', body: '다른 탭으로 가면 고친 내용이 사라져요.', confirmLabel: '버리고 가기', cancelLabel: '계속 편집',
+    }))) return;
     setView(v); remember(VIEW_KEY, v);
   };
   const pickTypes = (v: TimelineType[]) => { setTypes(v); remember(TYPES_KEY, v); };
@@ -94,18 +99,19 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
               options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABEL[t], dot: TYPE_DOT[t] }))} />
           </div>
           {pins.length > 0 && (
-            <div className="flex items-center gap-x-4 overflow-x-auto border-b border-line px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="고정 일정">
+            // 넘치면 가로로 밀지 않고 이름을 말줄임(「고정 일정」 글자와 날짜는 그대로)
+            <div className="flex items-center gap-x-4 overflow-hidden border-b border-line px-4" aria-label="고정 일정">
               <span className="flex min-h-11 shrink-0 items-center whitespace-nowrap text-sm font-normal text-ink-soft"><i className="fas fa-thumbtack mr-1.5" aria-hidden />고정 일정</span>
               {pins.map((p) => openDay
                 ? (
-                  <button key={`${p.date}${p.label}`} type="button" onClick={() => openDay(p.date)}
-                    className="inline-flex min-h-11 shrink-0 items-center gap-x-1.5 whitespace-nowrap text-sm text-ink-soft hover:underline">
-                    <span className="font-bold">{shortDate(p.date)}</span><span className="font-normal">{p.label}</span>
+                  <button key={`${p.date}${p.label}`} type="button" onClick={() => openDay(p.date)} title={p.label}
+                    className="inline-flex min-h-11 min-w-0 items-center gap-x-1.5 whitespace-nowrap text-sm text-ink-soft hover:underline">
+                    <span className="shrink-0 font-bold">{shortDate(p.date)}</span><span className="min-w-0 truncate font-normal">{p.label}</span>
                   </button>
                 )
                 : (
-                  <span key={`${p.date}${p.label}`} className="inline-flex min-h-11 shrink-0 items-center gap-x-1.5 whitespace-nowrap text-sm text-ink-soft">
-                    <span className="font-bold">{shortDate(p.date)}</span><span className="font-normal">{p.label}</span>
+                  <span key={`${p.date}${p.label}`} title={p.label} className="inline-flex min-h-11 min-w-0 items-center gap-x-1.5 whitespace-nowrap text-sm text-ink-soft">
+                    <span className="shrink-0 font-bold">{shortDate(p.date)}</span><span className="min-w-0 truncate font-normal">{p.label}</span>
                   </span>
                 ))}
             </div>

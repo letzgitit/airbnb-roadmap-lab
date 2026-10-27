@@ -46,17 +46,27 @@ export function dueState(due: string | null, today: string): 'late' | 'today' | 
 }
 
 // 단계 안내의 일반 일정(시작한 날부터 센 날수)을 우리말로: 데이터의 「Day 12-13」 → 「12~13일째」, 「Day 5」 → 「5일째」.
+// 화면은 1부터 센다 — 데이터의 「Day 0」(시작하는 날)은 「1일째」(「Day 0-12」 → 「1~12일째」).
 // 콘텐츠(content/steps.json)는 그대로 두고 화면에서만 바꿔 보인다. 숫자가 없는 글은 그대로 돌려준다.
 export function dayLabel(day: string | number | null | undefined): string {
   const s = String(day ?? '').trim();
   const nums = s.match(/\d+/g);
   if (!nums) return s;
-  return nums.length >= 2 ? dayRangeLabel(Number(nums[0]), Number(nums[1])) : `${Number(nums[0])}일째`;
+  return nums.length >= 2 ? dayRangeLabel(Number(nums[0]), Number(nums[1])) : `${Math.max(1, Number(nums[0]))}일째`;
 }
 
-// 「12~13일째」(처음과 끝이 같으면 「12일째」)
+// 「12~13일째」(처음과 끝이 같으면 「12일째」). 0은 1로(1부터 센다)
 export function dayRangeLabel(start: number, end: number): string {
-  return start === end ? `${start}일째` : `${start}~${end}일째`;
+  const s = Math.max(1, start);
+  const e = Math.max(1, end);
+  return s === e ? `${s}일째` : `${s}~${e}일째`;
+}
+
+// 공개 콘텐츠의 달(「2026-11」 · 「2026-11-03」) → 「11월」(올해가 아니면 「2025년 10월」). 꼴이 다르면 그대로
+export function monthLabel(ym: string, today: string): string {
+  const m = ym.match(/^(\d{4})-(\d{2})/);
+  if (!m) return ym;
+  return m[1] === today.slice(0, 4) ? `${Number(m[2])}월` : `${m[1]}년 ${Number(m[2])}월`;
 }
 
 // 화면에 보일 사람 이름: 시스템 계정 · 개발용 가짜 로그인 이름을 사람 말로 바꾼다(실제 이름은 MEMBER_NAMES 에서 온다).

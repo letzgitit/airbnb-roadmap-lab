@@ -71,7 +71,7 @@ export function HomeSearch({ steps, updates, scripts, onStep, onNotice, onScript
 
   return (
     <div className="relative z-30">
-      <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="검색 · 예: 임대인 설득" aria-label="검색"
+      <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="예: 임대인 설득" aria-label="검색"
         onKeyDown={(e) => { if (e.key === 'Escape' && query) { e.preventDefault(); setQuery(''); } }}
         className="min-h-11 w-full rounded-control border border-line-strong bg-surface py-2 pl-11 pr-3 text-lg font-semibold text-ink placeholder:font-normal placeholder:text-muted focus:border-accent-ink focus:outline-none focus:ring-1 focus:ring-accent-ink [&::-webkit-search-cancel-button]:hidden" />
       <i className="fas fa-search pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base text-muted" aria-hidden />

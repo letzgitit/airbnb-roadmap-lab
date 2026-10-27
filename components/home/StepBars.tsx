@@ -14,8 +14,9 @@ import { axisOf, type DocLike, type Pin, type StepRange, type TimelineStep } fro
 //     아랫줄 = 그 기간의 막대(16px 색면, 최소 14px). 막대가 화면 밖이면 그쪽 가장자리에 같은 색 조각(24px, 상자 쪽 모서리는 각지게 — 「상자 밖으로 이어짐」)만 둔다(기간은 윗줄에 이미 있다).
 //   줄을 누르면 단계 창. 「끝난 단계 n개」는 접어 둔다.
 //   로그인 전(guest)은 날짜 대신 공개 일정 날수(「13~14일째」)를 기간 자리에 적고, 날짜 칸은 누를 수 없다.
+//     약 45일이 한 화면에 다 들게 하루 폭을 줄인다(DateStrip fit — 폰은 약 7px). 막대가 화면 밖으로 나간 줄이 없다.
 const MIN_BAR = 14;
-const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--prep-bar)';
+const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--type-prep)';
 
 export function StepBars({ steps, doc, today, types, currentId, onStep, onPick, picked, fixedDay0, marks, guest }: {
   steps: TimelineStep[]; doc: DocLike; today: string; types: string[]; currentId: number | null;
@@ -33,7 +34,7 @@ export function StepBars({ steps, doc, today, types, currentId, onStep, onPick, 
   return (
     // 거르기 · 펼치기로 축이 바뀌면 처음 자리를 다시 잡는다
     <DateStrip key={`${first}${last}`} first={first} last={last} today={today} picked={picked} pins={pins} dayInfo={dayInfo} beyond={beyond}
-      onPick={onPick} startAt={anchor} align="lead" dense>
+      onPick={onPick} startAt={anchor} align="lead" dense fit={guest}>
       {({ x, day, sl, viewW }) => {
         const vw = viewW || 360;
         const leftEdge = sl;

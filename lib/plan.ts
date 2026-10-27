@@ -13,7 +13,7 @@ export interface PlanPayload {
 }
 
 export const PROJECT_LABEL: Record<PlanProject, string> = { oedomin: '외도민', jisan: '지산 · 원주' };
-export const VIA_LABEL: Record<MoneyVia, string> = { cash: '현금', credit: '마통' };
+export const VIA_LABEL: Record<MoneyVia, string> = { cash: '현금', credit: '마이너스 통장' };
 
 // 할 일 글 끝의 「(추정)」「(제안)」은 글에서 떼어 작은 표시로 보인다
 const MARK_RE = /\s*\((추정|제안)\)\s*$/;

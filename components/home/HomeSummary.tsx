@@ -3,7 +3,7 @@
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { TaskItem, UpdateItem } from '@/lib/core/types';
-import { dayRangeLabel, shortDate, todayStr } from '@/lib/client/format';
+import { dayRangeLabel, monthLabel, shortDate, todayStr } from '@/lib/client/format';
 import { manwon, PROJECT_LABEL, VIA_LABEL } from '@/lib/plan';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { Badge } from '@/components/ui/Badge';
@@ -21,15 +21,19 @@ import { dLabel, guestFinish, logWhen, summaryOf, type OwnerFilter } from './sum
 
 // 홈 「요약」 탭(보기 고르기 [요약 | 단계 | 달력]의 첫 칸). 위에서 아래로 읽으면 브리핑이 끝나는 순서의 카드:
 //   로그인 = ① 남은 날 → ② 할 일 → ③ 정할 것 → ④ 지금 하는 단계 → ⑤ 최근 기록 → ⑥ 돈 (계산은 summary-data.ts)
-//   로그인 전 = 남은 날(오늘 시작하면 첫 손님까지) → 처음 할 일(처음 세 단계) → 최근 바뀐 규정 — 공개 콘텐츠만 쓴다(현황을 받지 않는다)
+//   로그인 전 = 첫 손님까지(오늘 시작하면 약 n일 · 날짜) → 처음 세 단계 → 최근 바뀐 민박업 규정 — 공개 콘텐츠만 쓴다(현황을 받지 않는다)
 // 편집은 할 일 줄만 공통 줄(TaskRow) 그대로(체크 · 그 자리 고치기 · 전화 · 지우기). 나머지는 누르면 원래 자리
-//   (그날 창 · 단계 창 · 우리 집 › 질문 · 기록 · 돈)로 간다. 할 일 추가는 여기서 하지 않는다(「오늘」 → 그날 창).
+//   (그날 창 · 단계 창 · 우리 집 › 질문 · 기록 · 돈)로 간다. 할 일 추가는 여기서 하지 않는다(그날 창 · 단계 창에서).
 // 한 할 일은 요약에 한 번만 나온다(②가 먼저, ③은 남은 결정만). 폰은 한 줄로 쌓고, PC(768px 이상)는 ①④ · ⑤⑥만 두 칸으로 짝짓는다.
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const NEXT_SHOWN = 5;
 const DECIDE_SHOWN = 4;
-const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--prep-bar)';
+const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--type-prep)';
 const withDow = (iso: string) => `${shortDate(iso)} (${DOW[toDate(iso).getDay()]})`;
+/** 「12월 11일(금)」 */
+const longDate = (iso: string) => { const d = toDate(iso); return `${d.getMonth() + 1}월 ${d.getDate()}일(${DOW[d.getDay()]})`; };
+/** 할 일 카드 안 묶음 이름(기한 지남 · 오늘 · 다음 7일): 13px 700, 기한 지남만 빨강 */
+const groupHeadCls = 'px-4 pt-3 text-sm font-bold';
 /** 줄 전체가 누르는 칸인 한 줄(링크 · 단추 공통 모양) */
 const goRowCls = 'flex min-h-11 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-sunken focus-visible:-outline-offset-2';
 const Chevron = () => <i className="fas fa-chevron-right shrink-0 text-xs text-muted" aria-hidden />;
@@ -96,14 +100,14 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
     <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:gap-x-4">
       {/* ① 남은 날 */}
       {hasPins && (
-        <Block id={`${uid}-pins`} title="남은 날" summary={stepsDone} className="md:order-1">
+        <Block id={`${uid}-pins`} title="남은 날" paired className="md:order-1">
           <Card as="ul">
             {s.pins.map((p) => {
               const d = dLabel(p.date, today);
               return (
                 <li key={`${p.date}${p.label}`} className={cardRowCls}>
                   <button type="button" onClick={() => onDay(p.date)} className={`${goRowCls} py-2`}>
-                    <span className={`w-12 shrink-0 text-base font-bold tabular-nums ${d === '오늘' ? 'text-accent-ink' : 'text-ink'}`}>{d}</span>
+                    <span className={`w-14 shrink-0 text-lg font-bold tabular-nums ${d === '오늘' ? 'text-accent-ink' : 'text-ink'}`}>{d}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-base font-semibold text-ink">{p.label}</span>
                       <span className="block text-sm font-normal tabular-nums text-ink-soft">{withDow(p.date)}</span>
@@ -134,23 +138,22 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
             {nothingSoon && <p className={`${cardRowCls} px-4 py-3 text-base text-muted`}>기한 지난 일도, 7일 안에 할 일도 없어요.</p>}
             {s.late.length > 0 && (
               <section aria-labelledby={`${uid}-late`} className={cardRowCls}>
-                <h4 id={`${uid}-late`} className="px-4 pt-3 text-sm font-bold text-danger-ink">기한 지남</h4>
+                <h4 id={`${uid}-late`} className={`${groupHeadCls} text-danger-ink`}>기한 지남</h4>
                 <ul>{s.late.map((t) => row(t, true))}</ul>
               </section>
             )}
-            {/* 「오늘」 이름은 오늘 그날 창으로(할 일 추가는 거기서) */}
-            <section aria-labelledby={`${uid}-today`} className={cardRowCls}>
-              <h4 id={`${uid}-today`}>
-                <button type="button" onClick={() => onDay(today)} className={`${goRowCls} text-sm font-bold text-ink-soft`}>
-                  <span className="min-w-0 flex-1">오늘{s.today.length > 0 && <span className="ml-1.5 font-normal text-muted">{s.today.length}개</span>}</span>
-                  <Chevron />
-                </button>
-              </h4>
-              {s.today.length > 0 && <ul>{s.today.map((t) => row(t))}</ul>}
-            </section>
+            {/* 「오늘」은 비어도 남긴다(다른 묶음이 하나라도 있을 때) — 오늘 마감이 없다는 것도 알릴 거리 */}
+            {!nothingSoon && (
+              <section aria-labelledby={`${uid}-today`} className={cardRowCls}>
+                <h4 id={`${uid}-today`} className={`${groupHeadCls} text-ink`}>오늘</h4>
+                {s.today.length > 0
+                  ? <ul>{s.today.map((t) => row(t))}</ul>
+                  : <p className="px-4 pt-1 pb-3 text-base text-muted">오늘 마감인 할 일이 없어요.</p>}
+              </section>
+            )}
             {s.next7.length > 0 && (
               <section aria-labelledby={`${uid}-next`} className={cardRowCls}>
-                <h4 id={`${uid}-next`} className="px-4 pt-3 text-sm font-bold text-ink-soft">다음 7일</h4>
+                <h4 id={`${uid}-next`} className={`${groupHeadCls} text-ink`}>다음 7일</h4>
                 <ul>{s.next7.slice(0, NEXT_SHOWN).map((t) => row(t))}</ul>
                 {s.next7.length > NEXT_SHOWN && (
                   <>
@@ -209,7 +212,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
       )}
 
       {/* ④ 지금 하는 단계 */}
-      <Block id={`${uid}-steps`} title="지금 하는 단계" summary={hasPins ? undefined : stepsDone} paired={hasPins} className={`md:order-2 ${hasPins ? '' : 'md:col-span-2'}`}>
+      <Block id={`${uid}-steps`} title="지금 하는 단계" summary={stepsDone} className={`md:order-2 ${hasPins ? '' : 'md:col-span-2'}`}>
         <Card as="ul">
           {s.active.length === 0 && <li className={`${cardRowCls} px-4 py-3 text-base text-muted`}>모든 단계를 끝냈어요.</li>}
           {s.active.map((a) => (
@@ -248,8 +251,8 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
             <li key={l.id} className={cardRowCls}>
               <Link href="/house/log" className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-sunken focus-visible:-outline-offset-2">
                 <span className="min-w-0 flex-1">
-                  <Meta className="text-sm font-normal text-muted"><span>{l.kind}</span><span className="tabular-nums">{logWhen(l.at, today)}</span></Meta>
-                  <span className="mt-0.5 line-clamp-2 text-base font-normal text-ink">{l.text}</span>
+                  <span className="line-clamp-2 text-base font-normal text-ink">{l.text}</span>
+                  <Meta className="mt-0.5 text-sm font-normal text-muted"><span className="tabular-nums text-ink-soft">{logWhen(l.at, today)}</span><span>{l.kind}</span></Meta>
                 </span>
                 <span className="pt-1"><Chevron /></span>
               </Link>
@@ -305,11 +308,11 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
   );
 }
 
-// 남은 돈 항목(현금 · 마통 여유) — 돈 화면(MoneyApp)과 같은 글
+// 남은 돈 항목(현금 · 마이너스 통장 여유) — 돈 화면(MoneyApp)과 같은 글
 function balance(cash: number | null, credit: number | null): string[] {
   const parts: string[] = [];
   if (cash !== null) parts.push(`현금 ${cash < 0 ? '−' : ''}${manwon(cash)}`);
-  if (credit !== null) parts.push(`마통 여유 ${credit < 0 ? '−' : ''}${manwon(credit)}`);
+  if (credit !== null) parts.push(`마이너스 통장 여유 ${credit < 0 ? '−' : ''}${manwon(credit)}`);
   return parts;
 }
 
@@ -325,19 +328,14 @@ function GuestSummary({ steps, onStep, onShowSteps, updates, onNotice }: {
 
   return (
     <div className="flex flex-col gap-6">
-      <Block id={`${uid}-finish`} title="남은 날" summary="오늘 시작하면">
+      {/* 맨 위 구역 요약 문장(「오늘 시작하면 … 첫 손님을 받아요」)은 요약 탭에서 숨기고 이 카드 하나로 말한다 */}
+      <Block id={`${uid}-finish`} title="첫 손님까지">
         <Card>
-          <div className="flex min-h-11 items-center gap-3 px-4 py-2">
-            <span className="w-12 shrink-0 text-base font-bold tabular-nums text-ink">D-{finish.days}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-base font-semibold text-ink">첫 손님 받는 날</span>
-              <span className="block text-sm font-normal tabular-nums text-ink-soft">{withDow(finish.date)}쯤</span>
-            </span>
-          </div>
+          <p className="px-4 py-3 text-lg font-bold tabular-nums text-ink">오늘 시작하면 약 {finish.days}일 · {longDate(finish.date)}쯤</p>
         </Card>
       </Block>
 
-      <Block id={`${uid}-first`} title="처음 할 일">
+      <Block id={`${uid}-first`} title="처음 세 단계">
         <Card as="ul">
           {firstSteps.map((st, i) => (
             <li key={st.id} className={cardRowCls}>
@@ -360,14 +358,14 @@ function GuestSummary({ steps, onStep, onShowSteps, updates, onNotice }: {
       </Block>
 
       {recent.length > 0 && onNotice && (
-        <Block id={`${uid}-rules`} title="최근 바뀐 규정">
+        <Block id={`${uid}-rules`} title="최근 바뀐 민박업 규정">
           <Card as="ul">
             {recent.map(({ u, idx }) => (
               <li key={idx} className={cardRowCls}>
                 <button type="button" onClick={() => onNotice(idx)} className={`${goRowCls} py-2`}>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-normal tabular-nums text-ink-soft">{u.date}</span>
                     <span className="block text-base font-semibold text-ink">{u.title}</span>
+                    <span className="block text-sm font-normal tabular-nums text-ink-soft">{monthLabel(u.date, today)}</span>
                   </span>
                   <Chevron />
                 </button>

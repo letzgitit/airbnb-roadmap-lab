@@ -100,7 +100,7 @@ export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title
     const won = (n: number | null) => (n === null ? '-' : `${n < 0 ? '−' : ''}${manwon(n)}`);
     out.push('## 돈 흐름 (11월~1월 일정)');
     out.push('');
-    if (doc.plan) out.push(`- 출발점: 현금 ${won(doc.plan.cash)} · 마통 여유 ${won(doc.plan.credit)}`);
+    if (doc.plan) out.push(`- 출발점: 현금 ${won(doc.plan.cash)} · 마이너스 통장 여유 ${won(doc.plan.credit)}`);
     for (const r of rows) {
       const m = r.item;
       const amt = m.amount === null ? '금액 미정' : `${m.amount < 0 ? '−' : '+'}${manwon(m.amount)}`;

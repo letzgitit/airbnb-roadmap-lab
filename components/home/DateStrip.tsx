@@ -8,6 +8,8 @@ import { addDays, diffDays, toDate, type DayMark, type Pin } from './step-dates'
 //   dense(홈 「단계」 탭): 폰(640px 미만)에서는 하루 14px — 한 화면에 약 4주가 보인다. 칸이 좁아 요일 글자는 빼고(오늘은 선과 강조색 숫자,
 //     고정 일정 날은 핀), 날짜 숫자는 주 첫날(월요일) · 오늘 · 고른 날에만 적는다(오늘 · 고른 날 바로 옆 월요일 숫자는 겹치지 않게 뺀다).
 //     날짜 칸은 띠 높이 전체(44px 넘게)를 누르는 칸으로 쓰고, 칸 사이가 붙어 있어 누른 자리에서 가장 가까운 날이 골린다.
+//   fit(로그인 전 단계 탭): 처음부터 끝까지 한 화면에 들게 하루 폭을 상자 폭 ÷ 날수로(4~30px, 폰은 약 7px) — 막대가 화면 밖으로 나가지 않는다.
+//     좁은 띠와 같은 모양이고, 한 주 폭이 주 이름보다 좁으면 달이 바뀌는 주에만 「11월」.
 //   주 줄: 「10월 4주」(그 주 목요일이 든 달의 몇째 주), 주가 바뀌는 자리에 line-strong 세로 선. 이름 글자는 면 바탕을 깔아 세로선이 가로지르지 않는다
 //   날짜 줄: 요일 첫 글자(오늘은 「오늘」, 고정 일정 날은 핀) · 날짜 숫자 · 그날 할 일 점(ink-soft, 기한 지난 안 끝난 일이 있으면 빨강)
 //     오늘 = 강조색 글자, 고른 날 = ink 2px 테두리. 누르면 onPick(없으면 — 로그인 전 공개 화면 — 누를 수 없는 칸).
@@ -32,6 +34,13 @@ function weekName(monday: string): string {
   return `${thu.getMonth() + 1}월 ${Math.ceil(thu.getDate() / 7)}주`;
 }
 
+/** 좁은 띠의 주 이름: 그 주(목요일 기준) 달이 앞 주와 다르면(또는 첫 주) 「11월」, 아니면 없음 */
+function monthChange(monday: string, prev: string | null): string | null {
+  const m = toDate(addDays(monday, 3)).getMonth();
+  if (prev && toDate(addDays(prev, 3)).getMonth() === m) return null;
+  return `${m + 1}월`;
+}
+
 export interface StripCtx {
   /** 그날 칸의 왼쪽 x(px) */
   x: (iso: string) => number;
@@ -41,7 +50,7 @@ export interface StripCtx {
   sl: number; viewW: number;
 }
 
-export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 0, onPick, startAt, align = 'lead', dense = false, children, className = '' }: {
+export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 0, onPick, startAt, align = 'lead', dense = false, fit = false, children, className = '' }: {
   first: string; last: string; today: string;
   /** 고른 날(진한 테두리) */
   picked: string | null;
@@ -56,6 +65,8 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
   align?: 'lead' | 'center';
   /** 폰에서 하루 폭을 줄여 몇 주를 한 번에(홈 「단계」 탭) */
   dense?: boolean;
+  /** 처음부터 끝까지 한 화면에 들게 하루 폭을 줄인다(로그인 전 단계 탭) */
+  fit?: boolean;
   /** 띠 아래, 같은 상자 · 같은 배율로 같이 넘어가는 내용(홈의 단계 막대) */
   children?: (ctx: StripCtx) => ReactNode;
   className?: string;
@@ -65,8 +76,14 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
   const [sl, setSl] = useState(0);
   const drag = useRef<{ x: number; left: number; id: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
-  const narrow = useNarrow() && dense;
-  const dayW = narrow ? DENSE_DAY : DAY;
+  const isPhone = useNarrow();
+  const total = diffDays(first, last) + 1;
+  const fitW = fit && viewW > 0 ? Math.max(4, Math.min(DAY, Math.floor(viewW / total))) : null;
+  const dayW = fitW ?? (isPhone && dense ? DENSE_DAY : DAY);
+  // 좁은 칸 모양(요일 글자 없음, 숫자는 주 첫날 · 오늘 · 고른 날만)
+  const narrow = dayW < 20;
+  // 한 주 폭이 「10월 4주」보다 좁으면 달이 바뀌는 주에만 「11월」
+  const monthOnly = dayW * 7 < 60;
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -76,7 +93,6 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
     return () => ro.disconnect();
   }, []);
 
-  const total = diffDays(first, last) + 1;
   const x = (iso: string) => diffDays(first, iso) * dayW;
   // 처음 자리(폭을 처음 잰 뒤 한 번)
   const scrolled = useRef(false);
@@ -96,7 +112,7 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
   // 좁은 띠에서 숫자를 적는 날: 오늘 · 고른 날 · 월요일(오늘 · 고른 날 바로 옆이면 빼서 숫자끼리 겹치지 않게)
   const special = [today, picked].filter((d): d is string => !!d);
   const showNum = (d: string, i: number) => !narrow || special.includes(d)
-    || (i % 7 === 0 && !special.some((s) => Math.abs(diffDays(d, s)) === 1));
+    || (i % 7 === 0 && !special.some((s) => s !== d && Math.abs(diffDays(d, s)) * dayW < 22));
 
   const onDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
@@ -129,7 +145,10 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
         <div className="relative flex h-6 border-b border-line" aria-hidden>
           {weeks.map((m, i) => (
             <span key={m} className={`relative z-20 flex shrink-0 overflow-hidden px-1 pt-1 ${i > 0 ? 'border-l border-line-strong' : ''}`} style={{ width: dayW * 7 }}>
-              <span className="min-w-0 truncate bg-surface px-0.5 text-xs font-bold text-ink-soft">{weekName(m)}</span>
+              {(() => {
+                const name = monthOnly ? monthChange(m, i === 0 ? null : weeks[i - 1]) : weekName(m);
+                return name ? <span className="min-w-0 truncate bg-surface px-0.5 text-xs font-bold text-ink-soft">{name}</span> : null;
+              })()}
             </span>
           ))}
         </div>

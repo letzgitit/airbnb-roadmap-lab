@@ -29,11 +29,11 @@ function md(iso: string) {
 function week(iso: string) {
   return WEEK[new Date(`${iso}T00:00:00Z`).getUTCDay()];
 }
-// 남은 돈 항목들(현금 · 마통 여유). 화면에서는 점 없이 span 마다 12px 간격으로 나눠 보인다.
+// 남은 돈 항목들(현금 · 마이너스 통장 여유). 화면에서는 점 없이 span 마다 12px 간격으로 나눠 보인다.
 function balanceParts(cash: number | null, credit: number | null) {
   const parts: string[] = [];
   if (cash !== null) parts.push(`현금 ${cash < 0 ? '−' : ''}${manwon(cash)}`);
-  if (credit !== null) parts.push(`마통 여유 ${credit < 0 ? '−' : ''}${manwon(credit)}`);
+  if (credit !== null) parts.push(`마이너스 통장 여유 ${credit < 0 ? '−' : ''}${manwon(credit)}`);
   return parts;
 }
 
