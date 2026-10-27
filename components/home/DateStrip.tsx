@@ -7,7 +7,7 @@ import { addDays, diffDays, toDate, type DayMark, type Pin } from './step-dates'
 // 가로로 넘겨 보는 날짜 띠(홈 타임라인과 그날 창이 같이 쓴다). 하루 한 칸 30px.
 //   주 줄: 「10월 4주」(그 주 목요일이 든 달의 몇째 주), 주가 바뀌는 자리에 line-strong 세로 선
 //   날짜 줄: 요일 첫 글자(오늘은 「오늘」, 고정 일정 날은 핀) · 날짜 숫자 · 그날 할 일 점(ink-soft, 기한 지난 안 끝난 일이 있으면 빨강)
-//     오늘 = 강조색 글자, 고른 날 = ink 2px 테두리. 누르면 onPick.
+//     오늘 = 강조색 글자, 고른 날 = ink 2px 테두리. 누르면 onPick(없으면 — 로그인 전 공개 화면 — 누를 수 없는 칸).
 //   오늘 = 청록 2px · 고정 일정 = ink-soft 1px 세로선이 띠 위부터 children(홈의 막대) 끝까지 같은 x 로 지난다.
 //     글자 · 숫자는 선 위에 면 바탕으로 깔려 가려지지 않는다(children 쪽 글자도 z-20 + 면 바탕을 쓴다).
 //   손가락은 기본 가로 스크롤, PC 는 마우스로 끌어 넘긴다(끈 뒤에 놓아도 누른 것으로 치지 않는다).
@@ -36,7 +36,8 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
   dayInfo: Map<string, DayMark>;
   /** 띠 끝 뒤의 할 일 · 고정 일정 수(띠 오른쪽 위에 「12/14 이후 n개」) */
   beyond?: number;
-  onPick: (date: string) => void;
+  /** 날짜를 눌렀을 때. 없으면 날짜 칸은 단추가 아니다(로그인 전) */
+  onPick?: (date: string) => void;
   /** 처음 보일 날 */
   startAt: string;
   align?: 'lead' | 'center';
@@ -112,7 +113,7 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
           ))}
         </div>
         {/* 날짜 줄 */}
-        <div role="group" aria-label="날짜 고르기" className="relative flex border-b border-line">
+        <div role="group" aria-label={onPick ? '날짜 고르기' : '날짜'} className="relative flex border-b border-line">
           {days.map((d, i) => {
             const dt = toDate(d);
             const isToday = d === today;
@@ -120,10 +121,9 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
             const c = dayInfo.get(d);
             const pin = pinsOn(d);
             return (
-              <button key={d} type="button" aria-pressed={on} onClick={() => onPick(d)}
-                aria-label={`${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW[dt.getDay()]}요일${isToday ? ' 오늘' : ''}${pin.length ? `, 고정 일정 ${pin.map((p) => p.label).join(', ')}` : ''}${c ? `, 마감 할 일 ${c.n}개` : ''}${c?.late ? ', 기한 지난 일 있음' : ''}`}
-                className={`flex min-h-11 shrink-0 flex-col items-center pt-0.5 pb-1 focus-visible:-outline-offset-2 ${i % 7 === 0 && i > 0 ? 'border-l border-line-strong' : ''}`}
-                style={{ width: DAY }}>
+              <DayCell key={d} onPick={onPick ? () => onPick(d) : undefined} pressed={on}
+                label={`${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW[dt.getDay()]}요일${isToday ? ' 오늘' : ''}${pin.length ? `, 고정 일정 ${pin.map((p) => p.label).join(', ')}` : ''}${c ? `, 마감 할 일 ${c.n}개` : ''}${c?.late ? ', 기한 지난 일 있음' : ''}`}
+                className={`flex min-h-11 shrink-0 flex-col items-center pt-0.5 pb-1 focus-visible:-outline-offset-2 ${i % 7 === 0 && i > 0 ? 'border-l border-line-strong' : ''}`}>
                 <span className={`relative z-20 flex h-4 items-center bg-surface px-0.5 text-xs ${isToday ? 'font-bold text-accent-ink' : 'font-normal text-muted'}`}>
                   {pin.length > 0 ? <i className="fas fa-thumbtack text-ink-soft" aria-hidden /> : isToday ? '오늘' : DOW[dt.getDay()]}
                 </span>
@@ -134,7 +134,7 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
                 <span className="relative z-20 mt-0.5 flex h-1.5 items-center">
                   {c && <span className={`block size-1.5 rounded-full ${c.late ? 'bg-danger-ink' : 'bg-ink-soft'}`} aria-hidden />}
                 </span>
-              </button>
+              </DayCell>
             );
           })}
         </div>
@@ -147,4 +147,11 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
       </div>
     </div>
   );
+}
+
+// 날짜 한 칸: 누를 수 있으면 단추, 아니면(로그인 전) 그냥 칸. 모양은 같다
+function DayCell({ onPick, pressed, label, className, children }: { onPick?: () => void; pressed: boolean; label: string; className: string; children: ReactNode }) {
+  return onPick
+    ? <button type="button" aria-pressed={pressed} onClick={onPick} aria-label={label} className={className} style={{ width: DAY }}>{children}</button>
+    : <div role="img" aria-label={label} className={className} style={{ width: DAY }}>{children}</div>;
 }

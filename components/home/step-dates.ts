@@ -7,6 +7,9 @@ import type { ProgressDoc } from '@/lib/core/types';
 //   출발일 = fixedDay0(콘텐츠 날수가 정해진 날에서 센 값, 예: 지산 2026-09-01) → 목표일이 있는 첫 단계(보통 1단계)의 목표일 − 그 단계 끝 날수
 //          → 가장 이른 할 일 마감일 → 오늘.
 export interface TimelineStep { id: number; title: string; start: number; end: number; type: string }
+/** 계산에 쓰는 현황 조각. 로그인 전(공개 화면)에는 PUBLIC_DOC — 할 일 · 목표일 · 고정 일정 없이 공개 일정 날수만으로 그린다 */
+export type DocLike = Pick<ProgressDoc, 'tasks' | 'steps' | 'property'>;
+export const PUBLIC_DOC: DocLike = { tasks: {}, steps: {}, property: {} };
 export interface StepRange extends TimelineStep { from: string; to: string; done: boolean }
 
 export const toDate = (iso: string) => new Date(`${iso}T00:00:00`);
@@ -16,7 +19,7 @@ export const diffDays = (a: string, b: string) => Math.round((toDate(b).getTime(
 /** 그 날이 든 주의 월요일 */
 export const mondayOf = (iso: string) => { const d = toDate(iso); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return isoOf(d); };
 
-export function stepRanges(steps: TimelineStep[], doc: ProgressDoc, today: string, fixedDay0?: string): StepRange[] {
+export function stepRanges(steps: TimelineStep[], doc: DocLike, today: string, fixedDay0?: string): StepRange[] {
   const tasks = Object.values(doc.tasks).filter((t) => !t.deletedAt);
   const targetOf = (id: number) => doc.steps[String(id)]?.targetDate ?? null;
   let day0 = fixedDay0 ?? null;
@@ -41,7 +44,7 @@ export function stepRanges(steps: TimelineStep[], doc: ProgressDoc, today: strin
 // 고정 일정: 현황 집 정보 중 이름이 「고정 · 」으로 시작하고 값이 YYYY-MM-DD 로 시작하는 줄 + marks(예: 지산 만기). 날짜순.
 export interface Pin { date: string; label: string }
 const PIN_PREFIX = /^고정\s*·\s*/;
-export function pinsOf(doc: ProgressDoc | null, marks: Pin[] = []): Pin[] {
+export function pinsOf(doc: DocLike | null, marks: Pin[] = []): Pin[] {
   return [
     ...marks,
     ...(doc ? Object.values(doc.property) : [])
@@ -55,6 +58,7 @@ export function pinsOf(doc: ProgressDoc | null, marks: Pin[] = []): Pin[] {
 //   끝 = 단계 목표일 중 가장 늦은 날과 오늘 중 늦은 날이 든 주의 일요일(목표일이 없으면 단계 기간 끝). 그 뒤의 할 일 · 고정 일정은 beyond 로만 센다.
 //   시작 = showDone 이 아니면 안 끝난 단계 시작 · 오늘 · 고정 일정 · 안 끝난 할 일 마감 중 가장 이른 날, showDone 이면 전체 — 가 든 주의 월요일.
 //   include: 반드시 띠 안에 들어와야 하는 날(그날 창에서 고른 날 등).
+//   types: 단계 종류 거르기(비었으면 전체). 단계 기간은 전체 단계로 계산한 뒤 거른다(출발일이 거르기에 따라 바뀌지 않게). 할 일은 그 단계 종류로 거르고, 고정 일정은 늘 보인다.
 export interface DayMark { n: number; late: boolean }
 export interface Axis {
   ranges: StepRange[]; pins: Pin[]; first: string; last: string;
@@ -67,11 +71,12 @@ export interface Axis {
   /** 기한 지난 안 끝난 할 일 수 */
   lateCount: number;
 }
-export function axisOf(steps: TimelineStep[], doc: ProgressDoc, today: string, opts: { fixedDay0?: string; marks?: Pin[]; showDone?: boolean; include?: string } = {}): Axis {
-  const ranges = stepRanges(steps, doc, today, opts.fixedDay0);
-  const tasks = Object.values(doc.tasks).filter((t) => !t.deletedAt);
+export function axisOf(steps: TimelineStep[], doc: DocLike, today: string, opts: { fixedDay0?: string; marks?: Pin[]; showDone?: boolean; include?: string; types?: string[] } = {}): Axis {
+  const keep = typeFilter(steps, opts.types);
+  const ranges = stepRanges(steps, doc, today, opts.fixedDay0).filter((r) => keep(r.id));
+  const tasks = Object.values(doc.tasks).filter((t) => !t.deletedAt && keep(t.stepId));
   const pins = pinsOf(doc, opts.marks);
-  const targets = Object.values(doc.steps).map((s) => s.targetDate).filter((d): d is string => !!d).sort();
+  const targets = Object.entries(doc.steps).filter(([k]) => keep(Number(k))).map(([, s]) => s.targetDate).filter((d): d is string => !!d).sort();
   const endBase = [targets[targets.length - 1] ?? ranges.map((r) => r.to).sort().pop() ?? today, today, opts.include ?? today].sort().pop()!;
   const last = addDays(mondayOf(endBase), 6);
   const openDues = tasks.filter((t) => !t.done && t.due).map((t) => t.due!);
@@ -91,4 +96,12 @@ export function axisOf(steps: TimelineStep[], doc: ProgressDoc, today: string, o
   });
   const lateCount = tasks.filter((t) => !t.done && t.due && t.due < today).length;
   return { ranges, pins, first, last, openDues, beyond, dayInfo, lateCount };
+}
+
+/** 단계 종류 거르기: 비었으면 전부 통과, 아니면 그 단계의 종류가 types 안에 있을 때만(모르는 단계는 거른다) */
+export function typeFilter(steps: TimelineStep[], types?: string[]): (stepId: number) => boolean {
+  if (!types || types.length === 0) return () => true;
+  const on = new Set(types);
+  const typeOf = new Map(steps.map((s) => [s.id, s.type]));
+  return (id) => on.has(typeOf.get(id) ?? '');
 }

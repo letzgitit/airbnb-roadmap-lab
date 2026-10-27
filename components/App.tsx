@@ -3,8 +3,6 @@
 import { useCallback, useMemo } from 'react';
 import type { Content, StepStatus } from '@/lib/core/types';
 import type { StepSection } from '@/lib/client/step-sections';
-import { dueState, todayStr } from '@/lib/client/format';
-import type { StepCounts } from './TimelineChart';
 import { StepModal } from './StepModal';
 import { DaySheet } from './home/DaySheet';
 import { FIXED_DAY0, FIXED_MARKS, toTimelineSteps } from './home/timeline-config';
@@ -15,7 +13,7 @@ import { useProgress } from './progress/ProgressProvider';
 import { useSheetRouter, type SheetKind } from './use-sheet-router';
 
 // 홈. 머리글 · 내비게이션 · 진행 현황(ProgressProvider) · 사진(PhotosProvider)은 사이트 틀(components/shell/SiteShell)이 맡는다.
-// 구성: 「단계」(요약 · 검색 · 주의사항/대화 예시 · 범례 · 로그인 전 14단계 「n일째」 막대 / 로그인 후 실제 날짜 타임라인 + 고른 날의 할 일) → 꼬리글.
+// 구성: 「단계」(요약 · 단계/달력 탭 + 단계 종류 거르기 · 검색 · 주의사항/대화 예시 — 로그인 전후 같은 모양, 다른 건 내용뿐) → 꼬리글.
 // 공개 안내 시트 셋(단계 · 주의사항 · 대화 예시)은 주소 해시(#step-3 · #notice · #scripts)와 함께 열고 닫는다.
 export default function App({ content }: { content: Content }) {
   const { steps, scripts, updates } = content;
@@ -36,22 +34,6 @@ export default function App({ content }: { content: Content }) {
     steps.forEach((s) => { m[s.id] = doc.steps[String(s.id)]?.status; });
     return m;
   }, [loggedIn, doc, steps]);
-  // 단계별 할 일 개수. 「오늘 n」 · 「기한 지남 n」은 안 끝난 할 일만 센다(마감 기준은 할 일 줄의 날짜 표시와 같다).
-  const today = todayStr();
-  const counts = useMemo(() => {
-    if (!loggedIn || !doc) return null;
-    const m: Record<number, StepCounts> = {};
-    Object.values(doc.tasks).forEach((t) => {
-      if (t.deletedAt) return;
-      const c = (m[t.stepId] ??= { done: 0, total: 0, today: 0, late: 0 });
-      c.total += 1;
-      if (t.done) { c.done += 1; return; }
-      const due = dueState(t.due, today);
-      if (due === 'today') c.today += 1;
-      else if (due === 'late') c.late += 1;
-    });
-    return m;
-  }, [loggedIn, doc, today]);
   // 지금 하는 단계: 진행 중인 첫 단계, 없으면 시작 안 한 첫 단계(단계 목록의 「지금」 줄, 새 할 일의 기본 단계)
   const currentId = useMemo(() => {
     if (!statuses) return null;
@@ -69,7 +51,7 @@ export default function App({ content }: { content: Content }) {
     <>
       <h1 className="sr-only">외도민 타임 라인</h1>
       <div className="flex flex-col gap-6">
-        <GuideSection steps={steps} updates={updates} scripts={scripts} statuses={statuses} counts={counts} currentId={currentId}
+        <GuideSection steps={steps} updates={updates} scripts={scripts} statuses={statuses} currentId={currentId}
           onStep={openStep} onDay={openDay} onNotice={openNotice} onScript={openScript} />
       </div>
       <footer className="mt-8 flex flex-wrap gap-x-3 text-sm font-normal text-muted"><span>만든 곳</span><span>주money</span></footer>
