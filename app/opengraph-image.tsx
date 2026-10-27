@@ -36,18 +36,18 @@ export default async function Image() {
           flexDirection: 'column',
           justifyContent: 'center',
           padding: '0 96px',
-          background: '#f8fafc',
-          color: '#0f172a',
+          background: '#edfc47',
+          color: '#000000',
           fontFamily: 'Noto Sans KR',
         }}
       >
-        <div style={{ width: 72, height: 8, background: '#1d4ed8', borderRadius: 4, marginBottom: 44 }} />
+        <div style={{ width: 72, height: 8, background: '#000000', marginBottom: 44 }} />
         <div style={{ fontSize: 104, fontWeight: 700, lineHeight: 1.15, letterSpacing: -2 }}>{TITLE}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 32, fontSize: 44, fontWeight: 400, lineHeight: 1.4, color: '#475569' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 32, fontSize: 44, fontWeight: 400, lineHeight: 1.4, color: '#262626' }}>
           <div>{DESC}</div>
           <div>{DESC2}</div>
         </div>
-        <div style={{ marginTop: 56, fontSize: 30, fontWeight: 700, color: '#64748b' }}>{LABEL}</div>
+        <div style={{ marginTop: 56, fontSize: 30, fontWeight: 700, color: '#000000' }}>{LABEL}</div>
       </div>
     ),
     {

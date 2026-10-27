@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-/** 폰 홈 화면 바로가기 · 앱 설치 — 「외도민」 아이콘(public/icon-192.png · icon-512.png). 바탕 · 주소창 색은 화면 바탕과 같은 흰색 */
+/** 폰 홈 화면 바로가기 · 앱 설치 — 「외도민」 아이콘(public/icon-192.png · icon-512.png). 아이콘은 형광 #edfc47 + 검정 글자, 주소창 색은 머리 띠 형광, 바탕은 화면 바탕 회색 */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: '외도민 타임 라인',
