@@ -9,5 +9,5 @@ export const FIXED_DAY0: string | undefined = undefined;
 export const PLAN_WORD = '보통';
 /** 고정 일정에 늘 더할 표시(지산판의 만기 같은 것). 외도민은 현황의 「고정 · 」 줄만 쓴다 */
 export const FIXED_MARKS: { date: string; label: string }[] = [];
-export const toTimelineSteps = (steps: Step[]): TimelineStep[] =>
+export const toTimelineSteps = (steps: Pick<Step, 'id' | 'title'>[]): TimelineStep[] =>
   steps.map((s) => { const r = TIMELINE[s.id] ?? DEFAULT_RANGE; return { id: s.id, title: s.title, start: r.start, end: r.end, type: r.type }; });
