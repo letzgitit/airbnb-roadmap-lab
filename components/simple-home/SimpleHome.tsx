@@ -2,20 +2,23 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Content, ProgressDoc } from '@/lib/core/types';
+import type { Content, ProgressDoc, TaskItem } from '@/lib/core/types';
 import { usePhotos } from '@/components/progress/PhotosPanel';
 import { todayStr } from '@/lib/client/format';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { useSite } from '@/components/shell/SiteShell';
 import { Card } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
+import { TaskRow } from '@/components/tasks/TaskRow';
+import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
+import { CalendarTab } from './CalendarTab';
 import { ContactsTab } from './ContactsTab';
 import { GuQuestions } from './GuQuestions';
 import { NewsTab } from './NewsTab';
 import { PhotosTab } from './PhotosTab';
 import { TaskCard } from './TaskCard';
 import {
-  AIRBNB_CARDS, DOC_CARDS, DONE_STEPS, INTERIOR_CARDS, TABS, dateParts, sortCards, summarize, tabCounts, tasksByCard, type CardDef, type TabId,
+  AIRBNB_CARDS, DOC_CARDS, DONE_STEPS, INTERIOR_CARDS, TABS, WEEK_MAX, dateParts, sortCards, summarize, tabCounts, tasksByCard, weekTasks, type CardDef, type TabId,
 } from './home-model';
 
 // 고른 탭 · 펼친 카드는 이 브라우저에만 기억한다(두 사람 화면이 서로 바뀌지 않게)
@@ -25,8 +28,10 @@ const read = (k: string) => { try { return localStorage.getItem(k); } catch { re
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 저장이 막혀도 이번 화면에는 적용 */ } };
 
 /**
- * 새 홈(로그인한 두 사람): 엑셀 시트처럼 맨 위 탭 여섯 개 — 서류 · 인테리어 · 사진 · 에어비앤비 · 연락처 · 뉴스.
+ * 새 홈(로그인한 두 사람): 엑셀 시트처럼 맨 위 탭 일곱 개 — 서류 · 인테리어 · 사진 · 에어비앤비 · 연락처 · 뉴스 · 달력.
  * 탭마다 큰 덩어리 카드(마감 날짜를 크게), 펼치면 그 자리에서 체크 · 추가 · 고치기 · 지우기 · 메모.
+ * 서류 · 인테리어 · 에어비앤비 탭 맨 위에는 「이번 주 꼭 할 일」(기한 지남 + 일주일 안 마감, 급한 순 5개).
+ * 달력 탭은 카드 마감 날짜만 — 날짜를 눌러 카드를 고르면 그 탭으로 가서 그 카드를 펼친다.
  * 예전 홈(준비 일정 · 간트 · 달력)은 /classic 에 그대로 있고, 맨 아래 작은 「예전 화면」 글자로만 들어간다.
  */
 export function SimpleHome({ content }: { content: Content }) {
@@ -42,6 +47,16 @@ export function SimpleHome({ content }: { content: Content }) {
     return TABS.some((t) => t.id === v) ? (v as TabId) : 'docs';
   });
   const pick = (t: TabId) => { setTab(t); write(TAB_KEY, t); window.scrollTo({ top: 0 }); };
+  // 달력에서 고른 카드: 그 탭의 펼친 카드 기억에 더해 두고(탭이 열릴 때 펼친 채로 그려진다) 탭을 바꾼 뒤 그 카드로 내려간다
+  const [focus, setFocus] = useState<string | null>(null);
+  const openCard = (t: TabId, cardId: string) => {
+    const key = `${OPEN_KEY}:${t}`;
+    let ids: string[] = [];
+    try { ids = JSON.parse(read(key) ?? '[]') as string[]; } catch { /* 처음처럼 */ }
+    if (!ids.includes(cardId)) write(key, JSON.stringify([...ids, cardId]));
+    setFocus(cardId);
+    pick(t);
+  };
   const today = todayStr();
   // 폰에서 탭 줄이 옆으로 밀릴 때 고른 탭이 화면 안에 오게
   useEffect(() => {
@@ -55,7 +70,7 @@ export function SimpleHome({ content }: { content: Content }) {
       docs: tabCounts(tasksByCard(doc, DOC_CARDS), today).late,
       interior: tabCounts(tasksByCard(doc, INTERIOR_CARDS), today).late,
       airbnb: tabCounts(tasksByCard(doc, AIRBNB_CARDS), today).late,
-      photos: 0, contacts: 0, news: 0,
+      photos: 0, contacts: 0, news: 0, calendar: 0,
     } as Record<TabId, number>;
   }, [doc, today]);
 
@@ -81,12 +96,13 @@ export function SimpleHome({ content }: { content: Content }) {
       </div>
 
       <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-${tab}`}>
-        {tab === 'docs' && <CardsTab key="docs" tab="docs" cards={DOC_CARDS} doc={doc} steps={steps} today={today} extra={<><GuQuestions /><DoneSteps doc={doc} steps={steps} today={today} /></>} />}
-        {tab === 'interior' && <CardsTab key="interior" tab="interior" cards={INTERIOR_CARDS} doc={doc} steps={steps} today={today} />}
+        {tab === 'docs' && <CardsTab key="docs" tab="docs" cards={DOC_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)} extra={<><GuQuestions /><DoneSteps doc={doc} steps={steps} today={today} /></>} />}
+        {tab === 'interior' && <CardsTab key="interior" tab="interior" cards={INTERIOR_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)} />}
         {tab === 'photos' && <PhotosTab />}
-        {tab === 'airbnb' && <CardsTab key="airbnb" tab="airbnb" cards={AIRBNB_CARDS} doc={doc} steps={steps} today={today} />}
+        {tab === 'airbnb' && <CardsTab key="airbnb" tab="airbnb" cards={AIRBNB_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)} />}
         {tab === 'contacts' && <ContactsTab />}
         {tab === 'news' && <NewsTab content={content} />}
+        {tab === 'calendar' && <CalendarTab steps={content.steps} today={today} onOpenCard={openCard} />}
       </div>
 
       <footer className="mt-12 flex justify-center">
@@ -110,8 +126,10 @@ function useOpenCards(tab: string) {
   return { open, toggle };
 }
 
-function CardsTab({ tab, cards, doc, steps, today, extra }: {
+function CardsTab({ tab, cards, doc, steps, today, extra, focus = null, onFocused }: {
   tab: TabId; cards: CardDef[]; doc: ProgressDoc; steps: StepRef[]; today: string; extra?: ReactNode;
+  /** 달력에서 고른 카드 id: 그 카드로 내려가 머리에 포커스를 둔다 */
+  focus?: string | null; onFocused?: () => void;
 }) {
   const groups = useMemo(() => tasksByCard(doc, cards), [doc, cards]);
   const sums = useMemo(() => Object.fromEntries(cards.map((c) => [c.id, summarize(c, groups[c.id], doc, today)])), [cards, groups, doc, today]);
@@ -121,15 +139,56 @@ function CardsTab({ tab, cards, doc, steps, today, extra }: {
   const heroId = shown[0] && !sums[shown[0].id].finished && sums[shown[0].id].deadline ? shown[0].id : null;
   const { open, toggle } = useOpenCards(tab);
   const { wd } = dateParts(today);
+  const anchor = (id: string) => `home-card-${tab}-${id}`;
+  useEffect(() => {
+    if (!focus) return;
+    const raf = window.requestAnimationFrame(() => {
+      const el = document.getElementById(anchor(focus));
+      el?.scrollIntoView({ block: 'start' });
+      el?.querySelector<HTMLElement>('h3 button')?.focus({ preventScroll: true });
+      onFocused?.();
+    });
+    return () => window.cancelAnimationFrame(raf);
+    // 탭이 열릴 때 한 번만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm font-normal text-muted">오늘 {Number(today.slice(5, 7))}월 {Number(today.slice(8))}일 ({wd})</p>
+      <WeekBundle groups={groups} doc={doc} steps={steps} today={today} />
       {shown.map((c) => (
         <TaskCard key={c.id} card={c} cards={cards} tasks={groups[c.id]} summary={sums[c.id]} steps={steps} today={today}
-          open={open.has(c.id)} onToggleOpen={() => toggle(c.id)} hero={c.id === heroId} />
+          open={open.has(c.id)} onToggleOpen={() => toggle(c.id)} hero={c.id === heroId} anchorId={anchor(c.id)} />
       ))}
       {extra}
     </div>
+  );
+}
+
+/**
+ * 「이번 주 꼭 할 일」: 그 탭의 기한 지남 + 일주일 안 마감, 급한 순 WEEK_MAX 개. 그 줄에서 바로 체크 · 고치기(같은 TaskRow 쉬운 모양).
+ * 없으면 숨긴다. 같은 할 일이 아래 카드에도 있다. 경고 말은 줄마다 한 번(「n일 지남」 · 「곧 마감」)만 — 묶음 이름에는 개수만.
+ */
+function WeekBundle({ groups, doc, steps, today }: { groups: Record<string, TaskItem[]>; doc: ProgressDoc; steps: StepRef[]; today: string }) {
+  const uid = useId();
+  const { isDone, onToggle } = useStickyDone();
+  const { editing, reportEdit } = useEditingSet();
+  const { list, total } = useMemo(() => weekTasks(groups, today, (t) => isDone(t) && !editing.has(t.id)), [groups, today, isDone, editing]);
+  if (list.length === 0) return null;
+  return (
+    <Card as="section" aria-labelledby={`${uid}-h`}>
+      <h3 id={`${uid}-h`} className="flex flex-wrap items-baseline gap-x-2 px-4 pt-3 pb-2 text-base font-bold text-ink">
+        이번 주 꼭 할 일
+        <span className="text-sm font-normal text-muted">{total > WEEK_MAX ? `${total}개 중 급한 ${list.length}개` : `${total}개`}</span>
+      </h3>
+      <ul className="border-t border-line">
+        {list.map((t) => (
+          <TaskRow key={t.id} t={t} steps={steps} listStepId={null} scope="page" inset simple
+            parentTitle={t.parentId ? doc.tasks[t.parentId]?.text : undefined}
+            onEditChange={reportEdit} onToggle={onToggle} onGone={() => undefined} />
+        ))}
+      </ul>
+    </Card>
   );
 }
 

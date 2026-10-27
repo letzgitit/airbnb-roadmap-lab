@@ -7,6 +7,26 @@ type TreeTask = Pick<TaskItem, 'id' | 'text'> & { parentId?: string | null };
 
 const md = (iso: string) => { const [, m, d] = iso.split('-'); return `${Number(m)}/${Number(d)}`; };
 
+const dayDiff = (from: string, to: string) => Math.round((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / 86400000);
+/** 「곧 마감」이 붙는 남은 날(오늘 포함 0 ~ 3일) */
+export const SOON_DAYS = 3;
+
+/**
+ * 할 일 줄의 때(새 홈 쉬운 모양): 안 끝난 일만.
+ *  late = 마감 지남 · soon = 마감까지 0~3일(「곧 마감」) · prep = 준비 시작일 ≤ 오늘 < 마감(「준비할 때」) · null = 그 밖
+ */
+export function taskPhase(t: Pick<TaskItem, 'done' | 'due'> & { start?: string | null }, today: string): 'late' | 'soon' | 'prep' | null {
+  if (t.done) return null;
+  if (t.due) {
+    const n = dayDiff(today, t.due);
+    if (n < 0) return 'late';
+    if (n <= SOON_DAYS) return 'soon';
+  }
+  if (t.start && t.start <= today && (!t.due || today <= t.due)) return 'prep';
+  return null;
+}
+export const PHASE_WORD = { soon: '곧 마감', prep: '준비할 때' } as const;
+
 /** 보조 줄 날짜: 시작일이 마감일과 다르면 「10/28~10/30」, 시작일만 있으면 「10/28~」. 그 밖은 null(기존 마감일 표시 그대로) */
 export function spanDate(start: string | null | undefined, due: string | null | undefined): string | null {
   if (!start || start === due) return null;

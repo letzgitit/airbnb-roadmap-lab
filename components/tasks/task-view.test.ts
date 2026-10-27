@@ -1,7 +1,20 @@
 // 할 일 줄 · 폼 계산 확인(node --test, 새 의존성 없이). 값은 모두 가짜다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { placeOf, placePatch, placeStep, shiftLabel, shiftPatch, spanDate, treeRows } from './task-view.ts';
+import { placeOf, placePatch, placeStep, shiftLabel, shiftPatch, spanDate, taskPhase, treeRows } from './task-view.ts';
+
+test('할 일 줄의 때: 지남 › 곧 마감(3일 안) › 준비할 때(시작일 ~ 마감)', () => {
+  const today = '2026-10-28';
+  assert.equal(taskPhase({ done: false, due: '2026-10-27' }, today), 'late');
+  assert.equal(taskPhase({ done: false, due: '2026-10-28' }, today), 'soon');
+  assert.equal(taskPhase({ done: false, due: '2026-10-31' }, today), 'soon');
+  assert.equal(taskPhase({ done: false, due: '2026-11-01' }, today), null);
+  assert.equal(taskPhase({ done: false, due: '2026-11-06', start: '2026-10-28' }, today), 'prep');
+  assert.equal(taskPhase({ done: false, due: '2026-11-06', start: '2026-10-29' }, today), null);   // 아직 시작 전
+  assert.equal(taskPhase({ done: false, due: '2026-10-30', start: '2026-10-20' }, today), 'soon');  // 곧 마감이 먼저
+  assert.equal(taskPhase({ done: false, due: null, start: '2026-10-20' }, today), 'prep');
+  assert.equal(taskPhase({ done: true, due: '2026-10-27' }, today), null);
+});
 
 test('보조 줄 날짜: 시작일이 있을 때만 범위', () => {
   assert.equal(spanDate('2026-10-28', '2026-10-30'), '10/28~10/30');

@@ -12,7 +12,7 @@ import {
 } from '@/components/progress/bits';
 import { callNumber, phonesIn, telHref } from './phone';
 import { START_AFTER_DUE, taskErrorMessage } from './task-errors';
-import { placeOf, placePatch, placeStep, spanDate } from './task-view';
+import { PHASE_WORD, placeOf, placePatch, placeStep, spanDate, taskPhase } from './task-view';
 import { KindSelect, NoteField, OwnerSelect, type StepRef, type TaskOwner, type TaskWithNote } from './TaskComposer';
 import { TaskPhotos } from './TaskPhotos';
 import { usePhotos } from '@/components/progress/PhotosPanel';
@@ -32,8 +32,9 @@ import { usePhotos } from '@/components/progress/PhotosPanel';
  * - quietLate: 홈 「기한 지남」 묶음 안의 줄. 묶음 이름이 이미 빨강이라 날짜 보조 줄은 muted 로 둔다.
  * - depth: 1 = 부모 바로 밑의 세부 항목 줄(앞 칸을 24px 들여 쓰고 글자를 한 단계 작게).
  * - parentTitle: 부모가 이 목록에 없는 세부 항목이면 부모 제목(보조 줄에 「‘부모 제목’의 세부 항목」).
- * - simple: 새 홈(한눈에 보기)의 쉬운 폼. 고치는 폼에 제목 · 마감일 · 담당 · 메모만 둔다(시작일 · 종류 · 넣을 곳은 그대로 둠).
- *   보조 줄의 종류 · 「자동으로 고름」도 뺀다. 메모는 접힌 채 첫 줄만 보이고, 누르면 펼친다. 다음 7일 안 마감은 ink 700으로.
+ * - simple: 새 홈(한눈에 보기)의 쉬운 폼. 고치는 폼에 제목 · 언제부터(시작일) · 마감일 · 담당 · 메모만 둔다(종류 · 넣을 곳은 그대로 둠).
+ *   보조 줄의 종류 · 「자동으로 고름」도 뺀다. 메모는 접힌 채 첫 줄만 보이고, 누르면 펼친다.
+ *   보조 줄 끝에 「곧 마감」(마감 3일 안) · 「준비할 때」(시작일 ~ 마감 사이)를 ink 700으로.
  */
 type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; place: string };
 
@@ -141,11 +142,10 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             <AutoTextarea className={inputCls} rows={2} value={text} maxLength={200} autoFocus aria-label="할 일 내용"
               onChange={(e) => setText(oneLine(e.target.value))} onKeyDown={enterSubmit} />
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {!simple && (
-                <label className="flex items-center gap-2 text-sm font-normal text-ink-soft">시작일
-                  <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label="시작일" />
-                </label>
-              )}
+              {/* 쉬운 모양은 「언제부터」(준비 시작일, 선택) — 데이터는 같은 시작일(start) */}
+              <label className="flex items-center gap-2 text-sm font-normal text-ink-soft">{simple ? '언제부터' : '시작일'}
+                <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label={simple ? '언제부터(선택)' : '시작일'} />
+              </label>
               <label className="flex items-center gap-2 text-sm font-normal text-ink-soft">마감일
                 <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
               </label>
@@ -201,8 +201,10 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const call = callNumber(t.note);
   const startEdit = () => { fill(formOf(t as unknown as Record<string, unknown>)); setErr(null); setBase(t.version); ed.start(); };
   if (simple) {
-    // 다음 7일 안(오늘 포함) 마감 = ink 700(누르는 것이 아니라 청록을 쓰지 않는다), 지남 = 빨강 700
-    const soon = !t.done && !late && !!t.due && (dl?.rel === '오늘' || /^D-[1-6]$/.test(dl?.rel ?? ''));
+    // 때 표시: 마감 3일 안 「곧 마감」 · 준비 시작일 ~ 마감 사이 「준비할 때」 = ink 700(누르는 것이 아니라 청록을 쓰지 않는다).
+    // 지남은 「n일 지남」 빨강 700 한 곳만
+    const phase = taskPhase(t, todayStr());
+    const phaseWord = phase === 'soon' || phase === 'prep' ? PHASE_WORD[phase] : null;
     const noteLines = (t.note ?? '').trim();
     const firstLine = noteLines.split('\n')[0];
     const photoN = taskPhotos.filter((p) => p.taskId === t.id).length;
@@ -218,7 +220,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             <span className={`block break-words ${depth ? 'text-sm font-normal text-ink' : rowText} ${t.done ? 'text-muted line-through' : ''}`}>{t.text}</span>
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 text-sm font-normal text-muted empty:hidden">
               {dateText && <span className={`whitespace-nowrap ${t.done ? '' : 'text-ink-soft'}`}>{dateText}</span>}
-              {dl && !t.done && <span className={`whitespace-nowrap ${late ? 'font-bold text-danger-ink' : soon ? 'font-bold text-ink' : ''}`}>{dl.rel}</span>}
+              {dl && !t.done && <span className={`whitespace-nowrap ${late ? 'font-bold text-danger-ink' : ''}`}>{dl.rel}</span>}
+              {phaseWord && <span className="whitespace-nowrap font-bold text-ink">{phaseWord}</span>}
               {t.owner && <span className="whitespace-nowrap">{t.owner}</span>}
               {parentTitle && <span className="min-w-0 truncate">‘{parentTitle}’의 세부 항목</span>}
               <EditBadge k={`task:${t.id}`} />

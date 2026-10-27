@@ -61,7 +61,7 @@ export function KindSelect({ value, onChange }: { value: TaskKind | ''; onChange
  */
 export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', parentId, parentTitle, simple = false, prepare, dirtyKey }: {
   stepId: number; steps?: StepRef[]; scope: DirtyScope; onClose: () => void; initialDue?: string; parentId?: string; parentTitle?: string;
-  /** 새 홈(한눈에 보기)의 쉬운 폼: 제목 · 마감일 · 담당 · 메모만(시작일 · 종류 칸 없음) */
+  /** 새 홈(한눈에 보기)의 쉬운 폼: 제목 · 언제부터(시작일) · 마감일 · 담당 · 메모만(종류 칸 없음) */
   simple?: boolean;
   /** 보내기 직전에 제목 · 종류를 바꾼다(새 홈 낱말 카드: 「욕실: …」처럼 카드 이름을 앞에 붙여 그 카드에 남게) */
   prepare?: (text: string, kind: TaskKind | '') => { text: string; kind: TaskKind | '' };
@@ -105,11 +105,10 @@ export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', p
         </label>
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {!simple && (
-          <label className={`flex items-center gap-2 ${labelCls}`}>시작일
-            <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label="시작일" />
-          </label>
-        )}
+        {/* 쉬운 모양은 「언제부터」(준비 시작일, 선택) — 데이터는 같은 시작일(start) */}
+        <label className={`flex items-center gap-2 ${labelCls}`}>{simple ? '언제부터' : '시작일'}
+          <input type="date" className={dateCls} value={start} onChange={(e) => setStart(e.target.value)} aria-label={simple ? '언제부터(선택)' : '시작일'} />
+        </label>
         <label className={`flex items-center gap-2 ${labelCls}`}>마감일
           <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
         </label>

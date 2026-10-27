@@ -121,10 +121,7 @@ export function summaryOf(steps: TimelineStep[], doc: SummaryDoc, today: string,
   }).filter((a): a is ActiveStep => !!a);
 
   // 첫 손님 날 · 링
-  const lastStep = steps[steps.length - 1];
-  const lastTarget = lastStep ? doc.steps[String(lastStep.id)]?.targetDate ?? null : null;
-  const latestEnd = ranges.map((r) => r.to).sort().pop() ?? null;
-  const finish = lastTarget ? { date: lastTarget, estimate: false } : latestEnd ? { date: latestEnd, estimate: true } : null;
+  const finish = finishOf(steps, doc, ranges);
   const start = ranges.map((r) => r.from).sort()[0] ?? null;
   const span = finish && start ? Math.max(1, diffDays(start, finish.date)) : 0;
   const elapsed = start && span ? Math.min(span, Math.max(0, diffDays(start, today))) : 0;
@@ -181,6 +178,21 @@ export function summaryOf(steps: TimelineStep[], doc: SummaryDoc, today: string,
     week: { late: late.map(item), days },
     ownerCounts,
   };
+}
+
+/** 첫 손님 날: 마지막 단계 목표일, 없으면 단계 끝 중 가장 늦은 날(estimate = true) */
+function finishOf(steps: TimelineStep[], doc: Pick<ProgressDoc, 'steps'>, ranges: { to: string }[]): { date: string; estimate: boolean } | null {
+  const lastStep = steps[steps.length - 1];
+  const lastTarget = lastStep ? doc.steps[String(lastStep.id)]?.targetDate ?? null : null;
+  const latestEnd = ranges.map((r) => r.to).sort().pop() ?? null;
+  return lastTarget ? { date: lastTarget, estimate: false } : latestEnd ? { date: latestEnd, estimate: true } : null;
+}
+
+/** 첫 손님까지(요약 맨 위 카드와 같은 계산 — 새 홈 달력 탭 맨 위 줄이 쓴다). dday = 오늘부터 남은 날(지나면 음수) */
+export function firstGuest(steps: TimelineStep[], doc: Pick<ProgressDoc, 'tasks' | 'steps' | 'property'>, today: string, fixedDay0?: string):
+  { finish: { date: string; estimate: boolean } | null; dday: number | null } {
+  const finish = finishOf(steps, doc, stepRanges(steps, doc, today, fixedDay0));
+  return { finish, dday: finish ? diffDays(today, finish.date) : null };
 }
 
 /** 「오늘」 · 「D-3」 · 「2일 지남」 */

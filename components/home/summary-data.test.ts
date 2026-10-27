@@ -1,7 +1,7 @@
 // 홈 「요약」 계산 확인(node --test, 새 의존성 없이). 값은 모두 가짜다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dLabel, guestFinish, logWhen, summaryOf, type SummaryDoc } from './summary-data.ts';
+import { dLabel, firstGuest, guestFinish, logWhen, summaryOf, type SummaryDoc } from './summary-data.ts';
 import type { TimelineStep } from './step-dates.ts';
 
 const TODAY = '2026-10-27';
@@ -246,4 +246,16 @@ test('빈 데이터: 단계도 할 일도 없으면 그림 재료가 비어 있�
   assert.deepEqual(s.ownerCounts, { all: 0, 남편: 0, 아내: 0 });
   assert.equal(s.pinsTotal, 0);
   assert.equal(s.money, null);
+});
+
+test('firstGuest: 요약의 첫 손님 날 · D-day 와 같은 값(새 홈 달력 탭 맨 위 줄)', () => {
+  for (const doc of [
+    docOf([{ id: 'a', due: '2026-10-01', stepId: 1 }], { steps: { 1: stepSt('done'), 4: stepSt('todo', '2026-11-28') } }),
+    docOf([]),
+    docOf([{ id: 'a', due: '2026-09-01' }], { steps: { 4: stepSt('doing', '2026-10-20') } }),
+  ]) {
+    const s = summaryOf(STEPS, doc, TODAY);
+    assert.deepEqual(firstGuest(STEPS, doc, TODAY), { finish: s.finish, dday: s.dday });
+  }
+  assert.deepEqual(firstGuest([], docOf([]), TODAY), { finish: null, dday: null });
 });

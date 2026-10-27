@@ -17,9 +17,11 @@ import { byDue, dateParts, prepareAdd, progressText, relDay, type CardDef, type 
  * 목록 = 첫 줄 「＋ 할 일 추가」 → 안 끝난 일(마감 이른 순, 세부 항목은 부모 밑) → 「끝낸 일 n개」(접음).
  * 할 일 줄은 홈 · 단계 창과 같은 TaskRow(쉬운 모양 simple) — 쓰기는 기존 /api/progress/mutate 그대로(Todoist 동기화도 같은 길).
  */
-export function TaskCard({ card, cards, tasks, summary, steps, today, open, onToggleOpen, hero = false }: {
+export function TaskCard({ card, cards, tasks, summary, steps, today, open, onToggleOpen, hero = false, anchorId }: {
   card: CardDef; cards: CardDef[]; tasks: TaskItem[]; summary: CardSummary; steps: StepRef[]; today: string;
   open: boolean; onToggleOpen: () => void;
+  /** 달력에서 이 카드로 올 때 찾아 내려오는 id */
+  anchorId?: string;
   /** 그 탭에서 가장 급한 카드 하나: 머리를 청록 면(hero) + 흰 글자로(DESIGN.md 2.2 · 8.1.2) */
   hero?: boolean;
 }) {
@@ -43,7 +45,7 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
   );
 
   return (
-    <Card as="section" aria-labelledby={`${uid}-t`}>
+    <Card as="section" aria-labelledby={`${uid}-t`} id={anchorId} className="scroll-mt-32">
       <h3>
       <button type="button" aria-expanded={open} aria-controls={`${uid}-list`} onClick={onToggleOpen}
         className={`flex w-full items-center gap-3 py-4 pl-4 pr-2 text-left transition-colors ${hero ? 'bg-hero text-on-hero hover:bg-accent-hover' : 'hover:bg-sunken/60'}`}>
@@ -52,8 +54,8 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
           <span id={`${uid}-t`} className={`block text-lg font-bold ${hero ? 'text-on-hero' : 'text-ink'}`}>{card.title}</span>
           {card.sub && <span className={`mt-0.5 block text-sm font-normal ${hero ? 'text-hero-sub' : 'text-ink-soft'}`}>{card.sub}</span>}
           <span className={`mt-1 flex flex-wrap items-center gap-x-3 text-sm font-normal ${hero ? 'text-hero-sub' : 'text-muted'}`}>
+            {/* 「일주일 안에 할 일 n개」는 탭 맨 위 「이번 주 꼭 할 일」이 말하므로 카드 머리에는 다시 쓰지 않는다 */}
             <span>{progressText(summary)}</span>
-            {summary.soon > 0 && <span className={`font-bold ${hero ? 'text-on-hero' : 'text-ink'}`}>일주일 안에 할 일 {summary.soon}개</span>}
           </span>
         </span>
         <Deadline summary={summary} today={today} hero={hero} />

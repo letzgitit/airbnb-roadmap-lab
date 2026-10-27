@@ -4,7 +4,7 @@
 import type { PhotoView } from '@/lib/core/photos';
 import type { ProgressDoc, PropertyItem, QuestionItem, RefItem, TaskItem, TaskKind, UpdateItem } from '@/lib/core/types';
 
-export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts' | 'news';
+export type TabId = 'docs' | 'interior' | 'photos' | 'airbnb' | 'contacts' | 'news' | 'calendar';
 export const TABS: { id: TabId; label: string }[] = [
   { id: 'docs', label: '서류' },
   { id: 'interior', label: '인테리어' },
@@ -12,6 +12,7 @@ export const TABS: { id: TabId; label: string }[] = [
   { id: 'airbnb', label: '에어비앤비' },
   { id: 'contacts', label: '연락처' },
   { id: 'news', label: '뉴스' },
+  { id: 'calendar', label: '달력' },
 ];
 
 // ── 뉴스: 사이트에 이미 있는 두 자료(민박업 규정 소식 content/updates.json · 단계별 참고 자료 refs — 고정 + 6시간마다 자동 수집)를 한 목록으로 ──
@@ -75,19 +76,20 @@ export function newsGroups(updates: UpdateItem[], refs: RefItem[]): { policy: Ne
  * - kind: 이 할 일 종류면 (앞 카드 낱말에 안 걸렸을 때) 이 카드로.
  * - fixedWords: 고정 일정(집 정보 「고정 · 」 줄) 설명에 이 낱말이 있으면 그 날을 카드 마감으로.
  * - sub: 카드 제목 밑 한 줄 설명.
+ * - short: 달력 칸에 쓰는 짧은 이름(없으면 title).
  */
 export interface CardDef {
   id: string; title: string; steps: number[]; addStep: number;
-  match?: RegExp; prefix?: string; kind?: TaskKind; fixedWords?: string[]; sub?: string;
+  match?: RegExp; prefix?: string; kind?: TaskKind; fixedWords?: string[]; sub?: string; short?: string;
 }
 
 // ── 서류: 단계로 고른다 ──
 export const DOC_CARDS: CardDef[] = [
   { id: 'move-in', title: '전입신고', steps: [4], addStep: 4, fixedWords: ['전입'] },
-  { id: 'register', title: '외도민 등록 서류', steps: [5, 9], addStep: 9, fixedWords: ['등록 신청', '신청', '접수'], sub: '구청에 내는 서류' },
+  { id: 'register', title: '외도민 등록 서류', short: '등록 서류', steps: [5, 9], addStep: 9, fixedWords: ['등록 신청', '신청', '접수'], sub: '구청에 내는 서류' },
   { id: 'safety', title: '안전 설비', steps: [8], addStep: 8, sub: '소화기 · 화재감지기 등 꼭 살 것' },
   { id: 'inspect', title: '현장 실사', steps: [12], addStep: 12, sub: '구청에서 집을 보러 오는 날' },
-  { id: 'biz', title: '사업자 등록', steps: [13], addStep: 13, sub: '세무서에 하는 신고' },
+  { id: 'biz', title: '사업자 등록', short: '사업자', steps: [13], addStep: 13, sub: '세무서에 하는 신고' },
 ];
 /** 서류 탭 맨 아래 「끝난 일」로 접어 두는 단계(집 고르기 · 구청 확인 · 계약) */
 export const DONE_STEPS = [1, 2, 3];
@@ -98,21 +100,21 @@ const DOOR = /(^|[\s:·,(\]])문(?=$|[\s:·,)]|짝|고리|틀)|현관문|중문|
 // ── 인테리어: 6 · 7단계 할 일을 낱말로 나눈다(위 카드부터 먼저 고른다) ──
 export const INTERIOR_CARDS: CardDef[] = [
   { id: 'bath', title: '욕실', steps: [6, 7], addStep: 7, prefix: '욕실', match: /욕실|화장실|세면|변기|샤워|수전|욕조|줄눈|타일/ },
-  { id: 'wall', title: '도배 · 장판 · 문', steps: [6, 7], addStep: 7, prefix: '도배 · 장판', match: new RegExp(`도배|장판|벽지|페인트|몰딩|바닥재|${DOOR.source}`) },
+  { id: 'wall', title: '도배 · 장판 · 문', short: '도배', steps: [6, 7], addStep: 7, prefix: '도배 · 장판', match: new RegExp(`도배|장판|벽지|페인트|몰딩|바닥재|${DOOR.source}`) },
   { id: 'aircon', title: '에어컨', steps: [6, 7], addStep: 6, prefix: '에어컨', match: /에어컨|냉난방|실외기/ },
   { id: 'light', title: '조명', steps: [6, 7], addStep: 7, prefix: '조명', match: /조명|스위치|콘센트|전등|등기구|전구|천장등|벽등|램프/ },
   { id: 'buy', title: '살 것', steps: [6, 7], addStep: 6, prefix: '살 것', kind: '구매', sub: '가구 · 가전 · 커튼 같은 구매 목록',
     match: /구매|주문|구입|사기|살 것|가구|침대|매트리스|소파|식탁|의자|커튼|침구|이불|냉장고|세탁기|선반|거울/ },
-  { id: 'other', title: '그 밖에', steps: [6, 7], addStep: 7 },
+  { id: 'other', title: '그 밖에', short: '인테리어', steps: [6, 7], addStep: 7 },
 ];
 
 // ── 에어비앤비 준비: 10 · 11 · 14단계 할 일을 낱말로 ──
 export const AIRBNB_CARDS: CardDef[] = [
-  { id: 'listing', title: '숙소 이름 · 가격 정하기', steps: [10, 11, 14], addStep: 11, prefix: '숙소', match: /이름|가격|요금|리스팅|숙소 설명|소개글/ },
-  { id: 'guide', title: '손님 안내서', steps: [10, 11, 14], addStep: 11, prefix: '안내서', sub: '와이파이 · 체크인 방법 같은 것', match: /안내|가이드|매뉴얼|하우스 ?룰|체크인|체크아웃|와이파이/ },
-  { id: 'supplies', title: '소모품 사기', steps: [10, 11, 14], addStep: 14, prefix: '소모품', kind: '구매', sub: '휴지 · 수건 같은 생활용품',
+  { id: 'listing', title: '숙소 이름 · 가격 정하기', short: '숙소 이름', steps: [10, 11, 14], addStep: 11, prefix: '숙소', match: /이름|가격|요금|리스팅|숙소 설명|소개글/ },
+  { id: 'guide', title: '손님 안내서', short: '안내서', steps: [10, 11, 14], addStep: 11, prefix: '안내서', sub: '와이파이 · 체크인 방법 같은 것', match: /안내|가이드|매뉴얼|하우스 ?룰|체크인|체크아웃|와이파이/ },
+  { id: 'supplies', title: '소모품 사기', short: '소모품', steps: [10, 11, 14], addStep: 14, prefix: '소모품', kind: '구매', sub: '휴지 · 수건 같은 생활용품',
     match: /휴지|수건|소모품|생활용품|어메니티|샴푸|린스|바디|세제|비누|칫솔|치약|봉투|슬리퍼|비품/ },
-  { id: 'other', title: '그 밖에', steps: [10, 11, 14], addStep: 10 },
+  { id: 'other', title: '그 밖에', short: '에어비앤비', steps: [10, 11, 14], addStep: 10 },
 ];
 
 const live = (t: TaskItem) => !t.deletedAt;
@@ -247,6 +249,55 @@ export function tabCounts(groups: Record<string, TaskItem[]>, today: string): { 
     }
   }
   return { late, soon };
+}
+
+// ── 이번 주 꼭 할 일: 서류 · 인테리어 · 에어비앤비 탭 맨 위 묶음 ──
+export const WEEK_MAX = 5;
+/**
+ * 그 탭의 안 끝난 할 일 중 기한 지남 + 오늘 ~ 6일 뒤 마감(세부 항목 포함). 마감 이른 순(= 기한 지난 것이 먼저), 같으면 만든 순.
+ * list = 앞에서 WEEK_MAX 개, total = 모두. isDone = 방금 체크한 줄이 잠깐 제자리를 지키게(useStickyDone).
+ */
+export function weekTasks(groups: Record<string, TaskItem[]>, today: string, isDone: (t: TaskItem) => boolean = (t) => t.done): { list: TaskItem[]; total: number } {
+  const all = Object.values(groups).flat().filter((t) => !isDone(t) && t.due && daysBetween(today, t.due) <= 6).sort(byDue);
+  return { list: all.slice(0, WEEK_MAX), total: all.length };
+}
+
+// ── 달력 탭: 카드마다 마감 날짜 하나 ──
+export const CARD_TABS: { tab: TabId; label: string; cards: CardDef[] }[] = [
+  { tab: 'docs', label: '서류', cards: DOC_CARDS },
+  { tab: 'interior', label: '인테리어', cards: INTERIOR_CARDS },
+  { tab: 'airbnb', label: '에어비앤비', cards: AIRBNB_CARDS },
+];
+export interface CalendarMark { date: string; tab: TabId; tabLabel: string; cardId: string; title: string; short: string; finished: boolean; late: boolean }
+/** 서류 · 인테리어 · 에어비앤비 카드 중 마감 날짜가 있는 것(카드 머리의 큰 날짜와 같은 값). 날짜순 → 탭 순서 → 카드 정의 순서 */
+export function calendarMarks(doc: Pick<ProgressDoc, 'tasks' | 'steps' | 'property'>, today: string): CalendarMark[] {
+  const out: CalendarMark[] = [];
+  for (const { tab, label, cards } of CARD_TABS) {
+    const groups = tasksByCard(doc, cards);
+    for (const c of cards) {
+      const s = summarize(c, groups[c.id], doc, today);
+      if (!s.deadline) continue;
+      out.push({ date: s.deadline, tab, tabLabel: label, cardId: c.id, title: c.title, short: c.short ?? c.title, finished: s.finished, late: !s.finished && s.deadline < today });
+    }
+  }
+  // 정렬은 안정 정렬이라 같은 날이면 넣은 순서(탭 · 카드 순서)가 남는다
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const addDays = (iso: string, n: number) => { const d = toDate(iso); d.setDate(d.getDate() + n); return isoOf(d); };
+/** 그 달 1일(「2026-10-28」 → 「2026-10-01」) */
+export const monthOf = (iso: string) => `${iso.slice(0, 7)}-01`;
+/** 달 옮기기: 1일 기준으로 n달 */
+export const addMonths = (first: string, n: number) => { const d = toDate(first); d.setMonth(d.getMonth() + n, 1); return isoOf(d); };
+/** 한 달 달력의 주(월요일 시작 — 예전 홈 달력과 같은 기준). 주마다 날짜 일곱 개, 앞뒤 달 날짜도 채운다 */
+export function monthWeeks(first: string): string[][] {
+  const d = toDate(first);
+  const last = isoOf(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  let mon = addDays(first, -((d.getDay() + 6) % 7));
+  const weeks: string[][] = [];
+  for (; mon <= last; mon = addDays(mon, 7)) weeks.push(Array.from({ length: 7 }, (_, i) => addDays(mon, i)));
+  return weeks;
 }
 
 // ── 구청에 물어볼 것: 받는 사람에 「구청」이 든 질문 중 답 기다림 ──

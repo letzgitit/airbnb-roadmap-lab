@@ -4,7 +4,61 @@ import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
   newsGroups, progressText, relDay, shortSource, sortCards, summarize, tasksByCard,
+  TABS, addMonths, calendarMarks, monthWeeks, weekTasks,
 } from './home-model.ts';
+
+test('탭 일곱 개, 달력이 맨 끝', () => {
+  assert.equal(TABS.length, 7);
+  assert.equal(TABS[6].id, 'calendar');
+});
+
+test('이번 주 꼭 할 일: 기한 지남 + 6일 뒤까지, 마감 이른 순 5개, 끝낸 일 · 날짜 없는 일은 빠짐', () => {
+  const today = '2026-10-28';
+  const groups = {
+    a: [T('a1', 4, '하나', { due: '2026-11-03' }), T('a2', 4, '둘', { due: '2026-11-04' }), T('a3', 4, '셋', { due: '2026-10-20' })],
+    b: [T('b1', 8, '넷', { due: '2026-10-28' }), T('b2', 8, '다섯', { due: '2026-10-30', done: true }), T('b3', 8, '여섯'),
+      T('b4', 8, '일곱', { due: '2026-10-29' }), T('b5', 8, '여덟', { due: '2026-10-31' }), T('b6', 8, '아홉', { due: '2026-10-25' })],
+  };
+  const r = weekTasks(groups, today);
+  assert.equal(r.total, 6);
+  assert.deepEqual(r.list.map((t: { id: string }) => t.id), ['a3', 'b6', 'b1', 'b4', 'b5']);
+  // 방금 체크한 일(isDone 이 아직 false)은 자리를 지킨다
+  const sticky = weekTasks({ b: [T('b2', 8, '다섯', { due: '2026-10-30', done: true })] }, today, () => false);
+  assert.equal(sticky.total, 1);
+});
+
+test('달력: 카드 마감 날짜만(카드 머리와 같은 값), 짧은 이름 · 기한 지남 · 다 한 카드', () => {
+  const today = '2026-10-28';
+  const doc = {
+    tasks: Object.fromEntries([
+      T('x', 7, '욕실 줄눈', { due: '2026-11-12' }),
+      T('y', 7, '도배 견적', { due: '2026-10-20' }),
+      T('z', 11, '숙소 이름 정하기', { due: '2026-11-12' }),
+      T('w', 6, '조명 사기', { due: '2026-11-01', done: true }),
+    ].map((t: { id: string }) => [t.id, t])),
+    steps: { 9: { status: 'todo', targetDate: '2026-11-09' }, 4: { status: 'done', targetDate: '2026-10-27' } },
+    property: {},
+  };
+  const marks = calendarMarks(doc as never, today);
+  const brief = marks.map((m) => `${m.date} ${m.tab} ${m.short}${m.late ? ' 지남' : ''}${m.finished ? ' 끝' : ''}`);
+  assert.deepEqual(brief, [
+    '2026-10-20 interior 도배 지남',
+    '2026-10-27 docs 전입신고 끝',
+    '2026-11-09 docs 등록 서류',
+    '2026-11-12 interior 욕실',
+    '2026-11-12 airbnb 숙소 이름',
+  ]);
+});
+
+test('달력 주: 월요일 시작, 앞뒤 달 날짜로 채움', () => {
+  const w = monthWeeks('2026-10-01');
+  assert.equal(w.length, 5);
+  assert.equal(w[0][0], '2026-09-28');
+  assert.equal(w[4][6], '2026-11-01');
+  assert.equal(monthWeeks('2026-11-01')[0][0], '2026-10-26');
+  assert.equal(addMonths('2026-12-01', 1), '2027-01-01');
+  assert.equal(addMonths('2026-01-01', -1), '2025-12-01');
+});
 
 const T = (id: string, stepId: number, text: string, extra: Record<string, unknown> = {}) => ({
   id, stepId, text, due: null, done: false, doneBy: null, doneAt: null, version: 1, createdAt: `2026-10-01T00:00:0${id.length}Z`,
