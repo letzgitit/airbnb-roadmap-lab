@@ -159,6 +159,7 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
         deletedAt: null, deletedBy: null,
         ...(op.kind ? { kind: op.kind } : {}),
         ...(op.note ? { note: op.note } : {}),
+        ...(op.guide ? { guide: op.guide } : {}),
         ...(op.owner ? { owner: op.owner } : {}),
         ...(op.start ? { start: op.start } : {}),
         ...(op.parentId ? { parentId: op.parentId } : {}),
@@ -205,6 +206,7 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
       }
       // 자세한 내용을 비우거나 null 로 보내면 키를 지운다(없으면 저장하지 않는 것과 같게)
       if (op.patch.note !== undefined && !op.patch.note) delete next.note;
+      if (op.patch.guide !== undefined && !op.patch.guide) delete next.guide;
       if (op.patch.owner === null) delete next.owner;
       if (op.patch.done !== undefined && op.patch.done !== cur.done) {
         next.doneBy = op.patch.done ? actor.name : null;

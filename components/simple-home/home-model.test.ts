@@ -5,7 +5,33 @@ import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
   progressText, relDay, sortCards, summarize, tasksByCard, urgentCard,
   TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos, docGroups,
+  dayCounts, dayCellText, dayTasks,
 } from './home-model.ts';
+
+test('달력 날짜별 할 일: 개수 · 칸 글자 · 그날 마감 · 그날 시작(지운 것 빼고, 세부 항목 포함)', () => {
+  const tasks = Object.fromEntries([
+    T('a', 4, '전입 서류 챙기기', { due: '2026-10-28' }),
+    T('bb', 4, '세부', { due: '2026-10-28', parentId: 'a', done: true }),
+    T('c', 7, '도배 시작', { start: '2026-10-28', due: '2026-11-02' }),
+    T('d', 7, '지운 일', { due: '2026-10-28', deletedAt: 'x' }),
+    T('e', 7, '지난 일', { due: '2026-10-20' }),
+    T('f', 7, '다 한 날', { due: '2026-10-21', done: true }),
+    T('g', 7, '하루짜리', { start: '2026-10-28', due: '2026-10-28' }),
+  ].map((t: { id: string }) => [t.id, t]));
+  const doc = { tasks } as never;
+  const counts = dayCounts(doc);
+  assert.deepEqual(counts.get('2026-10-28'), { open: 2, done: 1 });
+  assert.equal(counts.get('2026-11-02')?.open, 1);
+  const today = '2026-10-28';
+  assert.deepEqual(dayCellText(counts.get('2026-10-28'), '2026-10-28', today), { text: '할 일 2', tone: 'open' });
+  assert.deepEqual(dayCellText(counts.get('2026-10-20'), '2026-10-20', today), { text: '할 일 1', tone: 'late' });
+  assert.deepEqual(dayCellText(counts.get('2026-10-21'), '2026-10-21', today), { text: '다 함', tone: 'done' });
+  assert.equal(dayCellText(undefined, '2026-10-22', today), null);
+  const day = dayTasks(doc, '2026-10-28');
+  assert.deepEqual(day.due.map((t: { id: string }) => t.id), ['a', 'g', 'bb']);
+  assert.deepEqual(day.starting.map((t: { id: string }) => t.id), ['c']); // 하루짜리(g)는 마감 쪽에만
+  assert.deepEqual(dayTasks(doc, '2026-10-29'), { due: [], starting: [] });
+});
 
 test('문의 필요만 보기: 문의 할 일 + 그 세부 항목 + 그 부모만', () => {
   const list = [

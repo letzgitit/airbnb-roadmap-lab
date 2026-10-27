@@ -1,58 +1,61 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { Step } from '@/lib/core/types';
+import type { ProgressDoc, Step, TaskItem } from '@/lib/core/types';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { firstGuest } from '@/components/home/summary-data';
 import { FIXED_DAY0, toTimelineSteps } from '@/components/home/timeline-config';
 import { textBtn } from '@/components/ui/buttonCls';
-import { Card, cardRowCls, softCardCls } from '@/components/ui/Card';
+import { Card, softCardCls } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/IconButton';
-import { longDate } from '@/components/tasks/task-view';
-import { addMonths, calendarMarks, dateParts, monthOf, monthWeeks, startMonth, type CalendarMark, type TabId } from './home-model';
+import { TaskRow } from '@/components/tasks/TaskRow';
+import { longDate, treeRows } from '@/components/tasks/task-view';
+import { useEditingSet } from '@/components/tasks/useTaskList';
+import type { StepRef } from '@/components/tasks/TaskComposer';
+import { addMonths, dateParts, dayCellText, dayCounts, dayTasks, daysBetween, monthOf, monthWeeks, type DayCount } from './home-model';
 
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
-/** 칸 하나에 이름을 몇 개까지(나머지는 이름 뒤 「+n」) */
-const PER_CELL = 1;
 
 /**
- * 달력 탭: 맨 위 「첫 손님까지」 옅은 회색 카드(예전 홈 첫 손님 카드와 같은 계산) → 한 달 달력.
- * 처음 여는 달 = 이번 달, 이번 달에 마감이 없으면 가장 가까운 마감이 있는 달(startMonth).
- * 칸에는 서류 · 인테리어 · 에어비앤비 카드의 마감 날짜만 — 카드 짧은 이름 하나(칸 폭에 안 들어가면 두 줄까지, 잘라 내지 않음),
- * 더 있으면 「에어컨 +1」. 기한 지남 = 빨강, 다 한 카드 = 흐린 글자.
- * 마감이 있는 날을 누르면 달력 밑에 그날 마감인 카드 목록(화면 안으로 끌어옴) → 누르면 그 탭으로 가서 그 카드를 펼친다(onOpenCard).
- * 오늘 숫자 = 검정 동그라미 면 + 흰 숫자(다크는 반대), 고른 날 = ink 2px 고리.
+ * 달력 탭: 맨 위 「첫 손님까지」 옅은 회색 카드(예전 홈 첫 손님 카드와 같은 계산) → 한 달 달력 → 고른 날의 할 일.
+ * - 처음 열면 이번 달 · 오늘을 고른 채. 오늘 칸 = 칸 전체 옅은 면(sunken) + 검정 동그라미 숫자 + 「오늘」 글자.
+ * - 칸에는 그날 마감인 할 일 개수 「할 일 3」(12px — 이 사이트에서 14px 아래가 허용되는 유일한 곳), 지난 날에 안 끝난 일이 있으면 빨강,
+ *   다 끝냈으면 흐린 「다 함」. 고른 날 = 칸 둘레 ink 2px.
+ * - 어느 날이든 누를 수 있다 → 달력 밑에 그날 마감인 할 일 줄(TaskRow 쉬운 모양 그대로 — 체크 · 고치기 · 지우기 · 참고)과
+ *   「이날 시작」 묶음(그날부터 하는 일). 없으면 「이날 할 일 없음」.
  */
-export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today: string; onOpenCard: (tab: TabId, cardId: string) => void }) {
+export function CalendarTab({ steps, rowSteps, today }: { steps: Step[]; rowSteps: StepRef[]; today: string }) {
   const { doc } = useProgress();
   const uid = useId();
-  const marks = useMemo(() => (doc ? calendarMarks(doc, today) : []), [doc, today]);
-  const [month, setMonth] = useState(() => startMonth(marks, today));
-  const [picked, setPicked] = useState<string | null>(null);
+  const counts = useMemo(() => (doc ? dayCounts(doc) : new Map<string, DayCount>()), [doc]);
+  const [month, setMonth] = useState(() => monthOf(today));
+  const [picked, setPicked] = useState<string>(today);
   const dayRef = useRef<HTMLDivElement>(null);
-  // 날을 고르면 그날 목록이 다 보이게
-  useEffect(() => { if (picked) dayRef.current?.scrollIntoView({ block: 'nearest' }); }, [picked]);
+  const userPicked = useRef(false);
+  // 사람이 날을 고르면 그날 목록이 보이게(처음 열 때는 끌어오지 않는다)
+  useEffect(() => {
+    if (userPicked.current) dayRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [picked]);
   const tl = useMemo(() => toTimelineSteps(steps), [steps]);
   const guest = useMemo(() => (doc ? firstGuest(tl, doc, today, FIXED_DAY0) : null), [tl, doc, today]);
   if (!doc) return null;
 
-  const byDay = new Map<string, CalendarMark[]>();
-  for (const m of marks) byDay.set(m.date, [...(byDay.get(m.date) ?? []), m]);
   const thisMonth = monthOf(today);
   const [y, mo] = month.split('-').map(Number);
   const weeks = monthWeeks(month);
-  const pickedList = picked ? byDay.get(picked) ?? [] : [];
+  const pick = (d: string) => { userPicked.current = true; setPicked(d); if (monthOf(d) !== month) setMonth(monthOf(d)); };
 
   return (
     <div className="flex flex-col gap-5 pt-5">
       <GuestLine guest={guest} />
 
-      <Card as="section" aria-label="마감 달력">
+      <Card as="section" aria-label="할 일 달력">
         <div className="flex items-center gap-1 border-b border-line px-2">
           <IconButton label="이전 달" icon="fa-chevron-left" onClick={() => setMonth((v) => addMonths(v, -1))} />
           <h3 className="min-w-0 flex-1 text-center text-lg font-semibold text-ink" aria-live="polite">{y}년 {mo}월</h3>
           <IconButton label="다음 달" icon="fa-chevron-right" onClick={() => setMonth((v) => addMonths(v, 1))} />
-          <button type="button" className={`${textBtn} mx-0 px-3 ${month === thisMonth ? 'invisible' : ''}`} onClick={() => setMonth(thisMonth)}>오늘</button>
+          <button type="button" className={`${textBtn} mx-0 px-3 ${month === thisMonth && picked === today ? 'invisible' : ''}`}
+            onClick={() => { setMonth(thisMonth); pick(today); }}>오늘</button>
         </div>
         <div className="grid grid-cols-7 border-b border-line" aria-hidden>
           {DOW.map((d) => <span key={d} className="py-1.5 text-center text-sm font-normal text-muted">{d}</span>)}
@@ -61,37 +64,34 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
           {weeks.map((week) => (
             <div key={week[0]} className="grid grid-cols-7 border-b border-line last:border-b-0">
               {week.map((d, i) => {
-                const list = byDay.get(d) ?? [];
                 const inMonth = d.slice(0, 7) === month.slice(0, 7);
                 const isToday = d === today;
                 const on = d === picked;
+                const c = counts.get(d);
+                const cell = dayCellText(c, d, today);
                 const { wd } = dateParts(d);
-                const label = `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일 ${wd}요일${isToday ? ' 오늘' : ''}`
-                  + (list.length ? `, 마감 ${list.map((m) => m.title).join(', ')}` : '');
-                const body = (
-                  <>
-                    <span className="flex h-8 items-center justify-center">
-                      <span className={`flex size-7 items-center justify-center rounded-full text-sm tabular-nums ${on ? 'ring-2 ring-inset ring-ink' : ''} ${isToday ? 'bg-ink font-bold text-surface' : inMonth ? 'font-semibold text-ink' : 'font-normal text-muted'}`}>
+                const say = !cell ? '' : cell.tone === 'done' ? ', 할 일 다 함' : `, 할 일 ${c?.open}개${cell.tone === 'late' ? ' 기한 지남' : ''}`;
+                const label = `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일 ${wd}요일${isToday ? ', 오늘' : ''}${say}`;
+                const face = isToday ? 'bg-sunken' : inMonth ? 'hover:bg-sunken' : 'bg-page/50 hover:bg-sunken';
+                const ring = on ? 'after:pointer-events-none after:absolute after:inset-0 after:ring-2 after:ring-inset after:ring-ink' : '';
+                return (
+                  <button key={d} type="button" aria-pressed={on} aria-label={label} aria-controls={`${uid}-day`} onClick={() => pick(d)}
+                    className={`relative flex min-h-16 min-w-0 flex-col items-center text-center transition-colors focus-visible:-outline-offset-2 ${i > 0 ? 'border-l border-line' : ''} ${face} ${ring}`}>
+                    <span className="flex h-9 items-center justify-center">
+                      <span className={`flex size-7 items-center justify-center rounded-full text-sm tabular-nums ${isToday ? 'bg-ink font-bold text-surface' : inMonth ? 'font-semibold text-ink' : 'font-normal text-muted'}`}>
                         {Number(d.slice(8))}
                       </span>
                     </span>
-                    <span className="flex min-w-0 flex-col gap-0.5 px-0.5 pb-1.5" aria-hidden>
-                      {list.slice(0, PER_CELL).map((m) => (
-                        <span key={`${m.tab}-${m.cardId}`}
-                          className={`line-clamp-2 block break-keep text-[12px] leading-tight ${m.late ? 'font-bold text-danger-ink' : m.finished ? 'font-normal text-muted line-through' : 'font-semibold text-ink'}`}>
-                          {m.short}
-                          {list.length > PER_CELL && <span className="whitespace-nowrap font-normal text-muted no-underline"> +{list.length - PER_CELL}</span>}
+                    <span className="flex min-w-0 flex-col items-center gap-0.5 px-0.5 pb-1.5 text-[12px] leading-tight" aria-hidden>
+                      {isToday && <span className="font-bold text-ink">오늘</span>}
+                      {cell && (
+                        <span className={`whitespace-nowrap tabular-nums ${cell.tone === 'late' ? 'font-bold text-danger-ink' : cell.tone === 'done' ? 'font-normal text-muted' : 'font-semibold text-ink'}`}>
+                          {cell.text}
                         </span>
-                      ))}
+                      )}
                     </span>
-                  </>
+                  </button>
                 );
-                const cls = `flex min-h-16 min-w-0 flex-col text-left ${i > 0 ? 'border-l border-line' : ''} ${inMonth ? '' : 'bg-page/50'}`;
-                // 마감이 있는 날만 누를 수 있다
-                return list.length > 0
-                  ? <button key={d} type="button" aria-pressed={on} aria-label={label} aria-controls={`${uid}-day`} onClick={() => setPicked(on ? null : d)}
-                      className={`${cls} transition-colors hover:bg-sunken focus-visible:-outline-offset-2`}>{body}</button>
-                  : <div key={d} className={cls}><span className="sr-only">{label}</span>{body}</div>;
               })}
             </div>
           ))}
@@ -99,35 +99,48 @@ export function CalendarTab({ steps, today, onOpenCard }: { steps: Step[]; today
       </Card>
 
       <div id={`${uid}-day`} ref={dayRef} aria-live="polite" className="scroll-mb-20">
-        {picked ? (
-          <Card as="section" aria-labelledby={`${uid}-dh`}>
-            <h3 id={`${uid}-dh`} className="px-4 pt-3 pb-2 text-base font-bold text-ink">
-              {Number(picked.slice(5, 7))}월 {Number(picked.slice(8))}일 ({dateParts(picked).wd}) 마감
-            </h3>
-            <ul className="border-t border-line">
-              {pickedList.map((m) => (
-                <li key={`${m.tab}-${m.cardId}`} className={cardRowCls}>
-                  <button type="button" onClick={() => onOpenCard(m.tab, m.cardId)}
-                    className="flex min-h-14 w-full items-center gap-3 py-3 pl-4 pr-2 text-left transition-colors hover:bg-sunken focus-visible:-outline-offset-2">
-                    <span className="min-w-0 flex-1">
-                      <span className={`block text-base font-semibold ${m.finished ? 'text-muted line-through' : 'text-ink'}`}>{m.title}</span>
-                      <span className="mt-0.5 flex flex-wrap gap-x-3 text-sm font-normal text-muted">
-                        <span>{m.tabLabel}</span>
-                        {m.late && <span className="font-bold text-danger-ink">기한 지남</span>}
-                        {m.finished && <span>다 했어요</span>}
-                      </span>
-                    </span>
-                    <span className="flex size-11 shrink-0 items-center justify-center text-muted" aria-hidden><i className="fas fa-chevron-right text-sm" /></span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ) : (
-          <p className="text-sm font-normal text-muted">글자가 적힌 날을 누르면 그날까지 할 일이 나와요.</p>
-        )}
+        <DayList key={picked} doc={doc} date={picked} today={today} steps={rowSteps} />
       </div>
     </div>
+  );
+}
+
+/** 고른 날 카드: 머리 「10월 28일 (수)」 + 「오늘」 · 「D-3」 · 「2일 전」 → 그날 마감인 할 일 줄 → 「이날 시작」 묶음 */
+function DayList({ doc, date, today, steps }: { doc: ProgressDoc; date: string; today: string; steps: StepRef[] }) {
+  const uid = useId();
+  const { reportEdit } = useEditingSet();
+  const { due, starting } = useMemo(() => dayTasks(doc, date), [doc, date]);
+  const n = daysBetween(today, date);
+  const rel = n === 0 ? '오늘' : n > 0 ? `D-${n}` : `${-n}일 전`;
+  const rows = (list: TaskItem[]) => treeRows(list, doc.tasks).map((r) => (
+    <TaskRow key={r.item.id} t={r.item} steps={steps} listStepId={null} scope="page" inset simple depth={r.depth}
+      parentTitle={r.parentTitle} onEditChange={reportEdit} onToggle={() => undefined} onGone={() => undefined} />
+  ));
+  return (
+    <Card as="section" aria-labelledby={`${uid}-h`}>
+      <div className="flex items-baseline justify-between gap-3 px-5 pb-1 pt-4">
+        <h3 id={`${uid}-h`} className="text-xl font-semibold text-ink">{longDate(date).replace(/\((.)\)$/, ' ($1)')}</h3>
+        <span className={`text-base tabular-nums ${n === 0 ? 'font-semibold text-ink' : 'font-normal text-muted'}`}>{rel}</span>
+      </div>
+      {due.length === 0 && starting.length === 0 ? (
+        <p className="px-5 pb-5 pt-2 text-base font-normal text-muted">이날 할 일 없음</p>
+      ) : (
+        <>
+          {due.length > 0 && (
+            <>
+              <p className="px-5 pt-1 text-sm font-semibold text-muted">이날까지 {due.length}개</p>
+              <ul className="px-5 pb-1">{rows(due)}</ul>
+            </>
+          )}
+          {starting.length > 0 && (
+            <>
+              <p className={`px-5 text-sm font-semibold text-muted ${due.length ? 'border-t border-line pt-4' : 'pt-1'}`}>이날 시작 {starting.length}개</p>
+              <ul className="px-5 pb-1">{rows(starting)}</ul>
+            </>
+          )}
+        </>
+      )}
+    </Card>
   );
 }
 

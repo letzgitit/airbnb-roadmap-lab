@@ -287,6 +287,38 @@ export function startMonth(marks: Pick<CalendarMark, 'date'>[], today: string): 
   return monthOf(near.date);
 }
 
+// ── 달력 탭: 날짜마다 할 일(2026-10-28 — 카드 이름 대신 그날 할 일 개수, 날을 누르면 그날 할 일 줄이 바로) ──
+export interface DayCount { open: number; done: number }
+/** 마감일별 할 일 개수(지우지 않은 모든 할 일 · 세부 항목 포함). open = 안 끝난 것, done = 끝낸 것 */
+export function dayCounts(doc: Pick<ProgressDoc, 'tasks'>): Map<string, DayCount> {
+  const out = new Map<string, DayCount>();
+  for (const t of Object.values(doc.tasks)) {
+    if (t.deletedAt || !t.due) continue;
+    const c = out.get(t.due) ?? { open: 0, done: 0 };
+    if (t.done) c.done += 1; else c.open += 1;
+    out.set(t.due, c);
+  }
+  return out;
+}
+/** 달력 칸 글자: 안 끝난 일이 있으면 「할 일 3」(지난 날이면 late), 다 끝냈으면 「다 함」, 없으면 null */
+export function dayCellText(c: DayCount | undefined, date: string, today: string): { text: string; tone: 'late' | 'open' | 'done' } | null {
+  if (!c) return null;
+  if (c.open > 0) return { text: `할 일 ${c.open}`, tone: date < today ? 'late' : 'open' };
+  if (c.done > 0) return { text: '다 함', tone: 'done' };
+  return null;
+}
+/**
+ * 고른 날의 할 일: due = 그날 마감(끝낸 것도 — 줄에서 체크를 풀 수 있게), starting = 그날 시작(언제부터)인데 마감은 다른 날.
+ * 둘 다 마감 이른 순 → 만든 순(체크해도 자리가 바뀌지 않게 끝냄 여부로 나누지 않는다).
+ */
+export function dayTasks(doc: Pick<ProgressDoc, 'tasks'>, date: string): { due: TaskItem[]; starting: TaskItem[] } {
+  const all = Object.values(doc.tasks).filter(live);
+  return {
+    due: all.filter((t) => t.due === date).sort(byDue),
+    starting: all.filter((t) => t.start === date && t.due !== date).sort(byDue),
+  };
+}
+
 const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const addDays = (iso: string, n: number) => { const d = toDate(iso); d.setDate(d.getDate() + n); return isoOf(d); };
 /** 그 달 1일(「2026-10-28」 → 「2026-10-01」) */

@@ -15,6 +15,7 @@ import { START_AFTER_DUE, taskErrorMessage } from './task-errors';
 import { longDate, PHASE_WORD, placeOf, placePatch, placeStep, spanDate, taskPhase } from './task-view';
 import { KindSelect, NoteField, OwnerSelect, SimpleWhenFields, type StepRef, type TaskOwner, type TaskWithNote } from './TaskComposer';
 import { TaskPhotos } from './TaskPhotos';
+import { GuideButton, GuideField } from './TaskGuide';
 import { usePhotos } from '@/components/progress/PhotosPanel';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { LineIcon } from '@/components/ui/LineIcon';
@@ -40,7 +41,7 @@ import { LineIcon } from '@/components/ui/LineIcon';
  *   고치는 폼은 제목 · 언제부터(선택) · 언제까지 · 문의 필요(종류 「문의」) · 메모만(종류 · 담당 · 넣을 곳은 숨김, 값은 그대로). 폼 안 「이 할 일 지우기」는 확인 창을 띄운다.
  *   보조 줄: 「10월 27일(화)까지」 · 「문의 필요」 안내 배지 · 「지금 할 때」. 남은 날 배지: 지남 = 경고(빨강 글자 옅은 면) · 3일 안 = 주의(노랑) · 그 밖 = 회색.
  */
-type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; place: string };
+type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; guide: string; place: string };
 
 export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, onEditChange, onToggle, onGone }: {
   t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
@@ -56,21 +57,22 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const [due, setDue] = useState('');
   const [kind, setKind] = useState<TaskKind | ''>('');
   const [note, setNote] = useState('');
+  const [guide, setGuide] = useState('');
   const [owner, setOwner] = useState<TaskOwner | ''>('');
   const [place, setPlace] = useState(placeOf(t));
   const [err, setErr] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [base, setBase] = useState(t.version);
-  const [orig, setOrig] = useState<Form>({ text: '', start: '', due: '', kind: '', owner: '', note: '', place: placeOf(t) });
+  const [orig, setOrig] = useState<Form>({ text: '', start: '', due: '', kind: '', owner: '', note: '', guide: '', place: placeOf(t) });
   const { busy, run } = useBusy();
   const textBtnRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const dl = dueLabel(t.due, todayStr());
   const dateText = spanDate(t.start, t.due) ?? dl?.date;
-  const dirty = ed.open && (text !== orig.text || start !== orig.start || due !== orig.due || kind !== orig.kind || note !== orig.note || owner !== orig.owner || place !== orig.place);
-  const fill = (o: Form) => { setText(o.text); setStart(o.start); setDue(o.due); setKind(o.kind); setOwner(o.owner); setNote(o.note); setPlace(o.place); setOrig(o); };
+  const dirty = ed.open && (text !== orig.text || start !== orig.start || due !== orig.due || kind !== orig.kind || note !== orig.note || guide !== orig.guide || owner !== orig.owner || place !== orig.place);
+  const fill = (o: Form) => { setText(o.text); setStart(o.start); setDue(o.due); setKind(o.kind); setOwner(o.owner); setNote(o.note); setGuide(o.guide); setPlace(o.place); setOrig(o); };
   const formOf = (c: Record<string, unknown>): Form => ({
-    text: String(c.text ?? ''), start: String(c.start ?? ''), due: String(c.due ?? ''), kind: (c.kind ?? '') as TaskKind | '', owner: (c.owner ?? '') as TaskOwner | '', note: String(c.note ?? ''),
+    text: String(c.text ?? ''), start: String(c.start ?? ''), due: String(c.due ?? ''), kind: (c.kind ?? '') as TaskKind | '', owner: (c.owner ?? '') as TaskOwner | '', note: String(c.note ?? ''), guide: String(c.guide ?? ''),
     place: placeOf({ stepId: typeof c.stepId === 'number' ? c.stepId : t.stepId, parentId: typeof c.parentId === 'string' ? c.parentId : null }),
   });
   const tasks = doc?.tasks ?? {};
@@ -120,7 +122,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const saveAsNew = () => {
     if (spanBad()) return;
     const where = place.startsWith('p:') ? { parentId: place.slice(2) } : { stepId: listStepId ?? placeStep(place, tasks) ?? t.stepId };
-    void run(() => send({ op: 'task.add', ...where, text, due: due || null, ...(start ? { start } : {}), ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(owner ? { owner } : {}) }, {
+    void run(() => send({ op: 'task.add', ...where, text, due: due || null, ...(start ? { start } : {}), ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(guide.trim() ? { guide: guide.trim() } : {}), ...(owner ? { owner } : {}) }, {
       quiet: true, onSuccess: () => { ed.stop(); onGone(); },
     }).then((r) => setErr(taskErrorMessage(r))));
   };
@@ -141,7 +143,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               text, due: due || null,
               ...(start !== orig.start ? { start: start || null } : {}),
               ...placePatch(orig.place, place),
-              ...(kind !== orig.kind ? { kind: kind || null } : {}), ...(note !== orig.note ? { note: note.trim() || null } : {}), ...(owner !== orig.owner ? { owner: owner || null } : {}),
+              ...(kind !== orig.kind ? { kind: kind || null } : {}), ...(note !== orig.note ? { note: note.trim() || null } : {}),
+              ...(guide !== orig.guide ? { guide: guide.trim() || null } : {}), ...(owner !== orig.owner ? { owner: owner || null } : {}),
             };
             void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch }, {
               quiet: true,
@@ -185,6 +188,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               </label>
             )}
             <NoteField value={note} onChange={setNote} />
+            {/* 참고(설명서): 접혀 있다가 펼쳐 쓰는 큰 칸(부부가 직접 고친다) */}
+            <GuideField value={guide} onChange={setGuide} />
             {/* 쉬운 모양: 메모 사진도 여기서 붙인다(바로 올라가고, 저장 단추와 상관없다) */}
             {simple && !deleted && <TaskPhotos taskId={t.id} stepId={t.stepId} />}
             {/* 메모 속 전화번호는 눌러서 바로 건다(메모 글은 그대로) */}
@@ -234,6 +239,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     const more = noteLines.includes('\n') || firstLine.length > 40 || photoN > 0;
     const hasMemo = !!noteLines || photoN > 0;
     const ask = t.kind === '문의';
+    const hasGuide = !!t.guide?.trim();
     const dateWord = spanDate(t.start, t.due) ?? (t.due ? `${longDate(t.due)}까지` : null);
     // 제목 16/600(세부 항목은 16/500)
     const titleCls = `block break-words text-base ${depth ? 'font-medium' : 'font-semibold'} ${t.done ? 'text-muted line-through' : 'text-ink'}`;
@@ -258,13 +264,16 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
         </label>
         <div className="min-w-0 flex-1">
           {/* 첫 줄: 제목 + 오른쪽 남은 날 배지. 제목을 누르면 메모만 펼치고 접는다(메모도 사진도 없으면 누르는 것이 아니다) */}
+          {/* 참고(설명서)가 있으면 제목 바로 옆에 물음표 단추(44px 누르는 칸, 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않음) */}
           <div className="flex items-start gap-2">
             {hasMemo ? (
-              <button type="button" aria-expanded={noteOpen} className="min-w-0 flex-1 text-left" onClick={() => setNoteOpen((v) => !v)}>
+              <button type="button" aria-expanded={noteOpen} className={`min-w-0 text-left ${hasGuide ? '' : 'flex-1'}`} onClick={() => setNoteOpen((v) => !v)}>
                 <span className={titleCls}>{t.text}</span>
                 <span className="sr-only">{noteOpen ? '메모 접기' : '메모 펼치기'}</span>
               </button>
-            ) : <span className={`min-w-0 flex-1 ${titleCls}`}>{t.text}</span>}
+            ) : <span className={`min-w-0 ${hasGuide ? '' : 'flex-1'} ${titleCls}`}>{t.text}</span>}
+            {hasGuide && <GuideButton title={t.text} guide={t.guide as string} className="-my-2.5 -ml-2.5 -mr-1" />}
+            {hasGuide && <span className="flex-1" aria-hidden />}
             {dl && !t.done && <Badge tone={tone} className="-mt-0.5 shrink-0">{dl.rel}</Badge>}
           </div>
           {/* 둘째 줄: 보조 글자 + 오른쪽 단추(전화 · 고치기 · 지우기). 단추 칸은 44px 이고 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않는다 */}

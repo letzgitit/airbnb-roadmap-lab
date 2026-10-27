@@ -84,7 +84,7 @@ export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
  * 새 홈(로그인한 두 사람): 맨 위 탭 여섯 개 — 서류 · 인테리어 · 사진 · 문서 · 에어비앤비 · 연락처 · 달력(뉴스는 2026-10-28 뺌).
  * 홈 안에서 끝난다 — 「우리 집」(/house)으로 보내는 링크를 두지 않는다(사진 전체 · 받아 둔 문서도 「사진 · 문서」 탭 안).
  * 서류 · 인테리어 · 에어비앤비 탭: 「오늘 / 10월 28일 (수)」 → 「일주일 안에 할 일」(옅은 카드) → 가장 급한 카드(빨강 「남은 일 보기」) → 나머지 카드.
- * 달력 탭은 카드 마감 날짜만 — 날짜를 눌러 카드를 고르면 그 탭으로 가서 그 카드를 펼친다.
+ * 달력 탭은 날짜마다 할 일 개수 — 날짜를 누르면 달력 밑에 그날 할 일 줄이 바로 보인다(체크 · 고치기 · 지우기 · 참고).
  * 예전 홈(준비 일정 · 간트 · 달력)은 /classic 에 그대로 있고, 맨 아래 작은 「예전 화면」 글자로만 들어간다.
  */
 export function SimpleHome({ content }: { content: Content }) {
@@ -103,16 +103,8 @@ export function SimpleHome({ content }: { content: Content }) {
   const pick = (t: TabId) => { setTab(t); write(TAB_KEY, t); window.scrollTo({ top: 0 }); };
   // 서류 탭 「받아 둔 문서 n개 보기」 → 사진 · 문서 › 문서
   const goDocs = () => { pickSub('docs'); pick('photos'); };
-  // 달력에서 고른 카드: 그 탭의 펼친 카드 기억에 더해 두고(탭이 열릴 때 펼친 채로 그려진다) 탭을 바꾼 뒤 그 카드로 내려간다
+  // 고른 카드로 내려가기(예전 달력 탭이 카드를 골라 보냈다 — 2026-10-28 달력이 그날 할 일 줄을 바로 보여 주면서 지금은 부르는 곳이 없다. 받는 쪽은 그대로 둔다)
   const [focus, setFocus] = useState<string | null>(null);
-  const openCard = (t: TabId, cardId: string) => {
-    const key = `${OPEN_KEY}:${t}`;
-    let ids: string[] = [];
-    try { ids = JSON.parse(read(key) ?? '[]') as string[]; } catch { /* 처음처럼 */ }
-    if (!ids.includes(cardId)) write(key, JSON.stringify([...ids, cardId]));
-    setFocus(cardId);
-    pick(t);
-  };
   const today = todayStr();
 
   // 탭 아이콘 옆 빨강 점: 그 탭에 기한 지난 안 끝난 일이 있나
@@ -142,7 +134,7 @@ export function SimpleHome({ content }: { content: Content }) {
         {tab === 'photos' && <PhotosTab sub={photoSub} onSub={pickSub} />}
         {tab === 'airbnb' && <CardsTab key="airbnb" tab="airbnb" cards={AIRBNB_CARDS} doc={doc} steps={steps} today={today} focus={focus} onFocused={() => setFocus(null)} />}
         {tab === 'contacts' && <ContactsTab />}
-        {tab === 'calendar' && <CalendarTab steps={content.steps} today={today} onOpenCard={openCard} />}
+        {tab === 'calendar' && <CalendarTab steps={content.steps} rowSteps={steps} today={today} />}
       </div>
 
       <footer className="mt-12 flex justify-center">

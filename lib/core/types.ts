@@ -41,6 +41,9 @@ export interface TaskItem {
   // 자세한 내용(선택, ≤1000자). 제목(text)은 짧게 두고 길게 적을 것은 여기에. 없으면 키가 없다.
   note?: string | null;
   owner?: TaskOwner | null;
+  // 2026-10-28 추가(선택): 참고(설명서) — 이 일을 왜 · 어떻게 하는지 마크다운(≤6000자). 할 일 줄의 물음표 단추로 연다.
+  // 없으면 키가 없다. 사이트에만 두고 Todoist 에는 보내지 않는다(siteState 에 없음).
+  guide?: string | null;
   // 2026-10-27 추가(선택, 단계 탭 트리 간트). 없으면 키가 없다. 규칙은 lib/core/task-tree.ts
   // start = 시작일 YYYY-MM-DD(없으면 마감일 하루짜리). 마감일이 있으면 시작일 ≤ 마감일.
   start?: string | null;

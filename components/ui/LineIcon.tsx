@@ -19,6 +19,8 @@ const PATHS = {
   plus: ['M12 5v14M5 12h14'],
   chevron: ['m9 6 6 6-6 6'],
   check: ['m5 12.5 4.5 4.5L19 7.5'],
+  // 할 일 참고(설명서) 열기: 동그라미 안 물음표
+  help: ['M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0', 'M9.6 9.4a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2 1-1.2 1.8v.4', 'M12 17.2v.01'],
 } as const;
 
 export type LineIconName = keyof typeof PATHS;
