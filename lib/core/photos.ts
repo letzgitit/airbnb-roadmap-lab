@@ -6,6 +6,7 @@ import sharp, { type Metadata } from 'sharp';
 import { redisEnv, sanitize } from './store.ts';
 import { STEP_COUNT } from './types.ts';
 import { REF_STEP } from './photo-order.ts';
+import { CARD_ID_RE } from './cardnotes.ts';
 
 export { REF_STEP, REF_LABEL } from './photo-order.ts';
 
@@ -52,6 +53,11 @@ export interface PhotoMeta {
    * 이 사진들은 사진 화면 · 단계 창 · 새 홈 사진 탭에 나오지 않고 그 할 일 메모 밑에만 보인다.
    */
   taskId?: string | null;
+  /**
+   * 2026-10-28 추가(선택): 새 홈 일터 탭의 단계 블록에 붙인 사진이면 그 블록 id(「admin.move-in」 꼴 — lib/core/cardnotes.ts CARD_ID_RE).
+   * 없으면 키가 없다(옛 사진 그대로). taskId 와 같이 쓰지 않는다. 블록 몸통 · 갤러리 › 사진의 분야 묶음에 보이고, 단계 창 · 공사 전/후에는 안 나온다.
+   */
+  cardId?: string | null;
   /** 할 일을 지울 때 같이 지운 사진(할 일을 되살리면 이것만 같이 되살린다 — 따로 지운 사진은 그대로) */
   deletedWithTask?: boolean;
   uploadedAt: string; by: string;
@@ -294,6 +300,12 @@ export function cleanTaskId(v: unknown): string | null {
   if (typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(v)) throw new PhotoError(400, 'task_invalid', '할 일을 찾지 못했어요.');
   return v;
 }
+/** 블록 id(「admin.move-in」 꼴). 빈 값 = 블록 사진 아님 */
+export function cleanCardId(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string' || !CARD_ID_RE.test(v)) throw new PhotoError(400, 'card_invalid', '블록을 찾지 못했어요.');
+  return v;
+}
 export function cleanCaption(s: unknown): string {
   const v = typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '';
   if (v.length > LIMITS.captionMax) throw new PhotoError(400, 'caption_too_long', `설명은 ${LIMITS.captionMax}자까지예요.`);
@@ -350,6 +362,8 @@ export interface AddInput {
   originalUrl?: string | null;
   /** 할 일 메모에 붙이는 사진이면 그 할 일 id */
   taskId?: unknown;
+  /** 새 홈 단계 블록에 붙이는 사진이면 그 블록 id(taskId 와 같이 쓰지 않는다) */
+  cardId?: unknown;
 }
 
 export async function addPhoto(input: AddInput): Promise<PhotoMeta> {
@@ -357,6 +371,8 @@ export async function addPhoto(input: AddInput): Promise<PhotoMeta> {
   const album = cleanAlbum(input.album);
   const caption = cleanCaption(input.caption);
   const taskId = cleanTaskId(input.taskId);
+  const cardId = cleanCardId(input.cardId);
+  if (taskId && cardId) throw new PhotoError(400, 'invalid', '할 일과 블록 중 한 곳에만 붙일 수 있어요.');
   if (input.data.length === 0) throw new PhotoError(400, 'empty', '빈 파일이에요.');
   if (input.data.length > LIMITS.inputMax) throw new PhotoError(413, 'too_large', '파일이 너무 커요(15MB까지).');
   const originalUrl = cleanUrl(input.originalUrl);
@@ -388,7 +404,7 @@ export async function addPhoto(input: AddInput): Promise<PhotoMeta> {
 
   const takenAt = exifTaken ?? kstLocal(input.takenAtFallback ?? new Date());
   const m: PhotoMeta = {
-    id, stepId, album, caption, kind, width, height, parts, bytes, order: nextOrder(), takenAt, originalUrl, ...(taskId ? { taskId } : {}),
+    id, stepId, album, caption, kind, width, height, parts, bytes, order: nextOrder(), takenAt, originalUrl, ...(taskId ? { taskId } : {}), ...(cardId ? { cardId } : {}),
     uploadedAt: iso, by: input.by, version: 1, updatedAt: iso, updatedBy: input.by, deletedAt: null, deletedBy: null,
   };
   await backend().put(id, JSON.stringify(m));
@@ -496,9 +512,11 @@ export type PhotoView = Pick<PhotoMeta, 'id' | 'stepId' | 'album' | 'caption' | 
   hasImage: boolean; originalUrl: string | null;
   /** 할 일 메모 사진이면 그 할 일 id, 아니면 null */
   taskId: string | null;
+  /** 새 홈 단계 블록 사진이면 그 블록 id, 아니면 null(옛 사진은 키가 없어 null) */
+  cardId: string | null;
 };
 export const toView = (m: PhotoMeta): PhotoView => ({
   id: m.id, stepId: m.stepId, album: m.album, caption: m.caption, kind: m.kind, width: m.width, height: m.height, order: m.order, position: m.position ?? null,
   takenAt: m.takenAt, uploadedAt: m.uploadedAt, by: m.by, version: m.version, deletedAt: m.deletedAt, deletedBy: m.deletedBy,
-  hasImage: !!m.parts.thumb, originalUrl: m.originalUrl ?? null, taskId: m.taskId ?? null,
+  hasImage: !!m.parts.thumb, originalUrl: m.originalUrl ?? null, taskId: m.taskId ?? null, cardId: m.cardId ?? null,
 });
