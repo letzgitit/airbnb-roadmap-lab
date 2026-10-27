@@ -31,6 +31,8 @@ export const TASK_NOTE_MAX = 1000;
 const taskNote = z.union([z.string().trim().max(TASK_NOTE_MAX, `자세한 내용은 ${TASK_NOTE_MAX}자 이하로 입력하세요.`), z.null()]);
 // Todoist 할 일 id(영숫자) 또는 null(짝 끊기)
 export const todoistId = z.union([z.string().regex(/^[A-Za-z0-9]{1,64}$/, 'Todoist id 형식이 올바르지 않습니다.'), z.null()]);
+// 세부 항목의 부모 할 일 id(t_…) 또는 null(부모에서 떼기)
+const parentId = z.union([z.string().regex(/^t_[A-Za-z0-9]{1,60}$/, '부모 할 일 id 형식이 올바르지 않습니다.'), z.null()]);
 export const taskPatch = z.object({
   text: text.optional(),
   due: nullableDate.optional(),
@@ -40,7 +42,10 @@ export const taskPatch = z.object({
   note: taskNote.optional(),
   owner: taskOwner.optional(),
   todoistId: todoistId.optional(),
-}).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.');
+  start: nullableDate.optional(),
+  parentId: parentId.optional(),
+}).strict().refine((p) => Object.keys(p).length > 0, '바꿀 내용이 없습니다.')
+  .refine((p) => !(p.start && p.due && p.start > p.due), { message: '시작일은 마감일보다 늦을 수 없습니다.', path: ['start'] });
 
 export const logPatch = z.object({
   kind: z.enum(LOG_KINDS).optional(),
@@ -100,7 +105,12 @@ export const opSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('guest.add'), name: personName }),
   z.object({ op: z.literal('guest.revoke'), id: gid }),
   z.object({ op: z.literal('step.update'), stepId, baseVersion: version, patch: stepPatch, force: z.boolean().optional() }),
-  z.object({ op: z.literal('task.add'), stepId, text, due: nullableDate.optional(), kind: taskKind.optional(), note: taskNote.optional(), owner: taskOwner.optional() }),
+  // stepId: 세부 항목(parentId)이면 빼도 된다(부모 단계를 따른다). 줘서 부모와 다르면 엔진이 거절한다.
+  z.object({
+    op: z.literal('task.add'), stepId: stepId.optional(), text, due: nullableDate.optional(), kind: taskKind.optional(), note: taskNote.optional(), owner: taskOwner.optional(),
+    start: nullableDate.optional(), parentId: parentId.optional(),
+  }).refine((o) => o.stepId !== undefined || !!o.parentId, { message: '단계(stepId)가 필요합니다(세부 항목이면 parentId 만으로 됩니다).', path: ['stepId'] })
+    .refine((o) => !(o.start && o.due && o.start > o.due), { message: '시작일은 마감일보다 늦을 수 없습니다.', path: ['start'] }),
   z.object({ op: z.literal('task.update'), id, baseVersion: version.optional(), patch: taskPatch, force: z.boolean().optional() }),
   z.object({ op: z.literal('task.delete'), id }),
   z.object({ op: z.literal('task.restore'), id }),

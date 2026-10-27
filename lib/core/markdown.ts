@@ -1,5 +1,6 @@
 import { questionsMarkdown } from './questions.ts';
 import type { ProgressDoc, Step, StepStatus, TaskItem } from './types.ts';
+import { treeOrder } from './task-tree.ts';
 import { manwon, moneyRows, VIA_LABEL } from '../plan.ts';
 
 const STATUS_LABEL: Record<StepStatus, string> = { todo: '시작 전', doing: '진행 중', done: '완료' };
@@ -20,11 +21,17 @@ function byDue(a: TaskItem, b: TaskItem) {
   return ad === bd ? a.stepId - b.stepId || a.createdAt.localeCompare(b.createdAt) : ad.localeCompare(bd);
 }
 
-// 할 일 자세한 내용: 제목 줄 아래 두 칸 들여쓴 줄(빈 줄은 건너뜀)
-function noteLines(t: TaskItem): string[] {
+// 할 일 자세한 내용: 제목 줄 아래 한 층 더 들여쓴 줄(빈 줄은 건너뜀). pad = 그 할 일 줄의 들여쓰기
+function noteLines(t: TaskItem, pad = ''): string[] {
   // 메모 안의 `- [ ]` · `[x]` 도 ☐ · ☑ 로(볼트 Todoist 플러그인이 할 일로 잡지 않게)
   return (t.note ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
-    .map((l) => `  ${l.replace(/\[ \]/g, '☐').replace(/\[[xX]\]/g, '☑')}`);
+    .map((l) => `${pad}  ${l.replace(/\[ \]/g, '☐').replace(/\[[xX]\]/g, '☑')}`);
+}
+// 기간: 시작일이 있으면 「시작 ~」을 붙인다
+function spanText(t: TaskItem, late = ''): string {
+  if (t.start && t.due) return ` · ${t.start} ~ 마감 ${t.due}${late}`;
+  if (t.start) return ` · 시작 ${t.start}`;
+  return t.due ? ` · 마감 ${t.due}${late}` : '';
 }
 
 // 🔴 할 일 줄은 `- [ ]` 를 쓰지 않는다(볼트 Todoist 플러그인이 체크박스를 할 일로 흡수). 일반 불릿 + ☐/☑ 기호만 쓴다.
@@ -36,6 +43,8 @@ export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title
   const props = Object.values(doc.property).filter((p) => !p.deletedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const logs = doc.log.filter((l) => !l.deletedAt).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 20);
   const stepTitle = (id: number) => steps.find((s) => s.id === id)?.title ?? '';
+  // 세부 항목은 부모 밑에 두 칸 들여 쓴다. 부모가 이 목록에 없으면(부모만 끝났거나 아직 남음) 맨 위 층에 「상위: 부모 제목」
+  const parentText = (id?: string) => (id && Object.hasOwn(doc.tasks, id) ? ` (상위: ${doc.tasks[id].text})` : '');
 
   const out: string[] = [];
   out.push('> ⚠️ 이 파일은 사이트에서 자동 생성됩니다 — 직접 고치지 마세요. 고치려면 사이트 또는 Claude에게 말해서 사이트 DB를 바꾸세요.');
@@ -71,19 +80,23 @@ export function renderMarkdown(doc: ProgressDoc, steps: Pick<Step, 'id' | 'title
   out.push('');
   if (open.length === 0) out.push('- (없음)');
   const today = kst(nowIso).slice(0, 10);
-  for (const t of open) {
+  for (const { item: t, depth, orphanOf } of treeOrder(open)) {
     const late = t.due && t.due < today ? ' ⚠️지남' : '';
-    out.push(`- ☐ ${t.kind ? `[${t.kind}] ` : ''}${t.text} — ${t.stepId}단계 ${stepTitle(t.stepId)}${t.autoFill ? ' (단계 자동)' : ''}${t.owner ? ` · ${t.owner}` : ''}${t.due ? ` · 마감 ${t.due}${late}` : ''}`);
-    out.push(...noteLines(t));
+    const pad = depth ? '  ' : '';
+    // 세부 항목은 부모와 같은 단계라 단계를 다시 쓰지 않는다
+    const where = depth ? '' : ` — ${t.stepId}단계 ${stepTitle(t.stepId)}${t.autoFill ? ' (단계 자동)' : ''}`;
+    out.push(`${pad}- ☐ ${t.kind ? `[${t.kind}] ` : ''}${t.text}${parentText(orphanOf)}${where}${t.owner ? ` · ${t.owner}` : ''}${spanText(t, late)}`);
+    out.push(...noteLines(t, pad));
   }
   out.push('');
   out.push('<details>');
   out.push(`<summary>완료 (${done.length})</summary>`);
   out.push('');
   if (done.length === 0) out.push('- (없음)');
-  for (const t of done) {
-    out.push(`- ☑ ${t.text} — ${t.stepId}단계${t.owner ? ` · ${t.owner}` : ''}${t.doneBy ? ` · ${t.doneBy} ${kst(t.doneAt).slice(0, 10)}` : ''}`);
-    out.push(...noteLines(t));
+  for (const { item: t, depth, orphanOf } of treeOrder(done)) {
+    const pad = depth ? '  ' : '';
+    out.push(`${pad}- ☑ ${t.text}${parentText(orphanOf)}${depth ? '' : ` — ${t.stepId}단계`}${t.owner ? ` · ${t.owner}` : ''}${t.doneBy ? ` · ${t.doneBy} ${kst(t.doneAt).slice(0, 10)}` : ''}`);
+    out.push(...noteLines(t, pad));
   }
   out.push('');
   out.push('</details>');

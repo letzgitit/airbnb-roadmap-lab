@@ -5,8 +5,12 @@
 // 짝 상태: 할 일마다 todoistSent = 「Todoist 에 지금 있다고 아는 값」(마지막으로 보냈거나 웹훅으로 받은 제목 · 메모 · 날짜 · 완료 · 삭제).
 // - 사이트 → Todoist: 지금 사이트 값과 todoistSent 의 차이만 보내고 todoistSent 를 맞춘다(그 순간의 문서 기준이라 순서가 뒤집혀도 마지막 상태로 모인다).
 // - Todoist → 사이트: 웹훅 값이 todoistSent 와 같으면 되돌아온 것(또는 바뀐 것 없음)이라 버린다. 다른 칸만 사이트에 반영한다.
+// 시작일(start) · 세부 항목(parentId)은 사이트에만 있다(1차). Todoist 에는 세부 항목도 평평한 할 일로 가고 시작일은 보내지 않는다.
+// Todoist 에서 온 변경은 이 두 칸을 그대로 둔다. 예외: 마감일이 시작일보다 앞당겨지면 시작일을 마감일로 맞춘다(시작일 ≤ 마감일),
+// Todoist 에서 부모를 지우면 세부 항목은 지우지 않고 맨 위 층으로 뗀다(Todoist 에선 따로 있는 할 일이라).
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { AutoFillBy, ProgressDoc, TaskItem, TaskKind, TodoistState } from './types.ts';
+import { checkParent, liveChildrenOf } from './task-tree.ts';
 
 export const TEXT_MAX = 200;
 export const NOTE_MAX = 1000;
@@ -256,6 +260,12 @@ export function applyTodoistOp(doc: ProgressDoc, op: TodoistEngineOp, iso: strin
       if (cur.deletedAt) { quiet(record(cur)); return { result: { action: 'unchanged', task: cur } }; }
       const next: TaskItem = record({ ...cur, deletedAt: iso, deletedBy: TODOIST_ACTOR.name, ...h.bump(cur) });
       doc.tasks[cur.id] = next;
+      // 세부 항목은 Todoist 에서 따로 있는 할 일이라 같이 지우지 않고 맨 위 층으로 뗀다
+      for (const c of liveChildrenOf(doc, cur.id)) {
+        const kid: TaskItem = { ...c, ...h.bump(c) };
+        delete kid.parentId;
+        doc.tasks[c.id] = kid;
+      }
       h.touch(`할 일 '${h.clip(cur.text)}' 삭제(Todoist)`);
       return { result: { action: 'deleted', task: next } };
     }
@@ -274,7 +284,11 @@ export function applyTodoistOp(doc: ProgressDoc, op: TodoistEngineOp, iso: strin
   const patch: Partial<TaskItem> = {};
   if (take.includes('text') && V.text && V.text !== base.text) patch.text = V.text;
   if (take.includes('note') && V.note !== (base.note ?? null)) patch.note = V.note;
-  if (take.includes('due') && V.due !== base.due) patch.due = V.due;
+  if (take.includes('due') && V.due !== base.due) {
+    patch.due = V.due;
+    // 시작일은 사이트에만 있다: 그대로 두되, 마감일이 시작일보다 앞당겨지면 시작일을 마감일로 맞춘다
+    if (V.due && base.start && base.start > V.due) patch.start = V.due;
+  }
   if (take.includes('done') && V.done !== base.done) {
     patch.done = V.done;
     patch.doneBy = V.done ? TODOIST_ACTOR.name : null;
@@ -283,6 +297,8 @@ export function applyTodoistOp(doc: ProgressDoc, op: TodoistEngineOp, iso: strin
   if (!restored && Object.keys(patch).length === 0) { quiet(record(cur)); return { result: { action: 'unchanged', task: cur } }; }
   const next: TaskItem = record({ ...base, ...patch, ...h.bump(cur) });
   if (next.note === null) delete next.note;
+  // 되살린 세부 항목의 부모가 지워졌거나 없으면 맨 위 층으로(살아 있는 세부 항목은 늘 살아 있는 부모 밑)
+  if (restored && next.parentId && checkParent(doc, next.parentId, next.id).problem) delete next.parentId;
   doc.tasks[cur.id] = next;
   const what = restored ? '복원' : patch.done !== undefined && Object.keys(patch).length === 3 ? (next.done ? '체크함' : '체크 해제') : '수정함';
   h.touch(`할 일 '${h.clip(next.text)}' ${what}(Todoist)`);

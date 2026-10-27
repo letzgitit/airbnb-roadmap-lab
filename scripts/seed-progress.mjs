@@ -42,12 +42,16 @@ for (const p of input.property ?? []) ops.push({ op: 'property.add', label: p.la
 for (const [id, s] of Object.entries(input.steps ?? {})) {
   ops.push({ op: 'step.update', stepId: Number(id), baseVersion: 0, patch: { status: s.status, targetDate: s.targetDate ?? null, note: s.note ?? '' } });
 }
+// 할 일: start(시작일) 선택. children = 세부 항목(한 층) — 부모가 만들어진 뒤 그 id 로 넣는다(단계는 부모를 따른다)
 const taskIdx = [];
-for (const t of input.tasks ?? []) { ops.push({ op: 'task.add', stepId: t.stepId, text: t.text, due: t.due ?? null }); taskIdx.push({ at: ops.length - 1, done: !!t.done }); }
+const taskOp = (t) => ({ op: 'task.add', text: t.text, due: t.due ?? null, ...(t.start ? { start: t.start } : {}) });
+for (const t of input.tasks ?? []) { ops.push({ ...taskOp(t), stepId: t.stepId }); taskIdx.push({ at: ops.length - 1, done: !!t.done, children: t.children ?? [] }); }
 for (const l of input.log ?? []) ops.push({ op: 'log.add', kind: l.kind, text: l.text });
 
-// 지우기 전에 입력부터 전부 검증(틀린 입력 때문에 기존 데이터만 날아가는 일이 없게)
-const parsed = ops.map((o, i) => { const r = opSchema.safeParse(o); if (!r.success) { console.error(`입력 ${i}번째 항목이 올바르지 않습니다: ${r.error.issues[0]?.message}`); process.exit(1); } return r.data; });
+// 지우기 전에 입력부터 전부 검증(틀린 입력 때문에 기존 데이터만 날아가는 일이 없게). 세부 항목은 가짜 부모 id 로 모양만 본다.
+const check = (o, what) => { const r = opSchema.safeParse(o); if (!r.success) { console.error(`${what}이 올바르지 않습니다: ${r.error.issues[0]?.message}`); process.exit(1); } return r.data; };
+const parsed = ops.map((o, i) => check(o, `입력 ${i}번째 항목`));
+taskIdx.forEach((t, i) => t.children.forEach((c, j) => check({ ...taskOp(c), parentId: 't_check' }, `할 일 ${i}번째의 세부 항목 ${j}번째`)));
 
 if (hasData) {
   const raw = await store.read();
@@ -59,9 +63,21 @@ if (hasData) {
 
 const actor = { email: 'seed@cli.local', name: input.by || 'seed' };
 const first = await mutateMany(parsed, actor);
+// 세부 항목은 만들어진 부모 id 로
+const kidIdx = [];
+const kidOps = [];
+for (const t of taskIdx) {
+  if (!first.outcomes[t.at].ok) continue;
+  for (const c of t.children) { kidOps.push(opSchema.parse({ ...taskOp(c), parentId: first.outcomes[t.at].result.id })); kidIdx.push({ at: kidOps.length - 1, done: !!c.done }); }
+}
+const kids = kidOps.length ? await mutateMany(kidOps, actor) : null;
 // 완료 표시는 만들어진 id 로 한 번 더
-const doneOps = taskIdx.filter((t) => t.done && first.outcomes[t.at].ok).map((t) => ({ op: 'task.update', id: first.outcomes[t.at].result.id, patch: { done: true } }));
+const doneIds = [
+  ...taskIdx.filter((t) => t.done && first.outcomes[t.at].ok).map((t) => first.outcomes[t.at].result.id),
+  ...kidIdx.filter((k) => k.done && kids.outcomes[k.at].ok).map((k) => kids.outcomes[k.at].result.id),
+];
+const doneOps = doneIds.map((id) => ({ op: 'task.update', id, patch: { done: true } }));
 const second = doneOps.length ? await mutateMany(doneOps.map((o) => opSchema.parse(o)), actor) : null;
-const failed = [...first.outcomes, ...(second?.outcomes ?? [])].filter((o) => !o.ok);
-console.log(JSON.stringify({ store: store.kind, applied: parsed.length + doneOps.length - failed.length, failed: failed.length }));
+const failed = [...first.outcomes, ...(kids?.outcomes ?? []), ...(second?.outcomes ?? [])].filter((o) => !o.ok);
+console.log(JSON.stringify({ store: store.kind, applied: parsed.length + kidOps.length + doneOps.length - failed.length, failed: failed.length }));
 process.exit(failed.length ? 1 : 0);

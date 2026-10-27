@@ -55,6 +55,9 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
     { "op": "task.update", "id": "t_xxxxxxxxxxxx", "baseVersion": 1, "patch": { "text": "구청 전화(오후)", "due": "2026-10-26" } },
     { "op": "task.update", "id": "t_xxxxxxxxxxxx", "baseVersion": 2, "patch": { "kind": "서류" } },
     { "op": "task.update", "id": "t_xxxxxxxxxxxx", "patch": { "done": true } },
+    { "op": "task.add", "stepId": 7, "text": "가구 들이기", "start": "2026-11-10", "due": "2026-11-20" },
+    { "op": "task.add", "parentId": "t_xxxxxxxxxxxx", "text": "침대 주문", "due": "2026-11-12" },
+    { "op": "task.update", "id": "t_xxxxxxxxxxxx", "baseVersion": 1, "patch": { "start": "2026-11-11", "parentId": null } },
     { "op": "task.delete", "id": "t_xxxxxxxxxxxx" },
     { "op": "task.restore", "id": "t_xxxxxxxxxxxx" },
     { "op": "step.update", "stepId": 2, "baseVersion": 0, "patch": { "status": "doing", "targetDate": "2026-10-31", "note": "메모" } },
@@ -70,8 +73,8 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 
 | 연산 | 필수 필드 | 비고 |
 |---|---|---|
-| `task.add` | `stepId`(1~14), `text`(1~200자) | `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다). `note`(선택): 자세한 내용 ≤1000자(제목은 짧게, 길게 적을 것은 여기). `owner`(선택): `남편` `아내` `같이` |
-| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기) `note`(빈 글 · null = 지우기) `owner`(null = 지우기) `todoistId`(Todoist 짝, null = 짝 끊기). **`done`만, 또는 `todoistId`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
+| `task.add` | `stepId`(1~14), `text`(1~200자) | `stepId`는 세부 항목(`parentId`)이면 빼도 된다(부모 단계를 따름). `start`(선택): 시작일 `YYYY-MM-DD` 또는 null. `parentId`(선택): 부모 할 일 id(`t_…`) — 아래 「시작일 · 세부 항목」. `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다). `note`(선택): 자세한 내용 ≤1000자(제목은 짧게, 길게 적을 것은 여기). `owner`(선택): `남편` `아내` `같이` |
+| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기) `note`(빈 글 · null = 지우기) `owner`(null = 지우기) `start`(시작일, null = 지우기) `parentId`(부모 할 일 id, null = 부모에서 떼기) `todoistId`(Todoist 짝, null = 짝 끊기). **`done`만, 또는 `todoistId`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
 | `task.delete` / `task.restore` | `id` | 소프트 삭제(30일 보관 후 정리) |
 | `step.update` | `stepId`, `baseVersion`, `patch` | `patch`: `status`(`todo` `doing` `done`) `targetDate` `note`(≤1000자). 아직 한 번도 안 고친 단계의 version은 0 |
 | `log.add` | `kind`(`결정` `통화` `일정` `메모`), `text`(≤1000자) | 「현황 메모/결정 기록」 |
@@ -89,6 +92,18 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 | `question.seen` | `id` | 「새 답」 표시 끄기 |
 | `guest.add` | `name`(≤20자) | 답 받는 링크 만들기. 결과의 `token`으로 주소 `/q/<token>`. `get` 출력의 `[손님 링크]` 칸(CLI 출력 이름은 그대로)에 전체 주소가 나온다 |
 | `guest.revoke` | `id`(`g_…`) | 링크 끊기(그 주소는 바로 안 열린다) |
+
+### 시작일 · 세부 항목 (`start` · `parentId`)
+
+단계 탭 트리 간트용. 둘 다 선택이고, 없는 옛 할 일은 그대로 읽힌다(옮기는 작업 없음). 규칙 코드: `lib/core/task-tree.ts` · `lib/core/engine.ts`.
+
+- `start`: 시작일. 없으면 마감일 하루짜리로 그린다(`taskStart(t) = start ?? due`). 마감일이 있으면 **시작일 ≤ 마감일**이어야 하고, 고칠 때는 지금 값과 합쳐서 본다 — 마감일만 시작일보다 앞으로 당기면 `400 start_after_due`(시작일도 같이 보낸다). 마감일 없이 시작일만 있어도 된다.
+- `parentId`: 세부 항목의 부모. **한 층만**이다. 거절(`400`, `error` 코드 · `message` 문장):
+  - `parent_not_found` 없는 부모 · `parent_deleted` 지운 부모 · `parent_self` 자기 자신 · `parent_is_child` 세부 항목을 부모로 · `has_children` 세부 항목이 있는 할 일을 다른 할 일 밑으로 · `step_mismatch` 부모와 다른 단계.
+- 단계: 세부 항목은 늘 부모와 같은 단계다. 부모를 새로 정하면 그 부모의 단계로 옮겨진다. 세부 항목의 `stepId`만 따로 바꾸면 거절(같은 값을 보내는 것은 괜찮다) — 떼면서 옮기려면 `{"parentId": null, "stepId": N}`. **부모의 단계를 옮기면 세부 항목(지운 것 포함)도 같이 옮겨진다.**
+- 지우기 · 되살리기: 부모를 지우면 살아 있는 세부 항목도 같은 시각으로 같이 지운다. 부모를 되살리면 그때 같이 지운 세부 항목만 같이 되살린다(따로 먼저 지운 것은 그대로). 부모가 지워져 있는데 세부 항목만 되살리면 `400 parent_deleted`(부모부터). 부모가 30일 지나 정리돼 없으면 세부 항목은 맨 위 층으로 되살아난다.
+- Todoist: 세부 항목도 평평한 할 일로 보내고(`parent_id` 없음) 시작일은 보내지 않는다(1차). 아래 「Todoist 동기화」 표.
+- `get`은 세부 항목을 부모 밑에 `└`로, `export-md`는 두 칸 들여 쓴다. 시작일이 있으면 `시작 …` / `시작 ~ 마감 …`.
 
 - 「사용자 체크리스트 항목」은 **할 일(task)과 같은 항목**입니다. `checklist.add/update/delete/restore`는 `task.*`의 별칭입니다.
 - `baseVersion`은 `get`에서 본 `(id … vN)`의 N입니다. 서버 version과 다르면 **그 연산만** 409로 실패하고 나머지는 적용됩니다(결과의 `failed`에 최신 내용이 들어 있음). 덮어쓰려면 연산에 `"force": true`.
@@ -121,6 +136,7 @@ Todoist 라벨 `외도민`(바꾸려면 `TODOIST_LABEL`) 할 일 ↔ 사이트 �
 | `done` | 완료(close / reopen) | |
 | 삭제 · 복원 | 삭제 / 새로 만들기 | Todoist 는 지운 할 일을 되살리는 API 가 없어, 사이트에서 복원하면 새로 만들고 새 id 를 적는다 |
 | `stepId` `kind` `owner` | — | 사이트에만 |
+| `start` `parentId` | — | 사이트에만(1차). 세부 항목은 Todoist 에 평평한 할 일로 간다. Todoist 에서 온 변경은 이 두 칸을 지우지 않는다. 예외: Todoist 에서 마감일을 시작일보다 앞으로 옮기면 시작일을 마감일로 맞춘다 · Todoist 에서 부모를 지우면 세부 항목은 지우지 않고 맨 위 층으로 뗀다(Todoist 에선 따로 있는 할 일이라). 사이트에서 부모를 지우거나 되살리면 세부 항목도 Todoist 에 같이 반영한다 |
 
 - **Todoist → 사이트**: 웹훅(`item:added` `item:updated` `item:completed` `item:uncompleted` `item:deleted`) → 서명(`X-Todoist-Hmac-SHA256` = base64 HMAC-SHA256(client secret, 본문)) 확인 → 엔진 연산 `task.fromTodoist`(서버 안에서만 만든다, CLI · API 로는 못 보낸다). 라벨 없는 할 일은 무시한다. 짝이 있던 할 일에서 라벨을 떼도 사이트 할 일은 그대로 둔다.
 - **사이트 → Todoist**: `/api/progress/mutate`(응답 뒤 `after`)와 이 CLI의 `apply`(쓴 뒤, `--dry-run` · `--no-todoist` 제외)가 같은 `pushToTodoist`(`lib/core/todoist-push.ts`)를 부른다. 보낼 때마다 문서를 다시 읽어 **지금 사이트 값과 `todoistSent`(Todoist 에 있다고 아는 값)의 차이만** 보내고 `todoistSent`를 맞춘다. 그래서 같은 할 일에 대한 보내기 둘이 순서가 뒤집혀도 마지막 상태로 모이고, 추가 직후 고치기 · 체크 · 삭제도 (짝을 적은 뒤 다시 읽어) 따라간다. 새로 만든 Todoist id · `todoistSent` 는 `task.todoistSent`(서버 전용)로 적고 항목 version 을 올리지 않는다. 보내기가 실패하면 할 일에 `todoistError`가 남는다(`get`에 ⚠️).
@@ -163,6 +179,8 @@ node scripts/progress.mjs apply "$OUT/link.json" --dry-run && node scripts/progr
 
 ```bash
 node --test scripts/test-todoist.mjs   # 임시 폴더의 연습 파일만 쓰고, Todoist · Claude API 는 가짜 fetch
+node --test scripts/test-task-tree.mjs # 시작일 · 세부 항목 규칙(임시 폴더의 연습 파일만)
+npm test                               # 위 둘 + 화면 계산 시험
 ```
 
 ## export-md
@@ -179,7 +197,7 @@ node --test scripts/test-todoist.mjs   # 임시 폴더의 연습 파일만 쓰�
 
 ## 초기 데이터
 
-`node scripts/seed-progress.mjs scripts/seed-example.json [--force] [--yes]` — 가짜 예시 데이터를 저장소에 넣습니다(저장소가 비어 있을 때만, `--force`는 지우고 다시, 원격(운영)이면 `--yes`도 필요). 실제 개인 정보는 이 파일에 넣지 마세요.
+`node scripts/seed-progress.mjs scripts/seed-example.json [--force] [--yes]` — 가짜 예시 데이터를 저장소에 넣습니다. 할 일에 `start`(시작일)와 `children`(세부 항목 배열, 단계는 부모를 따름)을 줄 수 있습니다(저장소가 비어 있을 때만, `--force`는 지우고 다시, 원격(운영)이면 `--yes`도 필요). 실제 개인 정보는 이 파일에 넣지 마세요.
 
 ## 질문 · 답 받는 링크 (`/house/questions` · `/q/<token>`, 옛 `/questions`)
 

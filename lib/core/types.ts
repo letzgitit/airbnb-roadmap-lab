@@ -39,6 +39,11 @@ export interface TaskItem {
   // 자세한 내용(선택, ≤1000자). 제목(text)은 짧게 두고 길게 적을 것은 여기에. 없으면 키가 없다.
   note?: string | null;
   owner?: TaskOwner | null;
+  // 2026-10-27 추가(선택, 단계 탭 트리 간트). 없으면 키가 없다. 규칙은 lib/core/task-tree.ts
+  // start = 시작일 YYYY-MM-DD(없으면 마감일 하루짜리). 마감일이 있으면 시작일 ≤ 마감일.
+  start?: string | null;
+  // parentId = 세부 항목이면 부모 할 일 id. 한 층만 · 부모와 같은 단계 · 부모를 지우거나 되살리면 같이. Todoist 에는 평평한 할 일로 간다.
+  parentId?: string | null;
   // 2026-10-27 추가(선택): Todoist 짝. todoistId = 짝인 Todoist 할 일 id, todoistAt = 마지막으로 반영한 Todoist 웹훅의 triggered_at
   todoistId?: string | null;
   todoistAt?: string | null;

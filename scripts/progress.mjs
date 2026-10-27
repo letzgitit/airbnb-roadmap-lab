@@ -17,6 +17,7 @@ const { opSchema } = await import('../lib/core/validate.ts');
 const { readContent } = await import('../lib/core/content-read.ts');
 const { renderMarkdown, kst } = await import('../lib/core/markdown.ts');
 const { getStore } = await import('../lib/core/store.ts');
+const { treeOrder } = await import('../lib/core/task-tree.ts');
 const { pushToTodoist, todoistConfig, pushAllowed, isRealTodoist, planSync, applySync, fetchTodoistLabeled } = await import('../lib/core/todoist-push.ts');
 
 // 손님 링크 주소를 찍을 때 쓰는 사이트 주소(NEXT_PUBLIC_SITE_URL 이 있으면 그것)
@@ -58,7 +59,7 @@ function normalize(raw) {
 function describeOp(op) {
   const p = op.patch ? ` ${JSON.stringify(op.patch)}` : '';
   switch (op.op) {
-    case 'task.add': return `할 일 추가 [${op.stepId}단계] "${op.text}"${op.due ? ` 마감 ${op.due}` : ''}${op.kind ? ` 종류 ${op.kind}` : ''}${op.note ? ` 자세히 ${op.note.length}자` : ''}${op.owner ? ` 맡은 사람 ${op.owner}` : ''}`;
+    case 'task.add': return `할 일 추가 [${op.parentId ? `세부 항목 ← ${op.parentId}` : `${op.stepId}단계`}] "${op.text}"${op.start ? ` 시작 ${op.start}` : ''}${op.due ? ` 마감 ${op.due}` : ''}${op.kind ? ` 종류 ${op.kind}` : ''}${op.note ? ` 자세히 ${op.note.length}자` : ''}${op.owner ? ` 맡은 사람 ${op.owner}` : ''}`;
     case 'task.update': if (op.patch && Object.keys(op.patch).length === 1 && 'todoistId' in op.patch) return `할 일 ${op.id} Todoist 짝 ${op.patch.todoistId ?? '끊기'}`; return `${op.op} ${op.id}${op.baseVersion !== undefined ? ` (v${op.baseVersion})` : ''}${op.force ? ' 덮어쓰기' : ''}${p}`;
     case 'log.add': return `기록 추가 [${op.kind}] "${op.text}"`;
     case 'property.add': return `집 정보 추가 ${op.label}: ${op.value}`;
@@ -89,11 +90,16 @@ function printGet(doc, steps) {
   }
   console.log('\n[할 일]');
   if (!live.length) console.log('  (없음)');
-  for (const t of live.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'))) {
+  // 세부 항목은 부모 밑에 들여 쓴다(└). 부모가 지워졌거나 없으면 맨 위 층에 「상위 id」
+  const sorted = live.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'));
+  for (const { item: t, depth, orphanOf } of treeOrder(sorted)) {
     const auto = t.autoFill ? ` · 단계 자동(${AUTO[t.autoFill] ?? t.autoFill})` : '';
-    console.log(`  ${t.done ? '☑' : '☐'} ${t.kind ? `[${t.kind}] ` : ''}${t.text}  — ${t.stepId}단계${auto}${t.owner ? ` · ${t.owner}` : ''}${t.due ? ` · 마감 ${t.due}` : ''}${t.done ? ` · ${t.doneBy}` : ''}  (id ${t.id} v${t.version}${t.todoistId ? ` · todoist ${t.todoistId}` : ''})`);
-    if (t.note) for (const line of t.note.split('\n')) console.log(`      ${line}`);
-    if (t.todoistError) console.log(`      ⚠️ Todoist 보내기 실패: ${t.todoistError} (todoist-sync 로 다시 맞춤)`);
+    const pad = depth ? '    └ ' : '  ';
+    const span = t.start ? ` · 시작 ${t.start}` : '';
+    console.log(`${pad}${t.done ? '☑' : '☐'} ${t.kind ? `[${t.kind}] ` : ''}${t.text}  — ${t.stepId}단계${auto}${t.owner ? ` · ${t.owner}` : ''}${span}${t.due ? ` · 마감 ${t.due}` : ''}${t.done ? ` · ${t.doneBy}` : ''}  (id ${t.id} v${t.version}${orphanOf ? ` · 상위 ${orphanOf}` : ''}${t.todoistId ? ` · todoist ${t.todoistId}` : ''})`);
+    const notePad = depth ? '          ' : '      ';
+    if (t.note) for (const line of t.note.split('\n')) console.log(`${notePad}${line}`);
+    if (t.todoistError) console.log(`${notePad}⚠️ Todoist 보내기 실패: ${t.todoistError} (todoist-sync 로 다시 맞춤)`);
   }
   const money = Object.values(doc.money ?? {}).filter((m) => !m.deletedAt).sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
   console.log(`\n[돈 흐름] 출발점 ${doc.plan ? `현금 ${doc.plan.cash ?? '-'}만 · 마통 여유 ${doc.plan.credit ?? '-'}만  (plan v${doc.plan.version})` : '(없음, plan v0)'}`);
