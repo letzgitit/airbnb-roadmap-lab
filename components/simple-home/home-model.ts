@@ -51,16 +51,16 @@ export const INTERIOR_CARDS: CardDef[] = [
   { id: 'light', title: '조명', steps: [6, 7], addStep: 7, prefix: '조명', match: /조명|스위치|콘센트|전등|등기구|전구|천장등|벽등|램프/ },
   { id: 'buy', title: '살 것', steps: [6, 7], addStep: 6, prefix: '살 것', kind: '구매', sub: '가구 · 가전 · 커튼 같은 구매 목록',
     match: /구매|주문|구입|사기|살 것|가구|침대|매트리스|소파|식탁|의자|커튼|침구|이불|냉장고|세탁기|선반|거울/ },
-  { id: 'other', title: '그 밖', steps: [6, 7], addStep: 7 },
+  { id: 'other', title: '그 밖에', steps: [6, 7], addStep: 7 },
 ];
 
 // ── 에어비앤비 준비: 10 · 11 · 14단계 할 일을 낱말로 ──
 export const AIRBNB_CARDS: CardDef[] = [
   { id: 'listing', title: '숙소 이름 · 가격 정하기', steps: [10, 11, 14], addStep: 11, prefix: '숙소', match: /이름|가격|요금|리스팅|숙소 설명|소개글/ },
-  { id: 'guide', title: '안내서', steps: [10, 11, 14], addStep: 11, prefix: '안내서', match: /안내|가이드|매뉴얼|하우스 ?룰|체크인|체크아웃|와이파이/ },
+  { id: 'guide', title: '손님 안내서', steps: [10, 11, 14], addStep: 11, prefix: '안내서', sub: '와이파이 · 체크인 방법 같은 것', match: /안내|가이드|매뉴얼|하우스 ?룰|체크인|체크아웃|와이파이/ },
   { id: 'supplies', title: '소모품 사기', steps: [10, 11, 14], addStep: 14, prefix: '소모품', kind: '구매', sub: '휴지 · 수건 같은 생활용품',
     match: /휴지|수건|소모품|생활용품|어메니티|샴푸|린스|바디|세제|비누|칫솔|치약|봉투|슬리퍼|비품/ },
-  { id: 'other', title: '그 밖', steps: [10, 11, 14], addStep: 10 },
+  { id: 'other', title: '그 밖에', steps: [10, 11, 14], addStep: 10 },
 ];
 
 const live = (t: TaskItem) => !t.deletedAt;
@@ -166,6 +166,15 @@ export function summarize(card: CardDef, tasks: TaskItem[], doc: Pick<ProgressDo
   const stepsDone = !card.match && card.steps.every((s) => doc.steps[String(s)]?.status === 'done');
   const finished = stepsDone || (tasks.length > 0 && open.length === 0);
   return { total: tasks.length, done: tasks.length - open.length, late, soon, deadline, finished };
+}
+
+/** 카드 순서: 안 끝난 카드 중 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드(각 묶음 안에서는 정의 순서) */
+export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'>>): CardDef[] {
+  const rank = (c: CardDef) => (sums[c.id].finished ? 2 : sums[c.id].deadline ? 0 : 1);
+  return cards
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => rank(a.c) - rank(b.c) || (sums[a.c.id].deadline ?? '').localeCompare(sums[b.c.id].deadline ?? '') || a.i - b.i)
+    .map((x) => x.c);
 }
 
 /** 「3개 중 1개 끝」 */

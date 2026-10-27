@@ -31,7 +31,7 @@ import { KindSelect, NoteField, OwnerSelect, type StepRef, type TaskOwner, type 
  * - depth: 1 = 부모 바로 밑의 세부 항목 줄(앞 칸을 24px 들여 쓰고 글자를 한 단계 작게).
  * - parentTitle: 부모가 이 목록에 없는 세부 항목이면 부모 제목(보조 줄에 「‘부모 제목’의 세부 항목」).
  * - simple: 새 홈(한눈에 보기)의 쉬운 폼. 고치는 폼에 제목 · 마감일 · 담당 · 메모만 둔다(시작일 · 종류 · 넣을 곳은 그대로 둠).
- *   보조 줄의 종류 · 「자동으로 고름」도 뺀다. 메모는 접힌 채 첫 줄만 보이고, 누르면 펼친다. 다음 7일 안 마감은 강조색으로.
+ *   보조 줄의 종류 · 「자동으로 고름」도 뺀다. 메모는 접힌 채 첫 줄만 보이고, 누르면 펼친다. 다음 7일 안 마감은 ink 700으로.
  */
 type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; place: string };
 
@@ -196,7 +196,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const call = callNumber(t.note);
   const startEdit = () => { fill(formOf(t as unknown as Record<string, unknown>)); setErr(null); setBase(t.version); ed.start(); };
   if (simple) {
-    // 다음 7일 안(오늘 포함) 마감 = 강조색 700, 지남 = 빨강 700
+    // 다음 7일 안(오늘 포함) 마감 = ink 700(누르는 것이 아니라 청록을 쓰지 않는다), 지남 = 빨강 700
     const soon = !t.done && !late && !!t.due && (dl?.rel === '오늘' || /^D-[1-6]$/.test(dl?.rel ?? ''));
     const noteLines = (t.note ?? '').trim();
     const firstLine = noteLines.split('\n')[0];
@@ -212,7 +212,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             <span className={`block break-words ${depth ? 'text-sm font-normal text-ink' : rowText} ${t.done ? 'text-muted line-through' : ''}`}>{t.text}</span>
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 text-sm font-normal text-muted empty:hidden">
               {dateText && <span className={`whitespace-nowrap ${t.done ? '' : 'text-ink-soft'}`}>{dateText}</span>}
-              {dl && !t.done && <span className={`whitespace-nowrap ${late ? 'font-bold text-danger-ink' : soon ? 'font-bold text-accent-ink' : ''}`}>{dl.rel}</span>}
+              {dl && !t.done && <span className={`whitespace-nowrap ${late ? 'font-bold text-danger-ink' : soon ? 'font-bold text-ink' : ''}`}>{dl.rel}</span>}
               {t.owner && <span className="whitespace-nowrap">{t.owner}</span>}
               {parentTitle && <span className="min-w-0 truncate">‘{parentTitle}’의 세부 항목</span>}
               <EditBadge k={`task:${t.id}`} />

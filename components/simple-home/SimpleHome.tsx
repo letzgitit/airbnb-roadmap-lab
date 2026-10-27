@@ -13,7 +13,7 @@ import { GuQuestions } from './GuQuestions';
 import { PhotosTab } from './PhotosTab';
 import { TaskCard } from './TaskCard';
 import {
-  AIRBNB_CARDS, DOC_CARDS, DONE_STEPS, INTERIOR_CARDS, TABS, summarize, tabCounts, tasksByCard, type CardDef, type TabId,
+  AIRBNB_CARDS, DOC_CARDS, DONE_STEPS, INTERIOR_CARDS, TABS, dateParts, sortCards, summarize, tabCounts, tasksByCard, type CardDef, type TabId,
 } from './home-model';
 
 // 고른 탭 · 펼친 카드는 이 브라우저에만 기억한다(두 사람 화면이 서로 바뀌지 않게)
@@ -79,7 +79,7 @@ export function SimpleHome() {
       </div>
 
       <footer className="mt-12 flex justify-center">
-        <Link href="/classic" className="inline-flex min-h-11 items-center px-3 text-sm font-normal text-muted hover:text-ink-soft hover:underline">예전 화면</Link>
+        <Link href="/classic" className="inline-flex min-h-11 items-center px-3 text-sm font-normal text-muted hover:text-ink-soft hover:underline">예전 화면으로 보기</Link>
       </footer>
     </>
   );
@@ -87,12 +87,12 @@ export function SimpleHome() {
 
 type StepRef = { id: number; title: string };
 
-/** 펼친 카드 기억: 처음엔 기한 지남 · 다음 7일 일이 있는 첫 카드 하나만 펼친다 */
-function useOpenCards(tab: string, firstUrgent: string | null) {
+/** 펼친 카드 기억: 처음엔 모두 접는다(마감 목록이 첫 화면에 다 보이게) */
+function useOpenCards(tab: string) {
   const [open, setOpen] = useState<Set<string>>(() => {
     const raw = read(`${OPEN_KEY}:${tab}`);
     if (raw) { try { return new Set(JSON.parse(raw) as string[]); } catch { /* 처음처럼 */ } }
-    return new Set(firstUrgent ? [firstUrgent] : []);
+    return new Set();
   });
   useEffect(() => { write(`${OPEN_KEY}:${tab}`, JSON.stringify([...open])); }, [tab, open]);
   const toggle = useCallback((id: string) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }), []);
@@ -105,21 +105,17 @@ function CardsTab({ tab, cards, doc, steps, today, extra }: {
   const groups = useMemo(() => tasksByCard(doc, cards), [doc, cards]);
   const sums = useMemo(() => Object.fromEntries(cards.map((c) => [c.id, summarize(c, groups[c.id], doc, today)])), [cards, groups, doc, today]);
   // 낱말 카드의 「그 밖」은 할 일이 없으면 숨긴다
-  const shown = cards.filter((c) => c.match || c.id !== 'other' || groups[c.id].length > 0);
-  const firstUrgent = shown.find((c) => sums[c.id].late > 0 || sums[c.id].soon > 0)?.id ?? null;
-  const { open, toggle } = useOpenCards(tab, firstUrgent);
-  const counts = tabCounts(groups, today);
+  // 마감 이른 순 → 날짜 없는 카드 → 다 끝낸 카드. 가장 급한 카드(맨 앞, 안 끝났고 날짜 있음) 하나만 청록 머리
+  const shown = sortCards(cards.filter((c) => c.match || c.id !== 'other' || groups[c.id].length > 0), sums);
+  const heroId = shown[0] && !sums[shown[0].id].finished && sums[shown[0].id].deadline ? shown[0].id : null;
+  const { open, toggle } = useOpenCards(tab);
+  const { wd } = dateParts(today);
   return (
     <div className="flex flex-col gap-4">
-      <p className="flex flex-wrap items-center gap-x-3 text-sm font-normal text-muted">
-        <span>오늘 {Number(today.slice(5, 7))}월 {Number(today.slice(8))}일</span>
-        {counts.late > 0 && <span className="font-bold text-danger-ink">기한 지남 {counts.late}</span>}
-        {counts.soon > 0 && <span className="font-bold text-accent-ink">다음 7일 {counts.soon}</span>}
-        {counts.late === 0 && counts.soon === 0 && <span>급한 일 없음</span>}
-      </p>
+      <p className="text-sm font-normal text-muted">오늘 {Number(today.slice(5, 7))}월 {Number(today.slice(8))}일 ({wd})</p>
       {shown.map((c) => (
         <TaskCard key={c.id} card={c} cards={cards} tasks={groups[c.id]} summary={sums[c.id]} steps={steps} today={today}
-          open={open.has(c.id)} onToggleOpen={() => toggle(c.id)} />
+          open={open.has(c.id)} onToggleOpen={() => toggle(c.id)} hero={c.id === heroId} />
       ))}
       {extra}
     </div>
@@ -132,11 +128,11 @@ function DoneSteps({ doc, steps, today }: { doc: ProgressDoc; steps: StepRef[]; 
   const [show, setShow] = useState(false);
   const cards: CardDef[] = useMemo(() => DONE_STEPS.map((id) => ({ id: `step-${id}`, title: steps.find((s) => s.id === id)?.title ?? `${id}단계`, steps: [id], addStep: id })), [steps]);
   const groups = useMemo(() => tasksByCard(doc, cards), [doc, cards]);
-  const { open, toggle } = useOpenCards('done', null);
+  const { open, toggle } = useOpenCards('done');
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <FoldRow label="끝난 단계" count={cards.length} open={show} onToggle={() => setShow((v) => !v)} controls={`${uid}-done`} />
+        <FoldRow label="다 끝낸 것" count={cards.length} open={show} onToggle={() => setShow((v) => !v)} controls={`${uid}-done`} />
       </Card>
       {show && (
         <div id={`${uid}-done`} className="flex flex-col gap-4">

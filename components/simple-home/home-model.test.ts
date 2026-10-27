@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
-  progressText, relDay, summarize, tasksByCard,
+  progressText, relDay, sortCards, summarize, tasksByCard,
 } from './home-model.ts';
 
 const T = (id: string, stepId: number, text: string, extra: Record<string, unknown> = {}) => ({
@@ -65,6 +65,15 @@ test('카드 마감: 고정 일정 → 단계 목표일 → 할 일 마감', () 
   assert.equal(progressText(safety), '2개 중 1개 끝');
   const inspect = summarize(DOC_CARDS[3], [T('z', 12, '실사', { due: '2026-11-20' })], { steps, property } as never, today);
   assert.equal(inspect.deadline, '2026-11-20');
+});
+
+test('카드 순서: 마감 이른 순 → 날짜 없음 → 다 끝냄', () => {
+  const cards = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, title: id, steps: [1], addStep: 1 }));
+  const sums = {
+    a: { deadline: null, finished: false }, b: { deadline: '2026-11-09', finished: true }, c: { deadline: '2026-11-20', finished: false },
+    d: { deadline: '2026-11-06', finished: false }, e: { deadline: null, finished: false },
+  };
+  assert.deepEqual(sortCards(cards, sums).map((c) => c.id), ['d', 'c', 'a', 'e', 'b']);
 });
 
 test('남은 날 말과 색', () => {

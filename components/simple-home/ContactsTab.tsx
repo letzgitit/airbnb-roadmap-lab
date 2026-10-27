@@ -27,13 +27,16 @@ export function ContactsTab() {
   const list = contacts(doc.property);
   return (
     <Card as="section" aria-label="연락처">
-      <div className={`hidden border-b border-line px-4 py-2 text-sm font-normal text-muted ${cols} md:gap-x-4`} aria-hidden>
-        <span>이름</span><span>무슨 일</span><span className="pl-2">전화</span><span />
+      <div className={composing ? 'border-b border-line px-3' : 'border-b border-line'}>
+        {composing ? <ContactForm onClose={close} /> : <AddButton buttonRef={addRef} label="연락처 추가" onClick={() => setComposing(true)} />}
       </div>
+      {/* 머리 줄: 줄(li)과 같은 왼쪽 여백 · 같은 칸 폭. 「전화」는 번호 단추의 안쪽 여백(8px)만큼 들여 번호 아이콘과 맞춘다 */}
+      {list.length > 0 && (
+        <div className={`hidden border-b border-line py-2 pl-4 text-sm font-normal text-muted ${cols} md:gap-x-4`} aria-hidden>
+          <span>이름</span><span>무슨 일</span><span className="pl-2">전화</span><span />
+        </div>
+      )}
       <ul>
-        <li className={composing ? `${cardRowCls} px-3` : cardRowCls}>
-          {composing ? <ContactForm onClose={close} /> : <AddButton buttonRef={addRef} label="연락처 추가" onClick={() => setComposing(true)} />}
-        </li>
         {list.length === 0 && <li className={`${cardRowCls} px-4 py-3 text-base text-muted`}>아직 연락처가 없어요.</li>}
         {list.map((c) => <ContactRow key={c.item.id} c={c} />)}
       </ul>

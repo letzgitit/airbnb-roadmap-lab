@@ -1,14 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import type { PhotoView } from '@/lib/core/photos';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { usePhotos } from '@/components/progress/PhotosPanel';
 import { textBtn } from '@/components/progress/bits';
 import { AddButton } from '@/components/ui/AddButton';
 import { Card, cardRowCls } from '@/components/ui/Card';
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { AFTER_ALBUM, housePhotos, ourUnits } from './home-model';
 
 /** 「공사 후」 사진을 올릴 때 고를 단계(인테리어 & 스타일링). 올리기 창에서 바꿀 수 있다 */
@@ -36,14 +35,14 @@ export function PhotosTab() {
     );
   }
   return (
-    <div className="flex flex-col gap-6">
-      <PhotoBlock title="우리 집 지금" sub={`공사 전 · ${before.length}장`} list={before} loading={loading}
+    <div className="flex flex-col gap-4">
+      <PhotoBlock title="공사 전" sub={`${before.length}장`} list={before} loading={loading}
         empty="아직 사진이 없어요." onUpload={() => upload()} onOpen={(id) => view(id, undefined, before.map((p) => p.id))} />
       <PhotoBlock title="공사 후" sub={`${after.length}장`} list={after} loading={loading}
         empty="공사가 끝나면 여기에 올려 주세요." onUpload={() => upload(AFTER_STEP, AFTER_ALBUM)} onOpen={(id) => view(id, undefined, after.map((p) => p.id))} />
       {hidden > 0 && (
         <p className="flex flex-wrap items-center gap-x-3 text-sm font-normal text-muted">
-          <span>참고 사진 · 서류 {hidden}장은 여기 안 보여요.</span>
+          <span>참고 사진과 서류 {hidden}장은 여기엔 안 나와요.</span>
           <Link href="/house/photos" className={`${textBtn} mx-0`}>사진 전체 보기</Link>
         </p>
       )}
@@ -54,11 +53,16 @@ export function PhotosTab() {
 function PhotoBlock({ title, sub, list, loading, empty, onUpload, onOpen }: {
   title: string; sub: string; list: PhotoView[]; loading: boolean; empty: string; onUpload: () => void; onOpen: (id: string) => void;
 }) {
+  const uid = useId();
+  // 묶음 제목은 카드 안 머리로(「구청에 물어볼 것」과 같은 모양)
   return (
-    <section>
-      <SectionHeader as="h3" title={title} summary={loading ? undefined : sub} />
-      <Card>
-        <div className={cardRowCls}><AddButton label="사진 올리기" icon="fa-camera" onClick={onUpload} /></div>
+    <Card as="section" aria-labelledby={`${uid}-t`}>
+      <div className="px-4 pb-2 pt-4">
+        <h3 id={`${uid}-t`} className="text-lg font-bold text-ink">{title}</h3>
+        {!loading && <p className="mt-0.5 text-sm font-normal text-muted">{sub}</p>}
+      </div>
+      <div className="border-t border-line">
+        <div className={cardRowCls}><AddButton label="사진 올리기" onClick={onUpload} /></div>
         {loading ? (
           <div className="grid grid-cols-3 gap-2 p-3 md:grid-cols-4" aria-hidden>
             {Array.from({ length: 6 }, (_, i) => <span key={i} className="skeleton aspect-square rounded-control" />)}
@@ -70,8 +74,8 @@ function PhotoBlock({ title, sub, list, loading, empty, onUpload, onOpen }: {
             {list.map((p) => <li key={p.id}><Thumb p={p} onOpen={() => onOpen(p.id)} /></li>)}
           </ul>
         )}
-      </Card>
-    </section>
+      </div>
+    </Card>
   );
 }
 

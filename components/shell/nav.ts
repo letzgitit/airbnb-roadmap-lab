@@ -7,10 +7,11 @@ export interface NavItem { href: string; label: string; icon: string; match: (pa
 const under = (base: string) => (p: string) => p === base || p.startsWith(`${base}/`);
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: '/', label: '홈', icon: 'fa-house', match: (p) => p === '/' || p === '/classic', open: true },
+  { href: '/', label: '홈', icon: 'fa-house', match: (p) => p === '/' || p === '/classic' || p === '/home', open: true },
   { href: '/house', label: '우리 집', icon: 'fa-door-open', match: under('/house') },
-  { href: '/decor/3d', label: '꾸미기', icon: 'fa-couch', match: under('/decor'), open: true },
-  { href: '/money', label: '돈 · 다른 집', icon: 'fa-wallet', match: under('/money') },
+  { href: '/decor/3d', label: '꾸미기 참고', icon: 'fa-couch', match: under('/decor'), open: true },
+  // 메뉴 이름은 짧게 「돈」(페이지 첫 구역이 돈 흐름이고, 지산 · 원주 할 일도 돈 계획과 같이 본다). 페이지 제목은 그대로 「돈 · 다른 집」
+  { href: '/money', label: '돈', icon: 'fa-wallet', match: under('/money') },
 ];
 
 /** 지금 보일 문: 로그인했으면 넷 다, 로그인 안 했거나 허용 밖 계정이면 공개 문만, 아직 모르면(불러오는 중) 없음 */

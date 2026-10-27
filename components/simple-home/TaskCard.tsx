@@ -17,9 +17,11 @@ import { byDue, dateParts, prepareAdd, progressText, relDay, type CardDef, type 
  * 목록 = 첫 줄 「＋ 할 일 추가」 → 안 끝난 일(마감 이른 순, 세부 항목은 부모 밑) → 「끝낸 일 n개」(접음).
  * 할 일 줄은 홈 · 단계 창과 같은 TaskRow(쉬운 모양 simple) — 쓰기는 기존 /api/progress/mutate 그대로(Todoist 동기화도 같은 길).
  */
-export function TaskCard({ card, cards, tasks, summary, steps, today, open, onToggleOpen }: {
+export function TaskCard({ card, cards, tasks, summary, steps, today, open, onToggleOpen, hero = false }: {
   card: CardDef; cards: CardDef[]; tasks: TaskItem[]; summary: CardSummary; steps: StepRef[]; today: string;
   open: boolean; onToggleOpen: () => void;
+  /** 그 탭에서 가장 급한 카드 하나: 머리를 청록 면(hero) + 흰 글자로(DESIGN.md 2.2 · 8.1.2) */
+  hero?: boolean;
 }) {
   const { doc } = useProgress();
   const uid = useId();
@@ -44,18 +46,18 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
     <Card as="section" aria-labelledby={`${uid}-t`}>
       <h3>
       <button type="button" aria-expanded={open} aria-controls={`${uid}-list`} onClick={onToggleOpen}
-        className="flex w-full items-center gap-3 py-4 pl-4 pr-2 text-left transition-colors hover:bg-sunken/60">
+        className={`flex w-full items-center gap-3 py-4 pl-4 pr-2 text-left transition-colors ${hero ? 'bg-hero text-on-hero hover:bg-accent-hover' : 'hover:bg-sunken/60'}`}>
         <span className="min-w-0 flex-1">
-          <span id={`${uid}-t`} className="block text-lg font-bold text-ink">{card.title}</span>
-          {card.sub && <span className="mt-0.5 block text-sm font-normal text-ink-soft">{card.sub}</span>}
-          <span className="mt-1 flex flex-wrap items-center gap-x-3 text-sm font-normal text-muted">
+          {hero && <span className="mb-1 block text-sm font-bold text-hero-sub">가장 급한 일</span>}
+          <span id={`${uid}-t`} className={`block text-lg font-bold ${hero ? 'text-on-hero' : 'text-ink'}`}>{card.title}</span>
+          {card.sub && <span className={`mt-0.5 block text-sm font-normal ${hero ? 'text-hero-sub' : 'text-ink-soft'}`}>{card.sub}</span>}
+          <span className={`mt-1 flex flex-wrap items-center gap-x-3 text-sm font-normal ${hero ? 'text-hero-sub' : 'text-muted'}`}>
             <span>{progressText(summary)}</span>
-            {summary.late > 0 && <span className="font-bold text-danger-ink">기한 지남 {summary.late}</span>}
-            {summary.soon > 0 && <span className="font-bold text-accent-ink">다음 7일 {summary.soon}</span>}
+            {summary.soon > 0 && <span className={`font-bold ${hero ? 'text-on-hero' : 'text-ink'}`}>다음 7일 {summary.soon}</span>}
           </span>
         </span>
-        <Deadline summary={summary} today={today} />
-        <span className="flex size-11 shrink-0 items-center justify-center text-muted" aria-hidden>
+        <Deadline summary={summary} today={today} hero={hero} />
+        <span className={`flex size-11 shrink-0 items-center justify-center ${hero ? 'text-on-hero' : 'text-muted'}`} aria-hidden>
           <i className={`fas fa-chevron-down text-sm transition-transform ${open ? 'rotate-180' : ''}`} />
         </span>
       </button>
@@ -83,25 +85,36 @@ export function TaskCard({ card, cards, tasks, summary, steps, today, open, onTo
   );
 }
 
-/** 카드 오른쪽 큰 마감 날짜: 「이날까지」 + 「11/9 (월)」 + 「D-13」(지남 = 빨강, 다음 7일 안 = 강조색). 다 끝냈으면 「끝」 */
-function Deadline({ summary, today }: { summary: CardSummary; today: string }) {
+/** 카드 오른쪽 큰 마감 날짜: 「11/9 (월)」 + 「D-13」(마감이 지났으면 날짜 빨강). 기한 지난 일이 있으면 「기한 지난 일 n개」. 다 끝냈으면 「끝」 */
+function Deadline({ summary, today, hero }: { summary: CardSummary; today: string; hero: boolean }) {
   if (summary.finished) {
     return (
-      <span className="flex shrink-0 flex-col items-end text-muted">
+      <span className={`flex shrink-0 flex-col items-end ${hero ? 'text-on-hero' : 'text-muted'}`}>
         <i className="fas fa-check text-xl" aria-hidden />
         <span className="text-sm font-bold">끝</span>
       </span>
     );
   }
-  if (!summary.deadline) return <span className="shrink-0 text-sm font-normal text-muted">날짜 미정</span>;
+  // 기한 지난 일이 있으면 날짜 밑 「D-13」 대신 「기한 지난 일 n개」(카드에서 이 한 곳만 빨강으로 말한다).
+  // 청록 머리(hero) 위에서는 빨강 글자가 안 읽혀서 흰 글자 + 경고 아이콘.
+  const lateLine = summary.late > 0
+    ? <span className={`text-sm font-bold ${hero ? 'text-on-hero' : 'text-danger-ink'}`}>{hero && <i className="fas fa-triangle-exclamation mr-1.5" aria-hidden />}기한 지난 일 {summary.late}개</span>
+    : null;
+  if (!summary.deadline) {
+    return (
+      <span className="flex shrink-0 flex-col items-end text-right">
+        <span className={`text-sm font-normal ${hero ? 'text-hero-sub' : 'text-muted'}`}>날짜 미정</span>
+        {lateLine}
+      </span>
+    );
+  }
   const { md, wd } = dateParts(summary.deadline);
   const rel = relDay(summary.deadline, today);
-  const tone = rel.tone === 'late' ? 'text-danger-ink' : rel.tone === 'soon' ? 'text-accent-ink' : 'text-ink';
+  const dateTone = hero ? 'text-on-hero' : rel.tone === 'late' ? 'text-danger-ink' : 'text-ink';
   return (
     <span className="flex shrink-0 flex-col items-end text-right">
-      <span className="text-sm font-normal text-muted">이날까지</span>
-      <span className={`text-2xl font-bold tabular-nums ${tone}`}>{md}<span className="ml-1 text-base font-normal text-ink-soft">({wd})</span></span>
-      <span className={`text-sm font-bold ${rel.tone === 'later' ? 'text-ink-soft' : tone}`}>{rel.text}</span>
+      <span className={`text-2xl font-bold tabular-nums ${dateTone}`}>{md}<span className={`ml-1 text-base font-normal ${hero ? 'text-hero-sub' : 'text-ink-soft'}`}>({wd})</span></span>
+      {lateLine ?? <span className={`text-sm font-bold ${hero ? 'text-on-hero' : rel.tone === 'later' ? 'text-ink-soft' : dateTone}`}>{rel.text}</span>}
     </span>
   );
 }

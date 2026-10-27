@@ -24,7 +24,7 @@ export function SiteHeader() {
   return (
     <header className="on-accent sticky top-0 z-40 bg-band pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-14 max-w-content items-center gap-4 px-safe">
-        <Link href="/" onClick={guard('/')} className="inline-flex min-h-11 shrink-0 items-center text-lg font-bold text-on-accent">외도민 타임 라인</Link>
+        <Link href="/" onClick={guard('/')} className="inline-flex min-h-11 shrink-0 items-center text-lg font-bold text-on-accent">외도민 준비</Link>
 
         {items.length > 0 && (
           <nav aria-label="사이트" className="hidden h-full min-w-0 flex-1 items-stretch md:flex">
