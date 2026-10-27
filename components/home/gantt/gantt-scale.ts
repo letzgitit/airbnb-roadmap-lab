@@ -52,8 +52,11 @@ export function axisOf(first: string, last: string, dw: number, zoom: Zoom, toda
   const td = toDate(today);
   const firstOfMonths = Array.from({ length: total }, (_, i) => i).filter((i) => i > 0 && toDate(addDays(first, i)).getDate() === 1).map((i) => i * dw);
   const shortX = todayX == null ? null : Math.max(todayX, HALF_SHORT + 2);
-  const toNext0 = (new Date(toDate(first).getFullYear(), toDate(first).getMonth() + 1, 1).getTime() - toDate(first).getTime()) / 86400000;
-  const monthShown = td.getDate() >= diffDays(first, today) + 1 ? toNext0 * dw > 40 : true; // 오늘이 첫 달이면 첫 칸 달 이름이 있어야
+  const f0 = toDate(first);
+  const toNext0 = (new Date(f0.getFullYear(), f0.getMonth() + 1, 1).getTime() - f0.getTime()) / 86400000;
+  const todayInFirstMonth = f0.getFullYear() === td.getFullYear() && f0.getMonth() === td.getMonth();
+  // 오늘이 축 첫 달이면 첫 칸 달 이름이 그려졌어야 한다(다른 달 이름은 1일 자리에 늘 있다)
+  const monthShown = todayInFirstMonth ? toNext0 * dw > 40 : true;
   const long = shortX != null && (firstOfMonths.some((mx) => Math.abs(mx - shortX) < HALF_SHORT) || !monthShown);
   const half = long ? HALF_LONG : HALF_SHORT;
   const labelX = todayX == null ? null : Math.max(todayX, half + 2);

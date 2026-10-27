@@ -45,7 +45,7 @@ button.axPin:hover { text-decoration: underline; }
 .pinline { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed var(--faint); }
 .today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--today); z-index: 3; pointer-events: none; }
 
-.r { position: relative; --rowbg: var(--surface); --rc1: color-mix(in srgb, var(--c) 55%, var(--surface)); --rc2: var(--line-strong); }
+.r { position: relative; --rowbg: var(--surface); --cb: color-mix(in srgb, var(--c) 60%, var(--ci)); --rc1: color-mix(in srgb, var(--c) 55%, var(--surface)); --rc2: var(--line-strong); }
 .nl { position: sticky; left: 0; z-index: 4; width: var(--vw); display: flex; align-items: center; gap: 8px; padding-right: 12px; background: var(--rowbg); }
 .bl { position: relative; display: flex; }
 .gut { position: sticky; left: 0; width: 0; height: 100%; z-index: 1; flex: none; }
@@ -93,15 +93,16 @@ button.axPin:hover { text-decoration: underline; }
 .pName:focus-visible::after, .tName:focus-visible::after { outline: 2px solid var(--accent-ink); outline-offset: -2px; border-radius: 8px; }
 .now { flex: none; font-size: 13px; line-height: 18px; font-weight: 700; color: var(--accent-ink); }
 /* 굵은 요약 막대 + 진행 채움 + ◆ 목표일 · 「목표 11/9」 */
-.sb { position: absolute; top: 4px; height: 14px; background: color-mix(in srgb, var(--c) 34%, var(--surface)); border-radius: 7px; overflow: hidden; z-index: 2; }
-:global(.dark) .sb { background: color-mix(in srgb, var(--c) 55%, var(--surface)); }
-.sb > i { display: block; height: 100%; background: var(--c); }
+/* 남은 부분 = 옅은 채움 + 1.5px 테두리, 끝낸 부분 = 진한 채움. 테두리 · 채움 색 --cb(종류색 60% + 옅은 면 위 글자색) =
+   띠(-soft) · 흰 면 위 그림 3:1 이상(밝은 화면 3.6~4.3, 어두운 화면 5 이상). 「트리를 더 선명하게」(2026-10-27 사이트 주인) */
+.sb { position: absolute; top: 4px; height: 14px; background: color-mix(in srgb, var(--c) 16%, var(--surface)); box-shadow: inset 0 0 0 1.5px var(--cb); border-radius: 7px; overflow: hidden; z-index: 2; }
+.sb > i { display: block; height: 100%; background: var(--cb); }
 .dia { position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px; background: var(--milestone); transform: rotate(45deg); box-shadow: 0 0 0 2.5px var(--cs); z-index: 3; }
 .diaL { position: absolute; top: 2px; margin-left: 12px; padding: 0 4px; font-size: 12px; line-height: 18px; font-weight: 700; color: var(--ink-soft); background: var(--cs); white-space: nowrap; z-index: 3; }
 .rPhase.done { --rowbg: var(--sunken); background: var(--sunken); }
 .rPhase.done .pName, .rPhase.done .chevBtn, .rPhase.done .pSub { color: var(--muted); }
 .rPhase.done .badge { background: var(--muted); color: var(--surface); box-shadow: 0 0 0 2px var(--sunken); }
-.rPhase.done .sb, .rPhase.done .sb > i { background: var(--line-strong); }
+.rPhase.done .sb, .rPhase.done .sb > i { background: var(--line-strong); box-shadow: none; }
 .rPhase.done .dia { background: var(--faint); box-shadow: 0 0 0 2.5px var(--sunken); }
 .rPhase.done .diaL { color: var(--muted); background: var(--sunken); }
 .guest.rPhase .nl { padding-left: 50px; }
@@ -136,10 +137,11 @@ button.axPin:hover { text-decoration: underline; }
 .kids svg { width: 16px; height: 16px; transition: transform .18s; }
 .kids.kShut svg { transform: rotate(-90deg); }
 .tb { position: absolute; top: 3px; height: 16px; border-radius: 8px; background: var(--c); z-index: 2; overflow: hidden; }
-.tb.part { background: color-mix(in srgb, var(--c) 30%, var(--surface)); }
-.tb.part > .fill { display: block; height: 100%; background: var(--c); }
+/* 세부 항목이 달린 할 일: 단계 막대와 같은 모양(옅은 채움 + --cb 테두리, 끝낸 세부 항목만큼 --cb 채움) */
+.tb.part { background: color-mix(in srgb, var(--c) 16%, var(--surface)); box-shadow: inset 0 0 0 1.5px var(--cb); }
+.tb.part > .fill { display: block; height: 100%; background: var(--cb); }
 .tb.pt { width: 16px; margin-left: -8px; }
-.tb.bDone { background: var(--line-strong); }
+.tb.bDone { background: var(--line-strong); box-shadow: none; }
 .done.rTask .tName { color: var(--muted); font-weight: 400; }
 .done .tMeta, .done .who { color: var(--muted); }
 
@@ -209,7 +211,7 @@ button.axPin:hover { text-decoration: underline; }
 /* 범례 */
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 12px 16px 14px; border-top: 1px solid var(--line); font-size: 12px; line-height: 16px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
-.lgSb { width: 22px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--ink-soft) 50%, color-mix(in srgb, var(--ink-soft) 30%, var(--surface)) 50%); }
+.lgSb { width: 22px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--ink-soft) 50%, color-mix(in srgb, var(--ink-soft) 16%, var(--surface)) 50%); box-shadow: inset 0 0 0 1.5px var(--ink-soft); }
 .lgTb { width: 22px; height: 8px; border-radius: 4px; background: var(--ink-soft); }
 .lgSt { width: 22px; height: 4px; border-radius: 2px; background: var(--faint); }
 .lgDia { width: 9px; height: 9px; background: var(--milestone); transform: rotate(45deg); border-radius: 1px; margin: 0 2px; }
