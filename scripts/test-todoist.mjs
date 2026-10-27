@@ -295,70 +295,25 @@ test('note: 없으면 저장 안 함 · 빈 글/null 이면 지움 · 1000자 �
   assert.equal(opSchema.safeParse({ op: 'task.add', stepId: 1, text: 'a', note: 'x'.repeat(1001) }).success, false);
 });
 
-test('guide(참고 · 설명서): 없으면 저장 안 함 · 줄바꿈 그대로 · 빈 글/null 이면 지움 · 6000자 넘으면 거절', async () => {
+test('설명서는 현황 문서 밖: 할 일 patch 의 guide 는 거절 · task.add 의 guide 는 버림 · 옛 문서의 guide 키는 읽을 때 버림 · Todoist 로 안 감', async () => {
   reset();
-  const { result: a } = await mutate(opSchema.parse({ op: 'task.add', stepId: 4, text: '전입신고' }), ME);
-  assert.equal('guide' in a, false);
-  const md = '## 왜 해야 하나요\n- 주소를 옮겨요\n\n> 평일만 돼요';
-  const { result: b } = await mutate(opSchema.parse({ op: 'task.update', id: a.id, baseVersion: a.version, patch: { guide: `  ${md}\n` } }), ME);
-  assert.equal(b.guide, md);
-  assert.equal(b.version, a.version + 1);
-  // 다른 칸과 같은 version 규칙: 옛 version 으로 고치면 충돌
-  await assert.rejects(mutate(opSchema.parse({ op: 'task.update', id: a.id, baseVersion: a.version, patch: { guide: 'x' } }), ME), (e) => e instanceof OpError && e.status === 409);
-  const { result: c } = await mutate(opSchema.parse({ op: 'task.update', id: a.id, baseVersion: b.version, patch: { guide: '   ' } }), ME);
-  assert.equal('guide' in c, false);
-  const { result: d } = await mutate(opSchema.parse({ op: 'task.add', stepId: 4, text: 'b', guide: md }), ME);
-  assert.equal(d.guide, md);
-  const { result: e } = await mutate(opSchema.parse({ op: 'task.update', id: d.id, baseVersion: d.version, patch: { guide: null } }), ME);
-  assert.equal('guide' in e, false);
-  assert.equal(opSchema.safeParse({ op: 'task.add', stepId: 1, text: 'a', guide: 'x'.repeat(6000) }).success, true);
-  assert.equal(opSchema.safeParse({ op: 'task.add', stepId: 1, text: 'a', guide: 'x'.repeat(6001) }).success, false);
-  assert.equal(opSchema.safeParse({ op: 'task.update', id: a.id, patch: { guide: 'x'.repeat(6001) } }).success, false);
-  assert.equal(opSchema.safeParse({ op: 'task.update', id: a.id, patch: { guide: 3 } }).success, false);
-});
-
-test('guide: 옛 데이터(guide 없음)도 그대로 읽히고 고쳐진다', async () => {
-  reset();
-  // guide · start · parentId · kind · owner 가 없던 때의 할 일 그대로
-  const old = { id: 't_old1', stepId: 2, text: '옛 할 일', due: '2026-10-20', done: false, doneBy: null, doneAt: null, version: 3,
+  assert.equal(opSchema.safeParse({ op: 'task.update', id: 't_abc', patch: { guide: 'x' } }).success, false);
+  const add = opSchema.parse({ op: 'task.add', stepId: 4, text: '전입신고 하기', guide: '## 왜\n긴 설명' });
+  assert.equal('guide' in add, false);
+  const old = { id: 't_old1', stepId: 2, text: '옛 할 일', due: '2026-10-20', done: false, doneBy: null, doneAt: null, version: 3, guide: '## 옛 설명',
     createdAt: '2026-10-15T00:00:00.000Z', createdBy: 'me', updatedAt: '2026-10-15T00:00:00.000Z', updatedBy: 'me', deletedAt: null, deletedBy: null };
   fs.mkdirSync(path.dirname(DATA), { recursive: true });
   fs.writeFileSync(DATA, JSON.stringify({ schema: 1, version: 5, updatedAt: null, lastAction: null, steps: {}, tasks: { t_old1: old }, log: [], property: {}, editing: {} }));
   const doc = await readDoc();
-  assert.equal(doc.tasks.t_old1.guide, undefined);
+  assert.equal('guide' in doc.tasks.t_old1, false);
   assert.equal(renderMarkdown(doc, STEPS, '2026-10-28T00:00:00Z').includes('옛 할 일'), true);
-  const { result } = await mutate(opSchema.parse({ op: 'task.update', id: 't_old1', baseVersion: 3, patch: { guide: '## 어떻게 하나요\n1. 전화' } }), ME);
-  assert.equal(result.guide, '## 어떻게 하나요\n1. 전화');
-  assert.equal(result.text, '옛 할 일');
-  assert.equal(result.due, '2026-10-20');
-});
-
-test('guide: Todoist 로 보내지 않음(만들기 본문에 없음 · guide 만 고치면 호출 없음 · 웹훅 반영 뒤에도 남음)', async () => {
-  reset();
+  const { result } = await mutate(opSchema.parse({ op: 'task.update', id: 't_old1', baseVersion: 3, patch: { text: '옛 할 일 고침' } }), ME);
+  assert.equal('guide' in result, false);
+  assert.equal(JSON.parse(fs.readFileSync(DATA, 'utf8')).tasks.t_old1.guide, undefined); // 다음 쓰기에서 문서에서도 빠진다
   const fk = fakeTodoist();
-  const cfg = { token: 'tok', base: 'http://fake.test', fetch: fk.fetch };
-  const add = opSchema.parse({ op: 'task.add', stepId: 4, text: '전입신고 하기', guide: '## 왜\n긴 설명' });
   const { result: t } = await mutate(add, ME);
-  await pushToTodoist([{ op: add, result: t }], cfg);
-  assert.equal(fk.calls.length, 1);
+  await pushToTodoist([{ op: add, result: t }], { token: 'tok', base: 'http://fake.test', fetch: fk.fetch });
   assert.deepEqual(fk.calls[0].body, { content: '전입신고 하기', labels: ['외도민'] });
-  assert.equal(JSON.stringify(fk.calls).includes('긴 설명'), false);
-  assert.equal('guide' in T.siteState((await readDoc()).tasks[t.id]), false);
-
-  fk.calls.length = 0;
-  const cur = (await readDoc()).tasks[t.id];
-  const u = opSchema.parse({ op: 'task.update', id: t.id, baseVersion: cur.version, patch: { guide: '## 바뀐 설명' } });
-  const { result: t2 } = await mutate(u, ME);
-  await pushToTodoist([{ op: u, result: t2 }], cfg);
-  assert.equal(fk.calls.length, 0);
-
-  // Todoist 에서 제목을 고쳐 웹훅이 와도 사이트의 guide 는 그대로
-  const linked = (await readDoc()).tasks[t.id];
-  const r = await send(event('item:updated', { id: linked.todoistId, content: '전입신고 하기(주민센터)' }));
-  assert.equal(r.status, 200);
-  const after = (await readDoc()).tasks[t.id];
-  assert.equal(after.text, '전입신고 하기(주민센터)');
-  assert.equal(after.guide, '## 바뀐 설명');
 });
 
 test('owner: 남편 · 아내 · 같이만 · null 이면 지움 · Todoist 로 보내지 않음', async () => {

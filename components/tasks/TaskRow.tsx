@@ -16,6 +16,7 @@ import { longDate, PHASE_WORD, placeOf, placePatch, placeStep, spanDate, taskPha
 import { KindSelect, NoteField, OwnerSelect, SimpleWhenFields, type StepRef, type TaskOwner, type TaskWithNote } from './TaskComposer';
 import { TaskPhotos } from './TaskPhotos';
 import { GuideButton, GuideField } from './TaskGuide';
+import { fetchGuide, saveGuide, useGuideIds } from './guides-client';
 import { usePhotos } from '@/components/progress/PhotosPanel';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { LineIcon } from '@/components/ui/LineIcon';
@@ -41,7 +42,10 @@ import { LineIcon } from '@/components/ui/LineIcon';
  *   고치는 폼은 제목 · 언제부터(선택) · 언제까지 · 문의 필요(종류 「문의」) · 메모만(종류 · 담당 · 넣을 곳은 숨김, 값은 그대로). 폼 안 「이 할 일 지우기」는 확인 창을 띄운다.
  *   보조 줄: 「10월 27일(화)까지」 · 「문의 필요」 안내 배지 · 「지금 할 때」. 남은 날 배지: 지남 = 경고(빨강 글자 옅은 면) · 3일 안 = 주의(노랑) · 그 밖 = 회색.
  */
-type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; guide: string; place: string };
+type Form = { text: string; start: string; due: string; kind: TaskKind | ''; owner: TaskOwner | ''; note: string; place: string };
+// 설명서(현황 문서 밖 — guides-client): 폼을 열 때 본문을 받아 두고, 저장할 때 바뀌었으면 할 일보다 먼저 따로 저장한다
+type GuideForm = { text: string; orig: string; base: number; loading: boolean; error: string | null };
+const NO_GUIDE: GuideForm = { text: '', orig: '', base: 0, loading: false, error: null };
 
 export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, hideDate = false, onEditChange, onToggle, onGone }: {
   t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
@@ -59,22 +63,32 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const [due, setDue] = useState('');
   const [kind, setKind] = useState<TaskKind | ''>('');
   const [note, setNote] = useState('');
-  const [guide, setGuide] = useState('');
+  const [gf, setGf] = useState<GuideForm>(NO_GUIDE);
+  const guideIds = useGuideIds();
+  const guideMeta = t.deletedAt ? undefined : guideIds[t.id];
   const [owner, setOwner] = useState<TaskOwner | ''>('');
   const [place, setPlace] = useState(placeOf(t));
   const [err, setErr] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [base, setBase] = useState(t.version);
-  const [orig, setOrig] = useState<Form>({ text: '', start: '', due: '', kind: '', owner: '', note: '', guide: '', place: placeOf(t) });
+  const [orig, setOrig] = useState<Form>({ text: '', start: '', due: '', kind: '', owner: '', note: '', place: placeOf(t) });
   const { busy, run } = useBusy();
   const textBtnRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const dl = dueLabel(t.due, todayStr());
   const dateText = spanDate(t.start, t.due) ?? dl?.date;
-  const dirty = ed.open && (text !== orig.text || start !== orig.start || due !== orig.due || kind !== orig.kind || note !== orig.note || guide !== orig.guide || owner !== orig.owner || place !== orig.place);
-  const fill = (o: Form) => { setText(o.text); setStart(o.start); setDue(o.due); setKind(o.kind); setOwner(o.owner); setNote(o.note); setGuide(o.guide); setPlace(o.place); setOrig(o); };
+  const dirty = ed.open && (text !== orig.text || start !== orig.start || due !== orig.due || kind !== orig.kind || note !== orig.note || gf.text !== gf.orig || owner !== orig.owner || place !== orig.place);
+  const fill = (o: Form) => { setText(o.text); setStart(o.start); setDue(o.due); setKind(o.kind); setOwner(o.owner); setNote(o.note); setPlace(o.place); setOrig(o); };
+  // 폼을 열 때 설명서 본문 받기(없으면 빈 칸, base 0)
+  const loadGuide = () => {
+    if (!guideMeta) { setGf(NO_GUIDE); return; }
+    setGf({ ...NO_GUIDE, loading: true });
+    fetchGuide(t.id)
+      .then((g) => setGf({ text: g?.md ?? '', orig: g?.md ?? '', base: g?.version ?? 0, loading: false, error: null }))
+      .catch(() => setGf({ ...NO_GUIDE, error: '설명서를 불러오지 못했어요. 폼을 닫았다 다시 열어 주세요.' }));
+  };
   const formOf = (c: Record<string, unknown>): Form => ({
-    text: String(c.text ?? ''), start: String(c.start ?? ''), due: String(c.due ?? ''), kind: (c.kind ?? '') as TaskKind | '', owner: (c.owner ?? '') as TaskOwner | '', note: String(c.note ?? ''), guide: String(c.guide ?? ''),
+    text: String(c.text ?? ''), start: String(c.start ?? ''), due: String(c.due ?? ''), kind: (c.kind ?? '') as TaskKind | '', owner: (c.owner ?? '') as TaskOwner | '', note: String(c.note ?? ''),
     place: placeOf({ stepId: typeof c.stepId === 'number' ? c.stepId : t.stepId, parentId: typeof c.parentId === 'string' ? c.parentId : null }),
   });
   const tasks = doc?.tasks ?? {};
@@ -124,7 +138,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const saveAsNew = () => {
     if (spanBad()) return;
     const where = place.startsWith('p:') ? { parentId: place.slice(2) } : { stepId: listStepId ?? placeStep(place, tasks) ?? t.stepId };
-    void run(() => send({ op: 'task.add', ...where, text, due: due || null, ...(start ? { start } : {}), ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(guide.trim() ? { guide: guide.trim() } : {}), ...(owner ? { owner } : {}) }, {
+    void run(() => send({ op: 'task.add', ...where, text, due: due || null, ...(start ? { start } : {}), ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(owner ? { owner } : {}) }, {
       quiet: true, onSuccess: () => { ed.stop(); onGone(); },
     }).then((r) => setErr(taskErrorMessage(r))));
   };
@@ -146,13 +160,27 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               ...(start !== orig.start ? { start: start || null } : {}),
               ...placePatch(orig.place, place),
               ...(kind !== orig.kind ? { kind: kind || null } : {}), ...(note !== orig.note ? { note: note.trim() || null } : {}),
-              ...(guide !== orig.guide ? { guide: guide.trim() || null } : {}), ...(owner !== orig.owner ? { owner: owner || null } : {}),
+              ...(owner !== orig.owner ? { owner: owner || null } : {}),
             };
-            void run(() => send({ op: 'task.update', id: t.id, baseVersion: base, patch }, {
-              quiet: true,
-              onSuccess: () => { ed.stop(); if (leaving) onGone(); },
-              onTakeLatest: (cur) => { fill(formOf(cur)); setBase(Number(cur.version) || 0); },
-            }).then((r) => setErr(taskErrorMessage(r))));
+            void run(async () => {
+              // 설명서가 바뀌었으면 먼저 따로 저장한다(실패하면 할 일도 저장하지 않고 폼에 까닭을 적는다)
+              if (gf.text !== gf.orig && !gf.loading && !gf.error) {
+                const g = await saveGuide(t.id, gf.text, gf.base);
+                if (!g.ok) {
+                  // 409: 그 사이 다른 사람이 고침 — 내 글은 그대로 두고 version 만 맞춰, 한 번 더 저장하면 덮어쓴다
+                  if (g.status === 409) setGf((s) => ({ ...s, base: g.current?.version ?? 0 }));
+                  setErr(g.status === 409 ? '그 사이 다른 사람이 설명서를 고쳤어요. 내 글로 덮어쓰려면 한 번 더 저장하세요.' : g.message);
+                  return;
+                }
+                setGf((s) => ({ ...s, orig: g.guide?.md ?? '', text: g.guide?.md ?? '', base: g.guide?.version ?? 0 }));
+              }
+              const r = await send({ op: 'task.update', id: t.id, baseVersion: base, patch }, {
+                quiet: true,
+                onSuccess: () => { ed.stop(); if (leaving) onGone(); },
+                onTakeLatest: (cur) => { fill(formOf(cur)); setBase(Number(cur.version) || 0); },
+              });
+              setErr(taskErrorMessage(r));
+            });
           }}>
             {/* 긴 할 일도 다 보이게 글 길이에 맞춰 늘어나는 칸. Enter 로 저장(한 줄 글이라 줄바꿈은 넣지 않는다), Esc 는 취소 */}
             <AutoTextarea className={inputCls} rows={2} value={text} maxLength={200} autoFocus aria-label="할 일 내용"
@@ -191,7 +219,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             )}
             <NoteField value={note} onChange={setNote} />
             {/* 설명서: 접혀 있다가 펼쳐 쓰는 큰 칸(부부가 직접 고친다) */}
-            <GuideField value={guide} onChange={setGuide} title={text} />
+            {/* 지운 할 일을 새로 올리는 폼에서는 설명서를 쓰지 않는다(새 id 가 저장 뒤에야 생김) */}
+            {!deleted && <GuideField value={gf.text} onChange={(v) => setGf((s) => ({ ...s, text: v }))} title={text} loading={gf.loading} error={gf.error} />}
             {/* 쉬운 모양: 메모 사진도 여기서 붙인다(바로 올라가고, 저장 단추와 상관없다) */}
             {simple && !deleted && <TaskPhotos taskId={t.id} stepId={t.stepId} />}
             {/* 메모 속 전화번호는 눌러서 바로 건다(메모 글은 그대로) */}
@@ -229,7 +258,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
 
   const late = !!dl?.late && !t.done;
   const call = callNumber(t.note);
-  const startEdit = () => { fill(formOf(t as unknown as Record<string, unknown>)); setErr(null); setBase(t.version); ed.start(); };
+  const startEdit = () => { fill(formOf(t as unknown as Record<string, unknown>)); loadGuide(); setErr(null); setBase(t.version); ed.start(); };
   if (simple) {
     // 남은 날 배지(제목 줄 오른쪽): 기한 지남 = 경고 · 3일 안 = 주의 · 그 밖 = 회색. 누르지 못하는 표시라 빨강 면 · 검정 면을 쓰지 않는다.
     // 보조 줄: 「10월 27일(화)까지」 · 「문의 필요」 안내 배지 · 「지금 할 때」. 담당은 쉬운 모양에서 보이지 않는다(값은 그대로).
@@ -241,7 +270,6 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     const more = noteLines.includes('\n') || firstLine.length > 40 || photoN > 0;
     const hasMemo = !!noteLines || photoN > 0;
     const ask = t.kind === '문의';
-    const hasGuide = !!t.guide?.trim();
     const dateWord = spanDate(t.start, t.due) ?? (t.due ? `${longDate(t.due)}까지` : null);
     // 제목 16/600(세부 항목은 16/500) — 아래 첫 줄에서 바로 준다
     const sub = (
@@ -276,7 +304,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
                   {t.text}<span className="sr-only">{noteOpen ? ' 메모 접기' : ' 메모 펼치기'}</span>
                 </span>
               ) : <span>{t.text}</span>}
-              {hasGuide && <GuideButton title={t.text} guide={t.guide as string} />}
+              {guideMeta && <GuideButton taskId={t.id} title={t.text} version={guideMeta.version} />}
             </div>
             {dl && !t.done && <Badge tone={tone} className="-mt-0.5 shrink-0">{dl.rel}</Badge>}
           </div>
@@ -335,7 +363,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
           onChange={(e) => { onToggle(t); void send({ op: 'task.update', id: t.id, patch: { done: e.target.checked } }); }} />
       </label>
       <button ref={textBtnRef} type="button" aria-label={`${t.text} 수정`} className="min-w-0 flex-1 py-3 text-left"
-        onClick={() => { fill(formOf(t as unknown as Record<string, unknown>)); setErr(null); setBase(t.version); ed.start(); }}>
+        onClick={startEdit}>
         <span className={`block truncate ${depth ? 'text-sm font-normal text-ink' : rowText} ${t.done ? 'text-muted line-through' : ''}`}>{t.text}</span>
         {/* 보조 줄: 날짜(ink-soft) · 남은 날 · (홈) n단계 이름 + 상대가 편집 중일 때의 표시. 항목 사이는 점 없이 12px 간격. 다 없으면 줄 자체가 없다.
             「n일 지남」 빨강은 기한 지남 묶음 밖에서만(quietLate = 묶음 이름이 이미 빨강으로 말하므로 줄은 muted) */}

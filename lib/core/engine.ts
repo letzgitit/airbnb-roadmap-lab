@@ -43,6 +43,8 @@ export function emptyDoc(): ProgressDoc {
 export function parseDoc(raw: string | null): ProgressDoc {
   if (!raw) return emptyDoc();
   const d = JSON.parse(raw) as Partial<ProgressDoc>;
+  // 설명서는 문서 밖(lib/core/guides.ts)에 둔다. 잠깐 문서에 guide 를 넣던 판(배포 안 됨)이 남긴 키가 있으면 읽을 때 버린다
+  for (const t of Object.values(d.tasks ?? {})) if (t && typeof t === 'object' && 'guide' in t) delete (t as { guide?: unknown }).guide;
   return {
     ...emptyDoc(), ...d, steps: d.steps ?? {}, tasks: d.tasks ?? {}, log: d.log ?? [], property: d.property ?? {}, editing: d.editing ?? {},
     money: d.money ?? {}, plan: d.plan ?? null, questions: d.questions ?? {}, guests: d.guests ?? {},
@@ -159,7 +161,6 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
         deletedAt: null, deletedBy: null,
         ...(op.kind ? { kind: op.kind } : {}),
         ...(op.note ? { note: op.note } : {}),
-        ...(op.guide ? { guide: op.guide } : {}),
         ...(op.owner ? { owner: op.owner } : {}),
         ...(op.start ? { start: op.start } : {}),
         ...(op.parentId ? { parentId: op.parentId } : {}),
@@ -205,9 +206,7 @@ function applyOp(doc: ProgressDoc, op: EngineOp, actor: Actor, now: number): { r
         next.todoistAt = null; next.todoistSent = null; delete next.todoistError;
       }
       // 자세한 내용을 비우거나 null 로 보내면 키를 지운다(없으면 저장하지 않는 것과 같게)
-      if (op.patch.note !== undefined && !op.patch.note) delete next.note;
-      if (op.patch.guide !== undefined && !op.patch.guide) delete next.guide;
-      if (op.patch.owner === null) delete next.owner;
+      if (op.patch.note !== undefined && !op.patch.note) delete next.note;      if (op.patch.owner === null) delete next.owner;
       if (op.patch.done !== undefined && op.patch.done !== cur.done) {
         next.doneBy = op.patch.done ? actor.name : null;
         next.doneAt = op.patch.done ? iso : null;

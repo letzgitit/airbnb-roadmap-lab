@@ -57,11 +57,9 @@ function normalize(raw) {
 
 // 적용 전 요약 한 줄
 function describeOp(op) {
-  // 설명서(guide)는 길어서 글자 수만 보인다
-  const shown = op.patch && typeof op.patch.guide === 'string' ? { ...op.patch, guide: `(설명서 ${op.patch.guide.length}자)` } : op.patch;
-  const p = shown ? ` ${JSON.stringify(shown)}` : '';
+  const p = op.patch ? ` ${JSON.stringify(op.patch)}` : '';
   switch (op.op) {
-    case 'task.add': return `할 일 추가 [${op.parentId ? `세부 항목 ← ${op.parentId}` : `${op.stepId}단계`}] "${op.text}"${op.start ? ` 시작 ${op.start}` : ''}${op.due ? ` 마감 ${op.due}` : ''}${op.kind ? ` 종류 ${op.kind}` : ''}${op.note ? ` 자세히 ${op.note.length}자` : ''}${op.guide ? ` 설명서 ${op.guide.length}자` : ''}${op.owner ? ` 맡은 사람 ${op.owner}` : ''}`;
+    case 'task.add': return `할 일 추가 [${op.parentId ? `세부 항목 ← ${op.parentId}` : `${op.stepId}단계`}] "${op.text}"${op.start ? ` 시작 ${op.start}` : ''}${op.due ? ` 마감 ${op.due}` : ''}${op.kind ? ` 종류 ${op.kind}` : ''}${op.note ? ` 자세히 ${op.note.length}자` : ''}${op.owner ? ` 맡은 사람 ${op.owner}` : ''}`;
     case 'task.update': if (op.patch && Object.keys(op.patch).length === 1 && 'todoistId' in op.patch) return `할 일 ${op.id} Todoist 짝 ${op.patch.todoistId ?? '끊기'}`; return `${op.op} ${op.id}${op.baseVersion !== undefined ? ` (v${op.baseVersion})` : ''}${op.force ? ' 덮어쓰기' : ''}${p}`;
     case 'log.add': return `기록 추가 [${op.kind}] "${op.text}"`;
     case 'property.add': return `집 정보 추가 ${op.label}: ${op.value}`;
@@ -101,7 +99,6 @@ function printGet(doc, steps) {
     console.log(`${pad}${t.done ? '☑' : '☐'} ${t.kind ? `[${t.kind}] ` : ''}${t.text}  — ${t.stepId}단계${auto}${t.owner ? ` · ${t.owner}` : ''}${span}${t.due ? ` · 마감 ${t.due}` : ''}${t.done ? ` · ${t.doneBy}` : ''}  (id ${t.id} v${t.version}${orphanOf ? ` · 상위 ${orphanOf}` : ''}${t.todoistId ? ` · todoist ${t.todoistId}` : ''})`);
     const notePad = depth ? '          ' : '      ';
     if (t.note) for (const line of t.note.split('\n')) console.log(`${notePad}${line}`);
-    if (t.guide) console.log(`${notePad}📖 설명서 ${t.guide.length}자 — 전문은 get --json`);
     if (t.todoistError) console.log(`${notePad}⚠️ Todoist 보내기 실패: ${t.todoistError} (todoist-sync 로 다시 맞춤)`);
   }
   const money = Object.values(doc.money ?? {}).filter((m) => !m.deletedAt).sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));

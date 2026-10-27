@@ -73,8 +73,8 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 
 | 연산 | 필수 필드 | 비고 |
 |---|---|---|
-| `task.add` | `stepId`(1~14), `text`(1~200자) | `stepId`는 세부 항목(`parentId`)이면 빼도 된다(부모 단계를 따름). `start`(선택): 시작일 `YYYY-MM-DD` 또는 null. `parentId`(선택): 부모 할 일 id(`t_…`) — 아래 「시작일 · 세부 항목」. `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다). `note`(선택): 자세한 내용 ≤1000자(제목은 짧게, 길게 적을 것은 여기). `owner`(선택): `남편` `아내` `같이`. `guide`(선택): 설명서 마크다운 ≤6000자 — 아래 「설명서」 |
-| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기) `note`(빈 글 · null = 지우기) `guide`(설명서 마크다운, 빈 글 · null = 지우기) `owner`(null = 지우기) `start`(시작일, null = 지우기) `parentId`(부모 할 일 id, null = 부모에서 떼기) `todoistId`(Todoist 짝, null = 짝 끊기). **`done`만, 또는 `todoistId`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
+| `task.add` | `stepId`(1~14), `text`(1~200자) | `stepId`는 세부 항목(`parentId`)이면 빼도 된다(부모 단계를 따름). `start`(선택): 시작일 `YYYY-MM-DD` 또는 null. `parentId`(선택): 부모 할 일 id(`t_…`) — 아래 「시작일 · 세부 항목」. `due`: `YYYY-MM-DD` 또는 null. `kind`(선택): `결정` `연락` `일정 확정` `구매` `예약` `서류` `공사` `확인` 또는 null. 없으면 종류를 안 보인다(옛 할 일도 그대로 읽힌다). `note`(선택): 자세한 내용 ≤1000자(제목은 짧게, 길게 적을 것은 여기). `owner`(선택): `남편` `아내` `같이`. 설명서는 여기 넣지 않는다(문서 밖 — 아래 「설명서」) |
+| `task.update` | `id`, `patch` | `patch`: `text` `due` `stepId`(단계 이동) `done` `kind`(위 값 또는 null = 종류 지우기) `note`(빈 글 · null = 지우기) `owner`(null = 지우기) `start`(시작일, null = 지우기) `parentId`(부모 할 일 id, null = 부모에서 떼기) `todoistId`(Todoist 짝, null = 짝 끊기). **`done`만, 또는 `todoistId`만 바꿀 땐 `baseVersion` 불필요**, 그 밖엔 필수 |
 | `task.delete` / `task.restore` | `id` | 소프트 삭제(30일 보관 후 정리) |
 | `step.update` | `stepId`, `baseVersion`, `patch` | `patch`: `status`(`todo` `doing` `done`) `targetDate` `note`(≤1000자). 아직 한 번도 안 고친 단계의 version은 0 |
 | `log.add` | `kind`(`결정` `통화` `일정` `메모`), `text`(≤1000자) | 「현황 메모/결정 기록」 |
@@ -105,15 +105,24 @@ node scripts/progress.mjs apply /tmp/p.json --dry-run && node scripts/progress.m
 - Todoist: 세부 항목도 평평한 할 일로 보내고(`parent_id` 없음) 시작일은 보내지 않는다(1차). 아래 「Todoist 동기화」 표.
 - `get`은 세부 항목을 부모 밑에 `└`로, `export-md`는 두 칸 들여 쓴다. 시작일이 있으면 `시작 …` / `시작 ~ 마감 …`.
 
-### 설명서 (`guide`)
+### 설명서 (`scripts/guides.mjs`)
 
-할 일마다 「왜 · 어떻게 하는지」 길게 적어 두는 설명서(2026-10-28). 새 홈 할 일 줄 제목 옆 물음표를 누르면 시트로 열린다. 선택이고, 없는 옛 할 일은 그대로 읽힌다.
+할 일마다 「왜 · 어떻게 하는지」 길게 적어 두는 설명서(2026-10-28). 새 홈 할 일 줄 제목 뒤 물음표를 누르면 시트로 열린다. **현황 문서 밖에 따로 저장한다** — 문서 하나 상한(400KB)과 화면을 열 때마다 문서를 통째로 받는 무게 때문(설명서 68개 ≈ 400KB).
 
-- 마크다운 ≤6000자. 앞뒤 공백만 지우고 줄바꿈은 그대로. 빈 글 · `null` = 지우기(키가 없어진다). 고칠 때 `baseVersion` 필수(다른 칸과 같은 규칙).
+- 저장: 운영 = Upstash 해시 `oedomin:guides`(필드 = 할 일 id, 값 = `{ md, version, updatedAt, updatedBy }` JSON), 로컬 = `.data/guides.json`. 코드 `lib/core/guides.ts`.
+- 규칙: 마크다운 ≤6000자, 앞뒤 공백만 지우고 줄바꿈은 그대로, 빈 글이면 지움. 화면 저장은 `version`이 다르면 409(다시 저장하면 덮어씀). 할 일을 지워도 설명서는 남고(되살리기 대비) 화면 목록에서만 빠진다. **Todoist 로 보내지 않는다.** `export-md`에도 넣지 않는다.
+- API(로그인한 두 사람만): `GET /api/guides` → `{ ids: { [할 일 id]: { len, version } } }`(지운 할 일 뺌), `GET /api/guides/<id>` → `{ guide }`, `PUT /api/guides/<id>` `{ md, baseVersion }`(없던 설명서면 0).
 - 화면이 읽는 모양: `## 소제목`(### = 작은 소제목) · `- 점 목록` · `1. 번호 목록` · `**굵게**` · `[글](https://…)`(새 창, 글자에 도메인이 없으면 문단 끝에 「(도메인)」) · `> 인용` = 「알아 두기」 옅은 면 상자 · `| 표 |` · `---`. 소제목은 「왜 해야 하나요 / 어떻게 하나요 / 준비물 / 알아 두면 좋은 것 / 자주 하는 실수」처럼.
-- **Todoist 로 보내지 않는다**(메모 `note`만 description 으로 간다). Todoist 쪽 고침이 와도 `guide`는 그대로.
-- `get`은 「📖 설명서 n자」만 보이고, 전문은 `get --json`. `export-md`에는 넣지 않는다.
-- 예: `{ "op": "task.update", "id": "t_xxxxxxxxxxxx", "baseVersion": 4, "patch": { "guide": "## 왜 해야 하나요\n…\n\n## 어떻게 하나요\n1. …" } }`
+- CLI(첫 줄 `[저장소]`는 progress.mjs 와 같은 규칙, **운영에 쓰려면 `--yes`**, 쓰는 사람 이름은 `--by`, 없으면 claude). CLI 쓰기는 version 을 보지 않고 덮어쓴다.
+
+```bash
+node scripts/guides.mjs list                                   # 설명서가 있는 할 일: id · 글자 수 · version · 제목(지운 할 일 표시)
+node scripts/guides.mjs get t_xxxxxxxxxxxx > 전입신고.md        # 본문
+node scripts/guides.mjs set t_xxxxxxxxxxxx 전입신고.md --yes    # 한 개 덮어쓰기(빈 파일이면 지움)
+node scripts/guides.mjs import guides.json --dry-run            # { "t_…": "## 왜 해야 하나요\n…", … } 미리 보기(새로 · 바꿈 · 지움 · 그대로 · 현황에 없는 할 일)
+node scripts/guides.mjs import guides.json --yes                # 한 번에 넣기 — 하나라도 형식이 틀리면 아무것도 쓰지 않는다
+```
+- 할 일 문서에 `guide`를 넣는 연산은 없다(`task.update` patch 에 넣으면 거절, `task.add`에 넣으면 버림). 잠깐 있던 판의 `guide` 키가 문서에 남아 있으면 읽을 때 버린다.
 
 - 「사용자 체크리스트 항목」은 **할 일(task)과 같은 항목**입니다. `checklist.add/update/delete/restore`는 `task.*`의 별칭입니다.
 - `baseVersion`은 `get`에서 본 `(id … vN)`의 N입니다. 서버 version과 다르면 **그 연산만** 409로 실패하고 나머지는 적용됩니다(결과의 `failed`에 최신 내용이 들어 있음). 덮어쓰려면 연산에 `"force": true`.

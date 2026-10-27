@@ -6,9 +6,10 @@ import { Sheet } from '@/components/Sheet';
 import { AutoTextarea, inputCls, textBtn } from '@/components/progress/bits';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { parseGuide, plainText, type Block, type Inline } from './guide-md';
+import { fetchGuide } from './guides-client';
 
 /**
- * 할 일 설명서 — 할 일 데이터의 guide(마크다운, ≤6000자). 화면 이름은 「설명서」 하나.
+ * 할 일 설명서 — 현황 문서 밖에 따로 저장한 마크다운(≤6000자, lib/core/guides.ts · 화면 쪽 guides-client.ts). 화면 이름은 「설명서」 하나.
  * - GuideButton: 할 일 제목 글 바로 뒤에 붙는 물음표 단추(아이콘 20, 누르는 칸 44 — 음수 여백으로 줄 높이를 늘리지 않음, 강조색 없음).
  *   누르면 폰 = 아래에서 올라오는 시트, PC = 가운데 창(공용 Sheet, 머리 · 본문 양옆 24px).
  *   열 때 기록을 하나 쌓아 폰의 뒤로 가기가 시트를 닫는다. 스크롤 잠금 · Esc · 포커스 복귀는 Sheet 가 한다.
@@ -164,15 +165,18 @@ function useGuideSheet(history: boolean) {
   return { open, shown, show, close };
 }
 
-function GuideSheet({ s, title, guide, preview = false }: { s: ReturnType<typeof useGuideSheet>; title: string; guide: string; preview?: boolean }) {
+/** guide = null 이면 아직 받는 중, error 가 있으면 그 문장 */
+function GuideSheet({ s, title, guide, error = null, preview = false }: { s: ReturnType<typeof useGuideSheet>; title: string; guide: string | null; error?: string | null; preview?: boolean }) {
   if (!s.open) return null;
   // React 이벤트는 포털을 지나 폼까지 올라간다 — 시트 안 Esc 가 고치는 폼의 「취소」로 번지지 않게 여기서 막고 시트만 닫는다
   return createPortal(
     <div onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); s.close(); } else e.stopPropagation(); }}>
       <Sheet open={s.open} shown={s.shown} onClose={s.close} wide
         eyebrow={<span className="text-sm font-semibold text-muted">{preview ? '설명서 미리 보기' : '설명서'}</span>} title={title}>
-        <div className="px-6 pb-[calc(40px+env(safe-area-inset-bottom))] pt-6">
-          <GuideView text={guide} />
+        <div className="px-6 pb-[calc(40px+env(safe-area-inset-bottom))] pt-6" aria-busy={guide === null && !error}>
+          {error ? <p role="alert" className="text-base text-danger-ink">{error}</p>
+            : guide === null ? <p className="text-base text-muted">불러오는 중…</p>
+            : <GuideView text={guide} />}
         </div>
       </Sheet>
     </div>,
@@ -181,21 +185,37 @@ function GuideSheet({ s, title, guide, preview = false }: { s: ReturnType<typeof
 }
 
 /** 제목 글 바로 뒤에 붙는 물음표(inline). 누르는 칸 44 는 음수 여백으로 — 줄 높이 · 글 흐름을 늘리지 않는다 */
-export function GuideButton({ title, guide }: { title: string; guide: string }) {
+// 본문은 누를 때 받는다(설명서는 현황 문서 밖 — guides-client). version 이 그대로면 한 번 받은 글을 다시 쓴다
+export function GuideButton({ taskId, title, version }: { taskId: string; title: string; version: number }) {
   const s = useGuideSheet(true);
+  const [body, setBody] = useState<{ v: number; md: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const open = () => {
+    s.show();
+    if (body?.v === version) return;
+    setError(null);
+    setBody(null);
+    fetchGuide(taskId)
+      .then((g) => setBody({ v: version, md: g?.md ?? '' }))
+      .catch(() => setError('설명서를 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.'));
+  };
+  const guide = body?.v === version ? body.md : null;
   return (
     <>
-      <button type="button" aria-label={`${title} 설명서 보기`} aria-haspopup="dialog" onClick={s.show}
+      <button type="button" aria-label={`${title} 설명서 보기`} aria-haspopup="dialog" onClick={open}
         className="-my-2.5 -mr-3 ml-[-6px] inline-flex size-11 items-center justify-center rounded-full align-middle text-ink-soft transition-colors hover:bg-strong">
         <LineIcon name="help" className="size-5" />
       </button>
-      <GuideSheet s={s} title={title} guide={guide} />
+      <GuideSheet s={s} title={title} guide={guide} error={error} />
     </>
   );
 }
 
 // ── 쓰기(고치는 폼 안) ──
-export function GuideField({ value, onChange, title }: { value: string; onChange: (v: string) => void; title: string }) {
+/** loading = 설명서 본문을 받는 중(그동안은 쓰지 못한다), error = 받기 실패 문장 */
+export function GuideField({ value, onChange, title, loading = false, error = null }: {
+  value: string; onChange: (v: string) => void; title: string; loading?: boolean; error?: string | null;
+}) {
   const uid = useId();
   const [open, setOpen] = useState(false);
   const s = useGuideSheet(false);
@@ -206,7 +226,7 @@ export function GuideField({ value, onChange, title }: { value: string; onChange
         className="flex min-h-11 w-full items-center gap-2 px-3 text-left">
         <LineIcon name="help" className="size-5 text-ink-soft" />
         <span className="text-base font-semibold text-ink">설명서</span>
-        <span className="text-sm font-normal text-muted">{n ? `${n.toLocaleString()}자` : '없음'}</span>
+        <span className="text-sm font-normal text-muted">{loading ? '불러오는 중…' : n ? `${n.toLocaleString()}자` : '없음'}</span>
         <LineIcon name="chevron" className={`ml-auto size-5 text-faint ${open ? '-rotate-90' : 'rotate-90'}`} />
       </button>
       {open && (
@@ -214,7 +234,8 @@ export function GuideField({ value, onChange, title }: { value: string; onChange
           <p className="text-sm font-normal leading-relaxed text-muted">
             이 일을 왜 · 어떻게 하는지 적어 두면 할 일 옆 물음표로 볼 수 있어요. 줄 앞에 ## 를 쓰면 소제목, - 를 쓰면 목록이 돼요.
           </p>
-          <AutoTextarea className={`${inputCls} leading-relaxed`} rows={8} value={value} maxLength={GUIDE_MAX} aria-label="설명서"
+          {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}
+          <AutoTextarea className={`${inputCls} leading-relaxed`} rows={8} value={value} maxLength={GUIDE_MAX} aria-label="설명서" disabled={loading || !!error}
             placeholder={'## 왜 해야 하나요\n…\n\n## 어떻게 하나요\n- …\n- …'} onChange={(e) => onChange(e.target.value)} />
           <div className="flex items-center justify-between gap-3">
             <button type="button" className={`${textBtn} mx-0`} aria-haspopup="dialog" onClick={s.show}>미리 보기</button>

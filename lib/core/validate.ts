@@ -29,9 +29,7 @@ const taskOwner = z.union([z.enum(TASK_OWNERS), z.null()], { error: `맡은 사�
 // 할 일 자세한 내용: ≤1000자, 빈 글 · null = 지우기
 export const TASK_NOTE_MAX = 1000;
 const taskNote = z.union([z.string().trim().max(TASK_NOTE_MAX, `자세한 내용은 ${TASK_NOTE_MAX}자 이하로 입력하세요.`), z.null()]);
-// 할 일 설명서(guide): 마크다운 ≤6000자, 빈 글 · null = 지우기. 줄바꿈은 그대로 둔다(앞뒤 공백만 지움).
-export const TASK_GUIDE_MAX = 6000;
-const taskGuide = z.union([z.string().trim().max(TASK_GUIDE_MAX, `설명서는 ${TASK_GUIDE_MAX}자 이하로 입력하세요.`), z.null()]);
+// 할 일 설명서는 현황 문서 밖 따로 저장한다(lib/core/guides.ts) — 여기 연산에는 guide 가 없다(taskPatch 는 strict 라 넣으면 거절).
 // Todoist 할 일 id(영숫자) 또는 null(짝 끊기)
 export const todoistId = z.union([z.string().regex(/^[A-Za-z0-9]{1,64}$/, 'Todoist id 형식이 올바르지 않습니다.'), z.null()]);
 // 세부 항목의 부모 할 일 id(t_…) 또는 null(부모에서 떼기)
@@ -43,7 +41,6 @@ export const taskPatch = z.object({
   done: z.boolean().optional(),
   kind: taskKind.optional(),
   note: taskNote.optional(),
-  guide: taskGuide.optional(),
   owner: taskOwner.optional(),
   todoistId: todoistId.optional(),
   start: nullableDate.optional(),
@@ -111,7 +108,7 @@ export const opSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('step.update'), stepId, baseVersion: version, patch: stepPatch, force: z.boolean().optional() }),
   // stepId: 세부 항목(parentId)이면 빼도 된다(부모 단계를 따른다). 줘서 부모와 다르면 엔진이 거절한다.
   z.object({
-    op: z.literal('task.add'), stepId: stepId.optional(), text, due: nullableDate.optional(), kind: taskKind.optional(), note: taskNote.optional(), guide: taskGuide.optional(), owner: taskOwner.optional(),
+    op: z.literal('task.add'), stepId: stepId.optional(), text, due: nullableDate.optional(), kind: taskKind.optional(), note: taskNote.optional(), owner: taskOwner.optional(),
     start: nullableDate.optional(), parentId: parentId.optional(),
   }).refine((o) => o.stepId !== undefined || !!o.parentId, { message: '단계(stepId)가 필요합니다(세부 항목이면 parentId 만으로 됩니다).', path: ['stepId'] })
     .refine((o) => !(o.start && o.due && o.start > o.due), { message: '시작일은 마감일보다 늦을 수 없습니다.', path: ['start'] }),
