@@ -88,9 +88,9 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
       <Segmented label="보는 방식 고르기" value={view} onChange={(v) => void pickView(v)}
         options={[{ value: 'summary', label: '요약' }, { value: 'steps', label: '단계' }, { value: 'month', label: '달력' }]} />
       {view === 'summary' ? (
-        <div className="pt-3">
+        <div className="pt-1">
           <HomeSummary steps={steps} currentId={currentId} onStep={onStep} onDay={openDay} onShowSteps={() => void pickView('steps')}
-            marks={marks} guest={guest} updates={updates} onNotice={onNotice} />
+            marks={marks} fixedDay0={fixedDay0} guest={guest} updates={updates} onNotice={onNotice} />
         </div>
       ) : (
         <Card>
