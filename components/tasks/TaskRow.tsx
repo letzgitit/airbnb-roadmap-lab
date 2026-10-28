@@ -96,6 +96,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     const onFocus = (e: Event) => {
       if ((e as CustomEvent<string>).detail !== t.id || !rowRef.current) return;
       if ((t.note ?? '').trim()) setNoteOpen(true);
+      // 줄의 scroll-margin-top = 탭 줄(--spacing-tabbar) + 붙은 블록 머리(두 줄까지 88px) — 그 밑에 가려지지 않게
       rowRef.current.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       rowRef.current.querySelector<HTMLElement>('input[type="checkbox"]')?.focus({ preventScroll: true });
       setFlash(false);
@@ -343,7 +344,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
       </span>
     );
     return (
-      <li ref={rowRef} id={`task-${t.id}`} className={`flex scroll-mt-16 flex-wrap items-start gap-x-2.5 border-b border-line py-3.5 last:border-b-0 ${depth ? 'pl-6' : ''} ${flash ? 'task-flash' : ''}`}>
+      <li ref={rowRef} id={`task-${t.id}`} className={`flex scroll-mt-[calc(var(--spacing-tabbar)+5.5rem)] flex-wrap items-start gap-x-2.5 border-b border-line py-3.5 last:border-b-0 ${depth ? 'pl-6' : ''} ${flash ? 'task-flash' : ''}`}>
         {/* 체크(22px 네모 · 모서리 6, 누르는 칸 44px): 빈 칸 → 고르면 검정(다크 흰색) 면 + 체크 */}
         <label className="relative -my-2.5 -ml-2.5 flex size-11 shrink-0 cursor-pointer items-center justify-center">
           <input type="checkbox" checked={t.done} aria-label={`${t.text} 완료`}

@@ -17,6 +17,7 @@ import { CalendarTab } from './CalendarTab';
 import { ContactsTab } from './ContactsTab';
 import { PhotosTab, type PhotoSub } from './PhotosTab';
 import { BlockHead, blockCls, StepBlock } from './StepBlock';
+import { useTabSwipe } from './TabSwipe';
 import {
   CARD_TABS, TABS, askOnly, blockId, contacts, daysBetween, isAsk, isWorkTab, relDay, sortCards, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
   type CardDef, type TabId, type WorkTabId,
@@ -29,6 +30,7 @@ const PHOTO_SUB_KEY = 'home:photos-sub';
 const OPEN_KEY = 'home:open-blocks';
 // 2026-10-28 전 탭 이름(서류 · 인테리어 · 사진 · 에어비앤비)으로 기억된 값을 새 탭으로
 const OLD_TAB: Record<string, TabId> = { docs: 'admin', interior: 'facility', photos: 'gallery', airbnb: 'ops' };
+const TAB_IDS = TABS.map((t) => t.id);
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 저장이 막혀도 이번 화면에는 적용 */ } };
 const savedOpen = (): Set<string> => {
@@ -44,16 +46,16 @@ const savedTab = (): TabId => {
 };
 
 /**
- * 분야 탭 줄(대메뉴, 기획 27의 9절): 흰 면 줄 + 아래 1px 선, 여섯 칸이 줄 폭을 꽉 채운다 — 칸은 글자 너비 + 같은 좌우 여백에서 남는 폭을 나눠 늘어난다(flex 1 1 auto, 글자는 칸 가운데, 아이콘 없음).
- * 글자 19(데일리 --f19 — 18은 데일리 단계에 없어 가장 가까운 값)/800, 안 고른 탭도 본문색(ink-soft)으로 진하게, 고른 탭 = ink + 칸 너비 3px 밑줄. 360px 폰에서도 한 줄.
+ * 분야 탭 줄(대메뉴, 기획 27의 9절): 흰 면 줄 + 아래 1px 선, **같은 너비 여섯 칸**이 줄 폭을 꽉 채운다(grid 6열 — 칸 너비가 글자에 따라 늘지 않아 320px 폰에서도 한 줄).
+ * 칸 = 선 아이콘 24px 위 + 이름 14(text-sm)/800 아래, 줄 높이 60px(아래 선 포함 — globals.css --spacing-tabbar, 펼친 블록 머리가 그 밑에 붙는다). 안 고른 탭도 본문색(ink-soft)으로 진하게,
+ * 고른 탭 = ink + 아이콘 선 굵게(1.8 → 2.3) + 칸 너비 3px 밑줄.
  * 화면 맨 위에 붙어 따라오고, 붙은 동안은 줄이 머리 띠와 같은 형광 면 + 검정 글자가 된다(데일리 .tabs--stuck).
- * 기한 지난 안 끝난 일이 있는 탭(고르지 않은 것)은 이름 옆 작은 빨강 점.
+ * 기한 지난 안 끝난 일이 있는 탭(고르지 않은 것)은 아이콘 오른쪽 위 작은 빨강 점.
  */
 export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
   tab: TabId | null; onPick?: (t: TabId) => void; late?: Partial<Record<TabId, number>>; idBase?: string;
 }) {
   const sentinel = useRef<HTMLDivElement>(null);
-  const bar = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
   useEffect(() => {
     const el = sentinel.current;
@@ -62,23 +64,25 @@ export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
     io.observe(el);
     return () => io.disconnect();
   }, []);
-  useEffect(() => {
-    bar.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [tab]);
+  // 여섯 칸이 늘 줄 안에 다 들어 있어(가로로 넘치지 않음) 고른 탭을 줄 안으로 끌어올 일이 없다 — 예전 scrollIntoView 는 뺐다
   return (
     <>
       <div ref={sentinel} aria-hidden className="h-px -mb-px" />
       <div className={`sticky top-0 z-30 border-b transition-colors ${stuck ? 'border-marker bg-marker text-on-marker [--tab-line:var(--color-on-marker)]' : 'border-line bg-surface text-ink [--tab-line:var(--color-ink)]'}`}>
-        <div ref={bar} role={onPick ? 'tablist' : undefined} aria-label={onPick ? '분야' : undefined} aria-hidden={onPick ? undefined : true}
-          className="mx-auto flex max-w-content overflow-x-auto [scrollbar-width:none] md:px-safe lg:max-w-wide [&::-webkit-scrollbar]:hidden">
+        <div role={onPick ? 'tablist' : undefined} aria-label={onPick ? '분야' : undefined} aria-hidden={onPick ? undefined : true}
+          className="mx-auto grid max-w-content grid-cols-6 md:px-safe lg:max-w-wide">
           {TABS.map((t) => {
             const on = t.id === tab;
             const dot = !on && (late[t.id] ?? 0) > 0;
-            const cls = `relative inline-flex h-12 flex-auto items-center justify-center whitespace-nowrap px-1.5 text-head font-extrabold leading-none tracking-[-0.02em] transition-opacity active:opacity-60 ${stuck ? '' : on ? 'text-ink' : 'text-ink-soft'}`;
+            const cls = `relative flex h-[calc(var(--spacing-tabbar)-1px)] min-w-0 flex-col items-center justify-center gap-1 whitespace-nowrap text-sm font-extrabold leading-none tracking-[-0.02em] transition-opacity active:opacity-60 ${stuck ? '' : on ? 'text-ink' : 'text-ink-soft'}`;
             const body = (
               <>
+                <span className="relative">
+                  <LineIcon name={t.icon} className="size-6" stroke={on ? 2.3 : 1.8} />
+                  {dot && <span className="absolute -right-1 -top-0.5 size-1.5 rounded-full bg-danger-ink" aria-hidden />}
+                </span>
                 {t.label}
-                {dot && <><span className="mt-3 ml-0.5 size-1.5 shrink-0 self-start rounded-full bg-danger-ink" aria-hidden /><span className="sr-only">(기한 지남 있음)</span></>}
+                {dot && <span className="sr-only">(기한 지남 있음)</span>}
                 {on && <span className="absolute inset-x-0 bottom-0 h-[3px] bg-[var(--tab-line)]" aria-hidden />}
               </>
             );
@@ -101,9 +105,9 @@ export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
  * 홈 안에서 끝난다 — 「우리 집」(/house)으로 보내는 링크를 두지 않는다.
  */
 export function SimpleHome() {
-  const { doc } = useProgress();
+  const { doc, hasDirty, confirmDiscard } = useProgress();
   const { steps } = useSite();
-  const { ensure } = usePhotos();
+  const { ensure, setQuery, setSort } = usePhotos();
   const uid = useId();
   // 할 일 사진 · 갤러리 개수를 보이려고 사진 목록도 처음에 한 번 받는다
   useEffect(() => { ensure(); }, [ensure]);
@@ -114,7 +118,24 @@ export function SimpleHome() {
   const [reveal, setReveal] = useState<{ id: string; tab: WorkTabId; n: number } | null>(null);
   // 「문의 필요만 보기」(일터 탭): 단추는 늘 「이번 주 할 일」 머리 오른쪽(폰은 본문, PC는 곁 칸). 탭을 바꾸면 끈다
   const [askOn, setAskOn] = useState(false);
-  const pick = (t: TabId) => { setTab(t); write(TAB_KEY, t); setReveal(null); setAskOn(false); window.scrollTo({ top: 0 }); };
+  // 탭을 고르면(누르기 · 좌우 쓸기, 이미 고른 탭을 다시 눌러도) 그 탭을 처음 상태로 열고 맨 위로 올린다(2026-10-29 사이트 주인):
+  //   행정 · 설비 · 운영 = 그 탭 단계 블록 모두 접기, 갤러리 = 보조 탭 「사진」 + 검색 비우기 + 정렬 기본, 달력 = 이번 달 · 오늘(다시 그려서).
+  //   탭 본문은 fresh 가 바뀔 때마다 새로 그린다(key) — 쓰다 만 폼이 있으면 먼저 「저장 안 한 내용」 확인을 받는다.
+  //   예외: 「이번 주 할 일」에서 건너가기(goTask)는 그 탭의 다른 블록을 접고 대상 블록 하나만 편다(WorkTab 의 reveal).
+  const [fresh, setFresh] = useState(0);
+  const openTab = (t: TabId) => {
+    if (isWorkTab(t)) write(OPEN_KEY, JSON.stringify([...savedOpen()].filter((id) => !id.startsWith(`${t}.`))));
+    if (t === 'gallery') { pickSub('photos'); setQuery(''); setSort('default'); }
+    setTab(t); write(TAB_KEY, t); setReveal(null); setAskOn(false); setFresh((n) => n + 1);
+    window.scrollTo({ top: 0 });
+  };
+  const pick = (t: TabId) => {
+    if (!hasDirty()) { openTab(t); return; }
+    void confirmDiscard().then((ok) => { if (ok) openTab(t); });
+  };
+  // 폰에서 본문을 좌우로 쓸면 옆 탭으로(TabSwipe.tsx — 데일리와 같은 판정). 탭을 누른 것과 같이 pick 으로 바꾸고 맨 위로 올린다.
+  // 쓰다 만 폼이 있으면 쓸기는 받지 않는다(탭을 누르면 확인을 거쳐 넘어간다)
+  useTabSwipe({ keys: TAB_IDS, current: tab, onPick: openTab, enabled: () => !hasDirty() });
   const today = todayStr();
   const goTask = (id: string, t: WorkTabId) => {
     if (t !== tab) { setTab(t); write(TAB_KEY, t); setAskOn(false); }
@@ -145,10 +166,10 @@ export function SimpleHome() {
       <h1 className="sr-only">우리 준비 간단히 보기</h1>
       <HomeTabBar tab={tab} onPick={pick} late={late} idBase={uid} />
 
-      <div className="mx-auto w-full max-w-content pt-2 md:px-safe md:pt-4 lg:grid lg:max-w-wide lg:grid-cols-[minmax(0,1fr)_18.75rem] lg:items-start lg:gap-x-6">
+      <div data-tab-swipe className="mx-auto w-full max-w-content pt-2 md:px-safe md:pt-4 lg:grid lg:max-w-wide lg:grid-cols-[minmax(0,1fr)_18.75rem] lg:items-start lg:gap-x-6">
         <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-${tab}`} className="min-w-0">
           {isWorkTab(tab) ? (
-            <WorkTab key={tab} tab={tab} groups={work[tab]} doc={doc} steps={steps} today={today}
+            <WorkTab key={`${tab}:${fresh}`} tab={tab} groups={work[tab]} doc={doc} steps={steps} today={today}
               weekItems={weekFor([tab])} weekTitle={weekTitle} onPickWeek={goTask}
               reveal={reveal?.tab === tab ? reveal : null} ask={ask} askOn={askOn} onAskOff={() => setAskOn(false)} />
           ) : tab === 'contacts' ? (
@@ -156,13 +177,13 @@ export function SimpleHome() {
           ) : (
             // 갤러리 · 달력은 일터 탭처럼 흰 블록을 쌓는다(폰은 화면 끝까지)
             <>
-              {tab === 'gallery' && <PhotosTab sub={photoSub} onSub={pickSub} />}
-              {tab === 'calendar' && <CalendarTab rowSteps={steps} today={today} />}
+              {tab === 'gallery' && <PhotosTab key={fresh} sub={photoSub} onSub={pickSub} />}
+              {tab === 'calendar' && <CalendarTab key={fresh} rowSteps={steps} today={today} />}
             </>
           )}
         </div>
         {/* 곁 칸(PC): 위에 붙어 따라온다(분야 탭 줄 아래) */}
-        <aside aria-label="곁 칸" className="hidden lg:sticky lg:top-16 lg:flex lg:flex-col lg:gap-2">
+        <aside aria-label="곁 칸" className="hidden lg:sticky lg:top-[calc(var(--spacing-tabbar)+1rem)] lg:flex lg:flex-col lg:gap-2">
           {/* 달력 탭에서는 달력이 같은 일을 하므로 이번 주 할 일을 숨긴다 */}
           {/* 「문의 필요만 보기」는 이번 주 블록 머리 오른쪽. 이번 주가 비어 블록이 없으면 같은 자리(곁 칸 맨 위 오른쪽)에 단추만 */}
           {tab !== 'calendar' && (asideWeek.length > 0
@@ -229,8 +250,14 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
   const revealBlock = revealCard ? blockId(tab, revealCard.id) : null;
   useEffect(() => {
     if (!reveal) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 건너가기를 누를 때마다 한 번 그 블록을 편다
-    if (revealBlock) setOpen(revealBlock, true);
+    // 건너가기를 누를 때마다 한 번: 이 탭의 다른 블록은 접고 그 블록 하나만 편다(다른 탭에서 펼친 것은 그대로)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 건너가기를 누를 때마다 한 번
+    if (revealBlock) setOpened((prev) => {
+      const next = new Set([...prev].filter((id) => !id.startsWith(`${tab}.`)));
+      next.add(revealBlock);
+      write(OPEN_KEY, JSON.stringify([...next]));
+      return next;
+    });
     let tries = 0;
     let raf = 0;
     const tryGo = () => {
@@ -247,7 +274,7 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
   return (
     <div className="flex flex-col gap-2">
       {weekItems.length > 0
-        ? <WeekBlock title={weekTitle} items={weekItems} today={today} onPick={onPickWeek} headRight={ask} className="lg:hidden" />
+        ? <WeekBlock title={weekTitle} items={weekItems} today={today} onPick={onPickWeek} headRight={ask} className="lg:hidden" stickyHead />
         : ask && <AskRow className="lg:hidden">{ask}</AskRow>}
       {askOn && shown.length === 0 && <p className={`${blockCls} px-5 py-4 text-base text-muted`}>문의할 일이 없어요.</p>}
       {shown.map((c) => block(c, askOn ? askOnly(groups[c.id]) : groups[c.id]))}
@@ -279,8 +306,10 @@ const WEEK_SHOWN = 5;
  * 누르면 아래 블록의 그 할 일 줄로 내려가 메모를 펼치고 잠깐 형광으로 칠한다(다른 탭이면 그 탭으로). 없으면 블록째 숨긴다.
  * showTab = 여러 탭을 모았을 때 줄 끝에 「행정」 같은 탭 이름(13 메타). headRight = 머리 오른쪽 작은 단추(「문의 필요만 보기」).
  */
-function WeekBlock({ title, items, today, onPick, showTab = false, headRight, className = '' }: {
+function WeekBlock({ title, items, today, onPick, showTab = false, headRight, className = '', stickyHead = false }: {
   title: string; items: WeekItem[]; today: string; onPick: (id: string, tab: WorkTabId) => void; showTab?: boolean; headRight?: React.ReactNode; className?: string;
+  /** 본문(폰 · 태블릿)의 이번 주 블록: 머리를 탭 줄 밑에 붙인다(단계 블록과 같은 규칙). 곁 칸(PC)은 곁 칸째 따라오므로 붙이지 않는다 */
+  stickyHead?: boolean;
 }) {
   const uid = useId();
   const [all, setAll] = useState(false);
@@ -290,7 +319,7 @@ function WeekBlock({ title, items, today, onPick, showTab = false, headRight, cl
   const rest = items.length - WEEK_SHOWN;
   return (
     <section aria-labelledby={`${uid}-h`} className={`${blockCls} ${className}`}>
-      <BlockHead id={`${uid}-h`} title={title} count={items.length} right={headRight} />
+      <BlockHead id={`${uid}-h`} title={title} count={items.length} right={headRight} sticky={stickyHead} />
       <ul id={`${uid}-l`} className="border-t border-line px-5">
         {shown.map(({ task, tab }) => {
           const rel = relDay(task.due!, today);

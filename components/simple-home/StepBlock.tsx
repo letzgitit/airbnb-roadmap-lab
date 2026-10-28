@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { TaskItem } from '@/lib/core/types';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { usePhotos } from '@/components/progress/PhotosPanel';
@@ -19,18 +19,51 @@ import { addCardNote, removeCardNote, restoreCardNote, useCardNotes, type CardNo
 export const blockCls = 'bg-surface md:border md:border-line';
 
 /**
+ * 펼친 블록의 머리를 분야 탭 줄 바로 밑에 붙인다(연락처 앱 머리글처럼): 할 일을 내려 보는 동안 머리가 따라오고,
+ * 블록이 끝나면 다음 블록 머리가 밀어 올린다(sticky 는 블록 section 안에서만 움직인다). top = 탭 줄 높이(--spacing-tabbar),
+ * z 는 탭 줄(30)보다 아래, 면은 블록과 같은 bg-surface. 붙은 동안만 아래 1px 선(그림자 1px — 자리를 밀지 않게).
+ * 접힌 블록은 머리 한 줄뿐이라 붙지 않고, 붙이는 클래스도 펼쳤을 때만 단다.
+ */
+const stickyHeadCls = 'sticky top-tabbar z-20 bg-surface';
+const stuckLineCls = 'shadow-[0_1px_0_var(--color-line)]';
+/** 블록 맨 위 1px 표시(sentinel)가 탭 줄 밑으로 지나가 숨었으면 머리가 붙은 것. 기준 선은 머리의 계산된 top(= 탭 줄 높이)을 읽는다 */
+function useStuck(on: boolean) {
+  const sentinel = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const s = sentinel.current;
+    const h = head.current;
+    if (!on || !s || !h) return;
+    const top = parseFloat(getComputedStyle(h).top) || 0;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top < top + 1),
+      { rootMargin: `-${top}px 0px 0px 0px`, threshold: 0 });
+    io.observe(s);
+    return () => io.disconnect();
+  }, [on]);
+  return { sentinel, head, stuck: on && stuck };
+}
+/** 머리 위치를 재는 기준(머리의 계산된 top = 탭 줄 높이) */
+const stickyTop = (head: HTMLElement | null) => (head ? parseFloat(getComputedStyle(head).top) || 0 : 0);
+
+/**
  * 블록 머리(데일리 .sec-h): 52px 줄, 제목 19/800 + 글자 밑 짧은 형광 밑줄(다크도 19/800 — 밑줄만 없음). 오른쪽에 메타(13) · 꼬리표 · 작은 글자 단추.
  * 좁아서 한 줄에 안 들어가면 오른쪽 메타가 제목 밑 줄로 내려간다.
+ * sticky = 탭 줄 밑에 붙는 머리(「이번 주 할 일」 본문 블록) — 펼친 단계 블록과 같은 규칙.
  */
-export function BlockHead({ id, title, count, right }: { id?: string; title: ReactNode; count?: ReactNode; right?: ReactNode }) {
+export function BlockHead({ id, title, count, right, sticky = false }: { id?: string; title: ReactNode; count?: ReactNode; right?: ReactNode; sticky?: boolean }) {
+  const { sentinel, head, stuck } = useStuck(sticky);
   return (
-    <div className="flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-5 py-2.5">
-      <h2 id={id} className="flex min-w-0 items-baseline gap-2 text-head font-extrabold tracking-[-0.01875rem] text-ink">
-        <span className="head-mark min-w-0">{title}</span>
-        {count != null && <small className="shrink-0 text-meta font-normal tracking-normal text-muted tabular-nums">{count}</small>}
-      </h2>
-      {right && <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">{right}</div>}
-    </div>
+    <>
+      {sticky && <div ref={sentinel} aria-hidden className="h-px -mb-px" />}
+      <div ref={head} className={`flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-5 py-2.5 ${sticky ? stickyHeadCls : ''} ${stuck ? stuckLineCls : ''}`}>
+        <h2 id={id} className="flex min-w-0 items-baseline gap-2 text-head font-extrabold tracking-[-0.01875rem] text-ink">
+          <span className="head-mark min-w-0">{title}</span>
+          {count != null && <small className="shrink-0 text-meta font-normal tracking-normal text-muted tabular-nums">{count}</small>}
+        </h2>
+        {right && <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">{right}</div>}
+      </div>
+    </>
   );
 }
 
@@ -76,21 +109,43 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
   );
   const progress = progressText(summary);
   const done = summary.finished;
+  const { sentinel, head, stuck } = useStuck(open);
+  const section = useRef<HTMLElement>(null);
+  // 붙은 머리에서 접으면 접은 뒤 그 머리가 탭 줄 바로 밑에 오게 스크롤을 되돌린다(접히면 블록이 짧아져 머리가 화면 위로 사라지므로)
+  //   기준 선(탭 줄 높이)은 접기 전에 잰다 — 접힌 머리는 sticky 가 아니어서 top 을 읽을 수 없다
+  const keepHead = useRef<number | null>(null);
+  const toggle = () => {
+    const s = section.current;
+    const top = stickyTop(head.current);
+    keepHead.current = open && s && s.getBoundingClientRect().top < top ? top : null;
+    onToggle();
+  };
+  useLayoutEffect(() => {
+    const top = keepHead.current;
+    if (top == null) return;
+    keepHead.current = null;
+    const s = section.current;
+    if (s) window.scrollTo({ top: window.scrollY + s.getBoundingClientRect().top - top });
+  }, [open]);
 
   return (
-    <section aria-labelledby={`${uid}-t`} className={blockCls}>
+    <section ref={section} aria-labelledby={`${uid}-t`} className={blockCls}>
+      {open && <div ref={sentinel} aria-hidden className="h-px -mb-px" />}
       {/* 머리 줄: 제목 속 단추가 줄 전체를 덮어(::after) 어디를 눌러도 접고 편다.
           오른쪽 메타(날짜 · 꼬리표 · 개수 · 꺾쇠)는 쪼개지지 않는 한 덩어리로 오른쪽 세로 가운데. 제목 옆에 다 안 들어가면
           덩어리째 아래 줄로 내려 오른쪽 정렬(flex-wrap — 제목은 한 줄 폭을 다 쓰니 많아야 2줄).
+          메타 덩어리는 누를 것이 없는 장식이라 pointer-events-none — 꺾쇠의 회전(transform)이 쌓임 맥락을 만들어
+          ::after 위에 그려지므로, 이게 없으면 꺾쇠를 정확히 누를 때 단추가 안 눌린다(2026-10-29 폰 제보).
+          펼친 블록은 머리가 탭 줄 밑에 붙는다(useStuck — 붙은 동안만 아래 선).
           다 끝낸 블록은 「완료」 꼬리표만 — 제목은 muted · 형광 밑줄 없음(훑어볼 때 뒤로 물러나게) */}
-      <div className="relative flex min-h-13 flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink">
+      <div ref={head} className={`flex min-h-13 flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'} ${stuck ? stuckLineCls : ''}`}>
         <h2 id={`${uid}-t`} className={`min-w-0 flex-auto text-head font-extrabold tracking-[-0.01875rem] ${done ? 'text-muted' : 'text-ink'}`}>
-          <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={onToggle}
+          <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={toggle}
             className="text-left outline-none after:absolute after:inset-0 after:content-['']">
             {done ? title : <span className="head-mark">{title}</span>}
           </button>
         </h2>
-        <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
+        <div className="pointer-events-none ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
           {!done && summary.deadline && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
           <StateBadge summary={summary} today={today} date={summary.deadline} />
           {/* 개수 칸: 개수가 없거나 다 끝낸 블록도 같은 너비를 비워 둔다(꼬리표 오른쪽 끝이 모든 머리에서 한 세로줄에 서게) */}

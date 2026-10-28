@@ -4,17 +4,20 @@
 import type { PhotoView } from '@/lib/core/photos';
 import type { ProgressDoc, PropertyItem, QuestionItem, TaskItem, TaskKind } from '@/lib/core/types';
 
-// 분야 탭(2026-10-28 다시 짬 — 기획 27): 일터 셋 「행정 · 설비 · 운영」 + 「갤러리 · 연락처 · 달력」. 글자 탭(아이콘 없음 — 데일리 .tab), 390px 폰에서 한 줄에 다 든다.
+// 분야 탭(2026-10-28 다시 짬 — 기획 27): 일터 셋 「행정 · 설비 · 운영」 + 「갤러리 · 연락처 · 달력」. 같은 너비 여섯 칸, 320px 폰에서도 한 줄에 다 든다.
 // 행정 = 옛 「서류」(4 · 5 · 8 · 9 · 12 · 13단계 + 끝난 1~3), 설비 = 옛 「인테리어」(6 · 7), 운영 = 옛 「에어비앤비」(10 · 11 · 14), 갤러리 = 옛 「사진」.
+// icon = 이름 위 선 아이콘(components/ui/LineIcon, 2026-10-29 다시 넣음). 뜻이 바로 통하는 물건으로:
+//   행정 = 문서, 설비 = 렌치(욕실 · 도배 · 장판 · 문 · 에어컨 · 조명 · 살 것), 운영 = 침대(숙소 운영), 갤러리 = 카메라, 연락처 = 전화, 달력 = 달력.
 export type TabId = 'admin' | 'facility' | 'ops' | 'gallery' | 'contacts' | 'calendar';
 export type WorkTabId = 'admin' | 'facility' | 'ops';
-export const TABS: { id: TabId; label: string }[] = [
-  { id: 'admin', label: '행정' },
-  { id: 'facility', label: '설비' },
-  { id: 'ops', label: '운영' },
-  { id: 'gallery', label: '갤러리' },
-  { id: 'contacts', label: '연락처' },
-  { id: 'calendar', label: '달력' },
+export type TabIcon = 'doc' | 'wrench' | 'bed' | 'camera' | 'phone' | 'calendar';
+export const TABS: { id: TabId; label: string; icon: TabIcon }[] = [
+  { id: 'admin', label: '행정', icon: 'doc' },
+  { id: 'facility', label: '설비', icon: 'wrench' },
+  { id: 'ops', label: '운영', icon: 'bed' },
+  { id: 'gallery', label: '갤러리', icon: 'camera' },
+  { id: 'contacts', label: '연락처', icon: 'phone' },
+  { id: 'calendar', label: '달력', icon: 'calendar' },
 ];
 export const isWorkTab = (t: TabId): t is WorkTabId => t === 'admin' || t === 'facility' || t === 'ops';
 

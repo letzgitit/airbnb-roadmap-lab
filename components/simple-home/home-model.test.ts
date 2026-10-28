@@ -139,6 +139,7 @@ test('문의 필요만 보기: 문의 할 일 + 그 세부 항목 + 그 부모�
 
 test('분야 탭 여섯 개: 행정 · 설비 · 운영 · 갤러리 · 연락처 · 달력(글자 탭), 일터는 앞 셋', () => {
   assert.deepEqual(TABS.map((t) => t.label), ['행정', '설비', '운영', '갤러리', '연락처', '달력']);
+  assert.deepEqual(TABS.map((t) => t.icon), ['doc', 'wrench', 'bed', 'camera', 'phone', 'calendar']);
   assert.deepEqual(TABS.filter((t) => isWorkTab(t.id)).map((t) => t.id), ['admin', 'facility', 'ops']);
   // 행정 = 서류 블록 + 늘 접는 1~3단계, 설비 = 인테리어, 운영 = 에어비앤비
   assert.deepEqual(workTab('admin').cards.flatMap((c) => c.steps), [4, 5, 9, 8, 12, 13, 1, 2, 3]);

@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { textBtn } from '@/components/ui/buttonCls';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { blockCls } from './StepBlock';
+import { useMonthSwipe } from './TabSwipe';
 import {
   addMonths, dateParts, daysBetween, dayDots, dayTasks, fieldLabel, monthOf, monthWeeks, relDay, taskTabs, upcomingTasks, UPCOMING_DAYS,
   type DayDot, type WorkTabId,
@@ -33,6 +34,7 @@ const SAT_DIM = 'text-[color-mix(in_srgb,var(--color-info-ink),var(--color-muted
  * 달력 탭(기획 27의 6절 — 데일리 「일정 · 모집」 그대로). 흰 블록 하나에 위에서 아래로:
  * - 달 머리: ‹ 「2026년 10월」 › + 오른쪽 「오늘」(이번 달 · 오늘을 보고 있으면 없음).
  * - 요일 줄 일 · 월 · 화 · 수 · 목 · 금 · 토(13, 일요일 빨강 · 토요일 파랑), 주마다 옅은 선.
+ * - 판(요일 줄 + 날 칸)을 왼쪽으로 쓸면 다음 달, 오른쪽으로 쓸면 이전 달(TabSwipe.tsx useMonthSwipe — 판 위 쓸기는 탭을 넘기지 않는다).
  * - 날 칸(56px): 숫자 16 + 36px 동그라미 — 오늘 = 검정 동그라미 · 흰 숫자, 고른 날 = 회색 동그라미, 앞으로 할 일이 있는 날 = 굵게. 다른 달 날은 비워 둔다.
  *   숫자 밑 분야 색 점(그날 마감 할 일의 분야 — 행정 · 설비 · 운영 셋까지, 그 분야를 다 끝냈으면 회색 점). 칸 안에 글자는 없다.
  * - 「오늘」(또는 고른 날 「10월 30일 (금)」) 묶음: 그날 마감 · 그날 시작 할 일 줄(TaskRow 쉬운 모양 — 체크 · 설명서 · 연필 · 휴지통). 없으면 「오늘은 할 일이 없어요」.
@@ -54,6 +56,9 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
   useEffect(() => {
     if (userPicked.current) dayRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [picked]);
+  // 달력 판(요일 줄 + 날짜 칸)을 좌우로 쓸면 달을 넘긴다 — ‹ › 단추와 같다. 판에는 data-noswipe 를 달아 탭 넘기기가 이 터치를 받지 않게
+  const board = useRef<HTMLDivElement>(null);
+  useMonthSwipe(board, month, (step) => setMonth((v) => addMonths(v, step)));
   if (!doc) return null;
 
   const thisMonth = monthOf(today);
@@ -78,6 +83,7 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
             <button type="button" className={`${textBtn} ml-auto mr-0 px-2`} onClick={() => { setMonth(thisMonth); pick(today); }}>오늘</button>
           )}
         </div>
+        <div ref={board} data-noswipe>
         <div className="grid grid-cols-7 border-b border-line text-center text-meta leading-7" aria-hidden>
           {DOW.map((d, i) => <span key={d} className={i === 0 ? SUN : i === 6 ? SAT : 'text-muted'}>{d}</span>)}
         </div>
@@ -116,9 +122,10 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
             </div>
           ))}
         </div>
+        </div>
       </div>
 
-      <div id={`${uid}-day`} ref={dayRef} aria-live="polite" className="scroll-mt-16">
+      <div id={`${uid}-day`} ref={dayRef} aria-live="polite" className="scroll-mt-[calc(var(--spacing-tabbar)+0.5rem)]">
         <DayList key={picked} doc={doc} date={picked} today={today} steps={rowSteps} />
       </div>
       <Upcoming doc={doc} today={today} picked={picked} steps={rowSteps} tabOf={tabOf} />
