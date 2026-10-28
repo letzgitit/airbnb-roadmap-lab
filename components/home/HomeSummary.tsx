@@ -7,18 +7,17 @@ import { dayRangeLabel, shortDate, todayStr } from '@/lib/client/format';
 import { manwon, PROJECT_LABEL } from '@/lib/plan';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { cardCls } from '@/components/ui/Card';
-import { Segmented } from '@/components/ui/Segmented';
 import type { StepRef } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import { treeRows } from '@/components/tasks/task-view';
 import { toDate, type Pin, type TimelineStep } from './step-dates';
-import { dLabel, guestFinish, logWhen, summaryOf, type MoneyAccount, type OwnerFilter, type StepStateRow, type Summary } from './summary-data';
+import { dLabel, guestFinish, logWhen, summaryOf, type MoneyAccount, type StepStateRow, type Summary } from './summary-data';
 import { Chevron, GuestPlan, GuestWeeks, MoneyBar, Ring, StepRoad, TypeDot, TypeLegend, useWidth, WeekChart } from './SummaryViz';
 
 // 홈 「요약」 탭(보기 고르기 [요약 | 단계 | 달력]의 첫 칸). 그림으로 먼저 보고, 아래 줄을 눌러 원래 자리로 간다(DESIGN.md 8.1.1).
 //   로그인 = ① 첫 손님까지(청록 카드: 링 + D-day · 첫 손님 날 · 다음 고정 일정) → ② 지금 하는 단계(14단계 길 + 하는 중 단계 줄)
-//          → ③ 할 일(담당 칸 묶음 · 날짜별 네모 그림 · 기한 지남 · 오늘 · 다음 7일 펼치기) → ④ 정할 것 → ⑤ 돈(계좌별 남는 돈 막대) → ⑥ 최근 기록
+//          → ③ 할 일(날짜별 네모 그림 · 기한 지남 · 오늘 · 다음 7일 펼치기) → ④ 정할 것 → ⑤ 돈(계좌별 남는 돈 막대) → ⑥ 최근 기록
 //   로그인 전 = 첫 손님까지(약 n일 · 주 막대) → 14단계 한눈에 → 처음 세 단계(막대 그림 + 줄) → 최근 바뀐 민박업 규정 — 공개 콘텐츠만 쓴다(현황을 받지 않는다)
 // 계산은 summary-data.ts, 그림은 SummaryViz.tsx. 편집은 할 일 줄만 공통 줄(TaskRow) 그대로. 나머지는 누르면 원래 자리로 간다.
 // 한 할 일은 요약에 한 번만 나온다(③이 먼저, ④는 남은 결정만). 폰은 한 줄로 쌓고, PC(768px 이상)는 ③ | ④⑥ 두 칸, 나머지는 한 줄을 꽉 채운다.
@@ -74,7 +73,6 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
   const { editing, reportEdit } = useEditingSet();
   const { isDone, onToggle } = useStickyDone();
   const [today] = useState(todayStr);
-  const [owner, setOwner] = useState<OwnerFilter>('');
   const [moreNext, setMoreNext] = useState(false);
   const [moreDecide, setMoreDecide] = useState(false);
   const todoRef = useRef<HTMLElement>(null);
@@ -84,7 +82,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
   const focusTodo = useCallback(() => { window.requestAnimationFrame(() => todoRef.current?.focus()); }, []);
   if (!doc) return null;
 
-  const s = summaryOf(steps, doc, today, { currentId, owner, marks, fixedDay0, isDone, editing });
+  const s = summaryOf(steps, doc, today, { currentId, marks, fixedDay0, isDone, editing });
   const stepRefs: StepRef[] = steps.map((x) => ({ id: x.id, title: x.title }));
   // 세부 항목은 같은 묶음 안에 부모가 있으면 바로 밑에 들여 쓰고, 없으면 맨 위 층 + 「‘부모’의 세부」
   const rows = (list: TaskItem[], late = false) => treeRows(list, doc.tasks).map(({ item: t, depth, parentTitle }) => (
@@ -197,10 +195,6 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
       {/* ③ 할 일 */}
       <section ref={todoRef} tabIndex={-1} aria-labelledby={`${uid}-todo`} className={`${cardCls} min-w-0 outline-none`}>
         <div className="flex min-h-11 items-center gap-2 px-4 pt-4"><h3 id={`${uid}-todo`} className="text-lg font-bold text-ink">할 일</h3></div>
-        <div className="px-4 pt-3">
-          <Segmented label="담당으로 걸러 보기" value={owner} onChange={setOwner}
-            options={[{ value: '', label: '전체', count: s.ownerCounts.all }, { value: '남편', label: '남편', count: s.ownerCounts.남편 }, { value: '아내', label: '아내', count: s.ownerCounts.아내 }]} />
-        </div>
         <WeekChart late={s.week.late} days={s.week.days} today={today} />
         {nothingSoon && <p className="border-t border-line px-4 py-3 text-base text-muted">기한 지난 일도, 7일 안에 할 일도 없어요.</p>}
         {s.late.length > 0 && (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { STEP_COUNT, TASK_KINDS, TASK_OWNERS, type TaskItem, type TaskKind, type TaskOwner } from '@/lib/core/types';
+import { STEP_COUNT, TASK_KINDS, type TaskItem, type TaskKind } from '@/lib/core/types';
 import { useProgress, type DirtyScope } from '@/components/progress/ProgressProvider';
 import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, dateCls, enterSubmit, inputCls, oneLine, useBusy, useDirty, useFormEsc,
@@ -10,22 +10,9 @@ import { START_AFTER_DUE, taskErrorMessage } from './task-errors';
 
 export interface StepRef { id: number; title: string }
 
-// 할 일 메모 · 담당 · 자동 분류 표시는 데이터(lib/core/types 의 TaskItem)에 있다. 지산판과 같은 줄 코드를 쓰려고 이름만 다시 내보낸다.
-export { TASK_OWNERS, type TaskOwner } from '@/lib/core/types';
+// 할 일 메모 · 자동 분류 표시는 데이터(lib/core/types 의 TaskItem)에 있다. 지산판과 같은 줄 코드를 쓰려고 이름만 다시 내보낸다.
 export type TaskWithNote = TaskItem;
 export const NOTE_MAX = 1000;
-
-/** 담당 고르기(선택). 빈 값 = 안 정함. 「같이」는 남편 · 아내 걸러 보기 둘 다에 보인다. */
-export function OwnerSelect({ value, onChange }: { value: TaskOwner | ''; onChange: (v: TaskOwner | '') => void }) {
-  return (
-    <label className={`flex items-center gap-2 ${labelCls}`}>담당
-      <select className={dateCls} value={value} onChange={(e) => onChange(e.target.value as TaskOwner | '')} aria-label="담당">
-        <option value="">안 정함</option>
-        {TASK_OWNERS.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </label>
-  );
-}
 
 /** 메모 칸(새 할 일 · 고치는 폼 공용). 여러 줄, 자세한 내용은 여기에 — 할 일 제목은 한 줄로 짧게. */
 export function NoteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -45,7 +32,7 @@ const dateFitCls = `${dateCls} block w-full min-w-[11rem] flex-1 basis-[11rem]`;
 
 /**
  * 쉬운 모양(새 홈)의 날짜 칸 + 「물어봐야 하는 일」: [언제부터(선택)] [언제까지] 두 줄(이름표는 고정 폭) + 켜기 칸 한 줄(밑에 작은 설명).
- * 데이터는 시작일(start) · 마감일(due) 그대로, 문의 필요 = 할 일 종류 「문의」. 담당(owner)은 쉬운 모양에서 보이지 않는다(값은 그대로).
+ * 데이터는 시작일(start) · 마감일(due) 그대로, 문의 필요 = 할 일 종류 「문의」.
  * 새 할 일 폼 · 고치는 폼이 같이 쓴다.
  */
 export function SimpleWhenFields({ start, onStart, due, onDue, ask, onAsk }: {
@@ -98,7 +85,7 @@ export function KindSelect({ value, onChange }: { value: TaskKind | ''; onChange
  */
 export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', parentId, parentTitle, simple = false, prepare, dirtyKey }: {
   stepId: number; steps?: StepRef[]; scope: DirtyScope; onClose: () => void; initialDue?: string; parentId?: string; parentTitle?: string;
-  /** 새 홈(한눈에 보기)의 쉬운 폼: 제목 · 언제부터(시작일) · 언제까지(마감일) · 문의 필요 · 메모만(종류 · 담당 칸 없음) */
+  /** 새 홈(한눈에 보기)의 쉬운 폼: 제목 · 언제부터(시작일) · 언제까지(마감일) · 문의 필요 · 메모만(종류 칸 없음) */
   simple?: boolean;
   /** 보내기 직전에 제목 · 종류를 바꾼다(새 홈 낱말 카드: 「욕실: …」처럼 카드 이름을 앞에 붙여 그 카드에 남게) */
   prepare?: (text: string, kind: TaskKind | '') => { text: string; kind: TaskKind | '' };
@@ -110,12 +97,11 @@ export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', p
   const [start, setStart] = useState('');
   const [due, setDue] = useState(initialDue);
   const [note, setNote] = useState('');
-  const [owner, setOwner] = useState<TaskOwner | ''>('');
   const [kind, setKind] = useState<TaskKind | ''>('');
   const [sid, setSid] = useState(stepId);
   const [err, setErr] = useState<string | null>(null);
   const { busy, run } = useBusy();
-  const dirty = text.trim() !== '' || start !== '' || due !== initialDue || kind !== '' || owner !== '' || note.trim() !== '';
+  const dirty = text.trim() !== '' || start !== '' || due !== initialDue || kind !== '' || note.trim() !== '';
   useDirty(dirtyKey ?? `form:add-task:${parentId ? `sub:${parentId}` : steps ? 'home' : stepId}`, dirty, scope);
   const esc = useFormEsc(dirty, onClose);
   return (
@@ -126,9 +112,9 @@ export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', p
       setErr(null);
       const where = parentId ? { parentId } : { stepId: sid };
       const ready = prepare ? prepare(text.trim(), kind) : { text, kind };
-      void run(() => send({ op: 'task.add', ...where, text: ready.text, due: due || null, ...(start ? { start } : {}), ...(ready.kind ? { kind: ready.kind } : {}), ...(note.trim() ? { note: note.trim() } : {}), ...(owner ? { owner } : {}) }, {
+      void run(() => send({ op: 'task.add', ...where, text: ready.text, due: due || null, ...(start ? { start } : {}), ...(ready.kind ? { kind: ready.kind } : {}), ...(note.trim() ? { note: note.trim() } : {}) }, {
         quiet: true,
-        onSuccess: () => { setText(''); setStart(''); setDue(initialDue); setKind(''); setOwner(''); setNote(''); onClose(); },
+        onSuccess: () => { setText(''); setStart(''); setDue(initialDue); setKind(''); setNote(''); onClose(); },
       }).then((r) => setErr(taskErrorMessage(r))));
     }}>
       {parentId && <p className={labelCls}>‘{parentTitle ?? '위 할 일'}’의 세부 항목</p>}
@@ -150,7 +136,6 @@ export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', p
             <input type="date" className={dateCls} value={due} onChange={(e) => setDue(e.target.value)} aria-label="마감일" />
           </label>
           <KindSelect value={kind} onChange={setKind} />
-          <OwnerSelect value={owner} onChange={setOwner} />
         </div>
       )}
       <NoteField value={note} onChange={setNote} />

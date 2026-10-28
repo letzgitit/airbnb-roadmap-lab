@@ -11,7 +11,6 @@ import { dateCls, textBtn } from '@/components/ui/buttonCls';
 import { Card, cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { LoginGate } from '@/components/ui/LoginGate';
-import { Segmented } from '@/components/ui/Segmented';
 import { TYPE_COLOR } from '@/components/TimelineChart';
 import { TaskComposer, type StepRef, type TaskWithNote } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
@@ -24,8 +23,8 @@ import { axisOf, diffDays, pinsOf, stepRanges, toDate, type Pin, type TimelineSt
 // 고른 날의 할 일 창(#day-2026-10-27). 홈 타임라인에서 날짜를 누르면 단계 창과 같은 시트로 뜬다.
 //   머리 바로 아래 홈과 같은 날짜 띠(DateStrip): 날짜를 누르면 창을 닫지 않고 그 날로 바뀐다(주소는 바꿔 끼움 — 뒤로 가기 한 번에 닫힌다).
 //   고른 날 = 진한 테두리, 열 때 고른 날이 띠 가운데.
-//   머리: 「10/27 (화)」 + 「오늘」/「D-3」/「2일 전」 + 그날 고정 일정 · 오른쪽 「일정 옮기기」
-//   담당 걸러 보기(전체 · 남편 · 아내, 「같이」는 둘 다) + 종류 걸러 보기(0개인 종류는 꺼 둠)
+//   머리: 「10/27 (화)」 + 「오늘」/「D-3」/「2일 전」 + 그날 고정 일정
+//   종류 걸러 보기(0개인 종류는 꺼 둠) · 같은 줄 오른쪽 「일정 옮기기」
 //   ＋ 할 일 추가(마감일 = 그날) / 「기한 지남」(어느 날을 열어도 늘 맨 위) / 단계 머리 + 그날 마감 할 일(단계 번호 순, 그날 기간이
 //   겹치는 단계는 할 일이 없어도 머리만. 머리를 누르면 그 단계 창으로 바뀐다) / 「날짜 없음 n개」(접음) / 「삭제한 할 일」
 // 할 일 줄은 단계 창 「우리 할 일」과 같은 TaskRow. 고치는 폼의 「쓰던 글」 범위는 시트(modal)라 닫을 때 확인 창이 뜬다.
@@ -33,7 +32,6 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const colorOf = (type: string) => (TYPE_COLOR as Record<string, string>)[type] ?? 'var(--type-prep)';
 const byDue = (a: TaskItem, b: TaskItem) =>
   (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.stepId - b.stepId || a.createdAt.localeCompare(b.createdAt);
-type OwnerFilter = '' | '남편' | '아내';
 
 export function DaySheet({ date, open, shown, steps, currentId, fixedDay0, marks = [], onClose, beforeClose, onStep, onPickDay }: {
   date: string; open: boolean; shown: boolean;
@@ -82,7 +80,6 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
   const { editing, reportEdit } = useEditingSet();
   const { isDone, onToggle } = useStickyDone();
   const [kindF, setKindF] = useState<TaskKind | ''>('');
-  const [ownerF, setOwnerF] = useState<OwnerFilter>('');
   const [composing, setComposing] = useState(false);
   const [shifting, setShifting] = useState(false);
   const [showNoDate, setShowNoDate] = useState(false);
@@ -97,8 +94,8 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
   const tasks = Object.values(doc.tasks).filter((t) => !t.deletedAt || editing.has(t.id)) as TaskWithNote[];
   const ranges = stepRanges(steps, doc, today, fixedDay0);
   const open = tasks.filter((t) => !isDone(t));
-  const pass = (t: TaskWithNote) => (!kindF || t.kind === kindF) && (!ownerF || t.owner === ownerF || t.owner === '같이');
-  const filtered = !!kindF || !!ownerF;
+  const pass = (t: TaskWithNote) => !kindF || t.kind === kindF;
+  const filtered = !!kindF;
   const late = open.filter((t) => t.due && t.due < today && pass(t)).sort(byDue);
   const lateIds = new Set(late.map((t) => t.id));
   const onDay = tasks.filter((t) => t.due === sel && !lateIds.has(t.id) && pass(t)).sort(byDue);
@@ -124,22 +121,16 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
   return (
     <div className="flex flex-col gap-3 px-4 py-4">
       <div ref={headingRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
-        <div className="flex items-center justify-end">
-          {!shifting && <button type="button" className={`${textBtn} mx-0`} onClick={() => { setShifting(true); setComposing(false); }}>일정 옮기기</button>}
-        </div>
-        {shifting && <ShiftDates from={sel} titleOf={titleOf} getDoc={getDoc} onClose={() => setShifting(false)} />}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-48 flex-1">
-            <Segmented label="담당으로 걸러 보기" value={ownerF} onChange={setOwnerF}
-              options={[{ value: '', label: '전체' }, { value: '남편', label: '남편' }, { value: '아내', label: '아내' }]} />
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <label className="flex items-center gap-2 text-sm font-normal text-ink-soft">종류
             <select className={dateCls} value={kindF} onChange={(e) => setKindF(e.target.value as TaskKind | '')} aria-label="종류로 걸러 보기">
               <option value="">전체</option>
               {TASK_KINDS.map((k) => { const n = kindCount.get(k) ?? 0; return <option key={k} value={k} disabled={n === 0}>{n ? `${k} ${n}` : k}</option>; })}
             </select>
           </label>
+          {!shifting && <button type="button" className={`${textBtn} mx-0`} onClick={() => { setShifting(true); setComposing(false); }}>일정 옮기기</button>}
         </div>
+        {shifting && <ShiftDates from={sel} titleOf={titleOf} getDoc={getDoc} onClose={() => setShifting(false)} />}
       </div>
       <Card>
         <div className={cardRowCls}>

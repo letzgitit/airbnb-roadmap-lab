@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { liveChildrenOf } from '@/lib/core/task-tree';
-import { STEP_COUNT, TASK_KINDS, TASK_OWNERS, type TaskKind, type TaskOwner } from '@/lib/core/types';
+import { STEP_COUNT, TASK_KINDS, type TaskKind } from '@/lib/core/types';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { btnPrimary, clipLabel, inputCls, LastEdit, TRASH_NOTE, useDirty, useFormEsc } from '@/components/progress/bits';
 import { START_AFTER_DUE, taskErrorMessage } from '@/components/tasks/task-errors';
@@ -12,12 +12,12 @@ import s from './gantt.module.css';
 import { Plus, Trash } from './icons';
 
 // 간트 안에서 그 자리에 펼쳐지는 할 일 폼(고치기 · 새 할 일 · 새 세부 항목).
-//   이름 · 시작일(없어도 됨) · 마감일 · 담당(남편 · 아내 · 같이, 누른 칸을 다시 누르면 안 정함) · 종류 · 메모 · 넣을 곳 · 끝냄 · 지우기 · 「＋ 세부 항목 추가」.
+//   이름 · 시작일(없어도 됨) · 마감일 · 종류 · 메모 · 넣을 곳 · 끝냄 · 지우기 · 「＋ 세부 항목 추가」.
 //   넣을 곳 = 「n단계 할 일」(어느 단계든) 또는 같은 단계 맨 위 할 일의 「‘제목’의 세부 항목」(한 층만) — 할 일 줄 폼(TaskRow)과 같은 말 · 같은 값.
 //   저장 거절(시작일 > 마감일 · 넣을 곳 문제)은 알림 대신 폼 안 빨강 한 줄(send quiet + taskErrorMessage).
 //   지우기 = 확인 창(세부 항목이 있으면 같이 지워진다고) → 지움 → 8초 「되돌리기」(세부 항목도 같이 돌아온다).
 export interface StepRef { id: number; title: string }
-interface Form { text: string; start: string; due: string; owner: TaskOwner | ''; kind: TaskKind | ''; note: string; place: string; done: boolean }
+interface Form { text: string; start: string; due: string; kind: TaskKind | ''; note: string; place: string; done: boolean }
 
 const secBtn = 'inline-flex min-h-11 shrink-0 items-center justify-center rounded-control bg-surface px-4 text-base font-bold text-ink-soft ring-1 ring-inset ring-line-strong transition-colors hover:bg-page';
 const fieldCls = inputCls;
@@ -31,8 +31,8 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
   const cur = ed.kind === 'edit' ? tasks[ed.id] : undefined;
   const parent = ed.kind === 'newsub' ? tasks[ed.parentId] : undefined;
   const [orig] = useState<Form>(() => cur
-    ? { text: cur.text, start: cur.start ?? '', due: cur.due ?? '', owner: cur.owner ?? '', kind: cur.kind ?? '', note: cur.note ?? '', place: placeOf(cur), done: cur.done }
-    : { text: '', start: '', due: parent?.due ?? '', owner: parent?.owner ?? '', kind: '', note: '', place: parent ? `p:${parent.id}` : `s:${phase.id}`, done: false });
+    ? { text: cur.text, start: cur.start ?? '', due: cur.due ?? '', kind: cur.kind ?? '', note: cur.note ?? '', place: placeOf(cur), done: cur.done }
+    : { text: '', start: '', due: parent?.due ?? '', kind: '', note: '', place: parent ? `p:${parent.id}` : `s:${phase.id}`, done: false });
   const [f, setF] = useState<Form>(orig);
   const [base] = useState(cur?.version ?? 0);
   const [err, setErr] = useState('');
@@ -71,7 +71,6 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
       if (text !== orig.text) patch.text = text;
       if (f.start !== orig.start) patch.start = f.start || null;
       if (f.due !== orig.due) patch.due = f.due || null;
-      if (f.owner !== orig.owner) patch.owner = f.owner || null;
       if (f.kind !== orig.kind) patch.kind = f.kind || null;
       if (f.note !== orig.note) patch.note = f.note.trim() || null;
       if (f.done !== orig.done) patch.done = f.done;
@@ -82,7 +81,7 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
       const where = f.place.startsWith('p:') ? { parentId: f.place.slice(2) } : { stepId: Number(f.place.slice(2)) };
       r = await send({
         op: 'task.add', text, ...where, due: f.due || null, ...(f.start ? { start: f.start } : {}),
-        ...(f.kind ? { kind: f.kind } : {}), ...(f.owner ? { owner: f.owner } : {}), ...(f.note.trim() ? { note: f.note.trim() } : {}),
+        ...(f.kind ? { kind: f.kind } : {}), ...(f.note.trim() ? { note: f.note.trim() } : {}),
       }, { quiet: true });
     }
     setBusy(false);
@@ -117,28 +116,12 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
           <input type="date" className={fieldCls} value={f.due} onChange={(e) => set('due', e.target.value)} />
         </label>
       </div>
-      <div className={s.two}>
-        <div className={s.f}>
-          <span id="g-owner">담당</span>
-          <div role="group" aria-labelledby="g-owner" className="flex gap-1 rounded-control bg-page p-1 ring-1 ring-inset ring-line-strong">
-            {TASK_OWNERS.map((o) => {
-              const on = f.owner === o;
-              return (
-                <button key={o} type="button" aria-pressed={on} onClick={() => set('owner', on ? '' : o)}
-                  className={`flex min-h-11 flex-1 items-center justify-center rounded-control px-2 text-base transition-colors ${on ? 'bg-raised font-bold text-ink shadow-sm ring-1 ring-line-strong dark:shadow-none' : 'font-semibold text-muted hover:text-ink'}`}>
-                  {o}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <label className={s.f}>종류
-          <select className={fieldCls} value={f.kind} onChange={(e) => set('kind', e.target.value as TaskKind | '')}>
-            <option value="">없음</option>
-            {TASK_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-          </select>
-        </label>
-      </div>
+      <label className={s.f}>종류
+        <select className={fieldCls} value={f.kind} onChange={(e) => set('kind', e.target.value as TaskKind | '')}>
+          <option value="">없음</option>
+          {TASK_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+      </label>
       <label className={s.f}>넣을 곳
         <select className={fieldCls} value={f.place} onChange={(e) => set('place', e.target.value)}>
           <optgroup label="단계 할 일로">

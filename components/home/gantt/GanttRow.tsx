@@ -148,10 +148,9 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, onEdit, onTog
           aria-label={`${t.text} 끝냄`} onClick={(e) => { e.stopPropagation(); onToggleDone(); }} />
         <i className={cls(s.node, t.done && s.nDone)} style={{ left: nx }} aria-hidden>{t.done && !sub ? <Check /> : null}</i>
         <div className={s.tLine}>
-          <button type="button" className={s.tName} aria-label={`${t.text}${dt.text ? `, ${dt.text}` : ''}${t.owner ? `, ${t.owner}` : ''}. 고치기`}>{t.text}</button>
+          <button type="button" className={s.tName} aria-label={`${t.text}${dt.text ? `, ${dt.text}` : ''}. 고치기`}>{t.text}</button>
           <span className={s.tMeta} aria-hidden>
             {dt.text && <span className={cls(s.dt, dt.tone === 'late' && s.lw, dt.tone === 'today' && s.tw)}>{dt.text}</span>}
-            {t.owner && <span className={s.who}>{t.owner}</span>}
           </span>
         </div>
         {kids.length > 0 && (

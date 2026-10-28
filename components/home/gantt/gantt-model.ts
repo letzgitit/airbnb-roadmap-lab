@@ -16,7 +16,7 @@ import { addDays, mondayOf, type Pin, type StepRange } from '../step-dates.ts';
 export interface GTask {
   id: string; stepId: number; text: string;
   start: string | null; due: string | null; done: boolean;
-  owner: string | null; parentId: string | null;
+  parentId: string | null;
   /** 같은 날짜끼리 순서(만든 때) */
   order: string;
 }
@@ -46,7 +46,7 @@ export function tasksOf(doc: Pick<ProgressDoc, 'tasks'>): GTask[] {
   const ids = new Set(live.map((t) => t.id));
   return live.map((t) => ({
     id: t.id, stepId: t.stepId, text: t.text, start: t.start ?? null, due: t.due ?? null, done: t.done,
-    owner: t.owner ?? null, parentId: t.parentId && ids.has(t.parentId) ? t.parentId : null, order: t.createdAt ?? '',
+    parentId: t.parentId && ids.has(t.parentId) ? t.parentId : null, order: t.createdAt ?? '',
   }));
 }
 

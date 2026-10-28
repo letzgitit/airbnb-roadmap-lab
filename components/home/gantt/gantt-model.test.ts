@@ -11,7 +11,7 @@ const phase = (id: number, o: Partial<PhaseIn> = {}): PhaseIn => ({
 });
 let n = 0;
 const task = (stepId: number, o: Partial<GTask> = {}): GTask => ({
-  id: `t${++n}`, stepId, text: `할 일 ${n}`, start: null, due: null, done: false, owner: null, parentId: null, order: String(n).padStart(3, '0'), ...o,
+  id: `t${++n}`, stepId, text: `할 일 ${n}`, start: null, due: null, done: false, parentId: null, order: String(n).padStart(3, '0'), ...o,
 });
 const kinds = (rows: Row[]) => rows.map((r) => r.k);
 const base = { open: new Set<number>(), openTask: new Set<string>(), showDone: false, types: [] as string[], editing: null, guest: false };

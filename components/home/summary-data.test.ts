@@ -61,19 +61,14 @@ test('결정 종류: ②의 날짜 범위에 있으면 ③에서 빠지고, 나�
   assert.deepEqual(ids(s.decide), ['later', 'nodue']);
 });
 
-test('결정은 담당 거르기와 상관없이 ③에 한 번만', () => {
-  const s = summaryOf(STEPS, docOf([{ id: 'w', due: '2026-10-29', kind: '결정', owner: '아내' }]), TODAY, { owner: '남편' });
-  assert.deepEqual(ids(s.next7), []);
-  assert.deepEqual(ids(s.decide), []);
-});
-
-test('담당 「같이」는 남편 · 아내 둘 다에, 담당 없는 일은 「전체」에서만', () => {
+test('옛 데이터에 담당 값이 남아 있어도 거르지 않고 다 보인다', () => {
   const doc = docOf([
-    { id: 'both', due: TODAY, owner: '같이' }, { id: 'h', due: TODAY, owner: '남편' }, { id: 'w', due: TODAY, owner: '아내' }, { id: 'none', due: TODAY },
+    { id: 'both', due: TODAY, owner: '같이' }, { id: 'h', due: TODAY, owner: '남편' }, { id: 'w', due: '2026-10-20', owner: '아내' }, { id: 'none', due: TODAY },
   ]);
-  assert.deepEqual(ids(summaryOf(STEPS, doc, TODAY).today), ['both', 'h', 'w', 'none']);
-  assert.deepEqual(ids(summaryOf(STEPS, doc, TODAY, { owner: '남편' }).today), ['both', 'h']);
-  assert.deepEqual(ids(summaryOf(STEPS, doc, TODAY, { owner: '아내' }).today), ['both', 'w']);
+  const s = summaryOf(STEPS, doc, TODAY);
+  assert.deepEqual(ids(s.today), ['both', 'h', 'none']);
+  assert.deepEqual(ids(s.late), ['w']);
+  assert.deepEqual(ids(s.week.days[0].items), ['both', 'h', 'none']);
 });
 
 test('고정 일정: 지난 것은 빠지고 오늘은 들어가며, 3개 넘으면 나머지 수', () => {
@@ -147,7 +142,7 @@ test('날수 · 달 표기: 1부터 세고(0 → 1), 규정 날짜는 연도 + �
   assert.equal(updateWhen('곧', '시행'), '곧 시행');
 });
 
-// ── 그림 재료(첫 손님 날 · 링 · 14단계 길 · 할 일 그림 · 담당 숫자 · 계좌별 남는 돈) ──
+// ── 그림 재료(첫 손님 날 · 링 · 14단계 길 · 할 일 그림 · 계좌별 남는 돈) ──
 const stepSt = (status: 'todo' | 'doing' | 'done', targetDate: string | null = null) => ({ status, targetDate, note: '', version: 1, updatedAt: '', updatedBy: '' });
 
 test('첫 손님 날: 마지막 단계 목표일이 있으면 그 날(추정 아님) · D-day · 링', () => {
@@ -201,19 +196,6 @@ test('할 일 그림: 지남 칸 + 오늘 ~ 6일 뒤 7칸, 하루 5개 넘어도
   assert.ok(!s.week.days.some((d) => d.items.some((x) => x.id === 'd7')));
 });
 
-test('담당 거르기: 그림은 거른 대로, 담당 숫자는 늘 전체 기준(같이 = 둘 다, 담당 없음 = 전체만)', () => {
-  const doc = docOf([
-    { id: 'both', due: TODAY, owner: '같이' }, { id: 'h', due: '2026-10-28', owner: '남편' }, { id: 'w', due: '2026-10-20', owner: '아내' },
-    { id: 'none', due: TODAY }, { id: 'far', due: '2026-12-01', owner: '남편' },
-  ]);
-  const h = summaryOf(STEPS, doc, TODAY, { owner: '남편' });
-  assert.deepEqual(ids(h.week.days[0].items), ['both']);
-  assert.deepEqual(ids(h.week.days[1].items), ['h']);
-  assert.deepEqual(h.week.late, []);
-  assert.deepEqual(h.ownerCounts, { all: 4, 남편: 2, 아내: 2 });
-  assert.deepEqual(summaryOf(STEPS, doc, TODAY).ownerCounts, h.ownerCounts);
-});
-
 test('돈: 계좌별 지금 · 다가오는 두 건 뒤 남는 돈 · 나가는 돈 합, 0 아래도 그대로', () => {
   const m = (id: string, date: string | null, amount: number | null, via: 'cash' | 'credit' = 'cash') => ({ ...meta, id, date, text: id, amount, via, estimate: false, project: 'oedomin' as const });
   const s = summaryOf(STEPS, docOf([], {
@@ -243,7 +225,6 @@ test('빈 데이터: 단계도 할 일도 없으면 그림 재료가 비어 있�
   assert.deepEqual(s.stepStates, []);
   assert.equal(s.week.days.length, 7);
   assert.ok(s.week.days.every((d) => d.items.length === 0));
-  assert.deepEqual(s.ownerCounts, { all: 0, 남편: 0, 아내: 0 });
   assert.equal(s.pinsTotal, 0);
   assert.equal(s.money, null);
 });

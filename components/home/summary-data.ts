@@ -1,4 +1,4 @@
-import type { LogEntry, MoneyVia, ProgressDoc, TaskItem, TaskOwner } from '@/lib/core/types';
+import type { LogEntry, MoneyVia, ProgressDoc, TaskItem } from '@/lib/core/types';
 import { moneyRows, type MoneyRow } from '../../lib/plan.ts';
 import { addDays, diffDays, pinsOf, stepRanges, type Pin, type TimelineStep } from './step-dates.ts';
 
@@ -7,7 +7,7 @@ import { addDays, diffDays, pinsOf, stepRanges, type Pin, type TimelineStep } fr
 //
 // 카드 여섯 장의 재료:
 //   ① 남은 날   = 오늘 이후(오늘 포함) 고정 일정 3개 + 그 뒤 개수, 끝낸 단계 수
-//   ② 할 일     = 안 끝나고 안 지운 할 일: 기한 지남(마감 < 오늘) 전부 · 오늘 전부 · 다음 7일(내일 ~ 6일 뒤) 마감순. 담당 거르기는 ②에만
+//   ② 할 일     = 안 끝나고 안 지운 할 일: 기한 지남(마감 < 오늘) 전부 · 오늘 전부 · 다음 7일(내일 ~ 6일 뒤) 마감순
 //   ③ 정할 것   = 안 끝난 「결정」 할 일 중 ②의 날짜 범위(마감 ≤ 6일 뒤)에 들지 않는 것(마감순, 날짜 없음은 뒤) — 한 할 일은 요약에 한 번만
 //                 + 질문: 답 기다림 수 · 새 답 수
 //   ④ 지금 하는 단계 = 지금 단계 + 그 밖의 진행 중 단계(번호순, 3개까지): 목표일 · 그 단계 안 끝난 할 일 수
@@ -18,9 +18,7 @@ import { addDays, diffDays, pinsOf, stepRanges, type Pin, type TimelineStep } fr
 //   finish     = 첫 손님 날: 마지막 단계(14단계) 목표일, 없으면 단계 끝 중 가장 늦은 날(estimate = true). dday = 오늘부터 남은 날(지나면 음수)
 //   start · elapsed · span = 링: 단계 시작 중 가장 이른 날부터 첫 손님 날까지 span 일 중 오늘까지 elapsed 일(0 ~ span)
 //   stepStates = 14단계 길: 단계마다 상태(done · now · doing · todo)와 종류
-//   week       = 할 일 그림: 「지남」 칸(기한 지난 일) + 오늘 ~ 6일 뒤 날짜별 할 일(담당 거르기 반영, ②와 같은 범위)
-//   ownerCounts = 담당 칸 묶음 숫자: ②의 범위(기한 지남 · 오늘 · 다음 7일) 안 할 일 수 — 「같이」는 남편 · 아내 둘 다에, 담당 없음은 전체에만
-export type OwnerFilter = '' | Exclude<TaskOwner, '같이'>;
+//   week       = 할 일 그림: 「지남」 칸(기한 지난 일) + 오늘 ~ 6일 뒤 날짜별 할 일(②와 같은 범위)
 export type SummaryDoc = Pick<ProgressDoc, 'tasks' | 'steps' | 'property' | 'log' | 'money' | 'plan' | 'questions'>;
 
 export interface ActiveStep {
@@ -66,18 +64,14 @@ export interface Summary {
   start: string | null; elapsed: number; span: number;
   stepStates: StepStateRow[];
   week: { late: WeekItem[]; days: WeekDay[] };
-  ownerCounts: { all: number; 남편: number; 아내: number };
 }
 
 export const NEXT_DAYS = 7;
 const byDue = (a: TaskItem, b: TaskItem) =>
   (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.stepId - b.stepId || a.createdAt.localeCompare(b.createdAt);
 
-/** 담당 거르기(그날 창과 같은 규칙): 「같이」는 남편 · 아내 둘 다에, 담당 없는 일은 「전체」에서만 */
-export const ownerPass = (owner: OwnerFilter) => (t: TaskItem) => !owner || t.owner === owner || t.owner === '같이';
-
 export function summaryOf(steps: TimelineStep[], doc: SummaryDoc, today: string, opts: {
-  currentId?: number | null; owner?: OwnerFilter; marks?: Pin[];
+  currentId?: number | null; marks?: Pin[];
   /** 콘텐츠 날수가 정해진 날에서 센 값이면 그 날(지산판). 단계 기간 계산(step-dates)에 그대로 넘긴다 */
   fixedDay0?: string;
   /** 방금 체크한 줄이 8초 동안 제자리를 지키게(useStickyDone 의 isDone). 없으면 t.done */
@@ -87,15 +81,13 @@ export function summaryOf(steps: TimelineStep[], doc: SummaryDoc, today: string,
 } = {}): Summary {
   const isDone = opts.isDone ?? ((t: TaskItem) => t.done);
   const editing = opts.editing ?? new Set<string>();
-  const pass = ownerPass(opts.owner ?? '');
   const lastNext = addDays(today, NEXT_DAYS - 1);
 
   const upcoming = pinsOf(doc, opts.marks).filter((p) => p.date >= today);
   const open = Object.values(doc.tasks).filter((t) => (!t.deletedAt || editing.has(t.id)) && !isDone(t)).sort(byDue);
-  const mine = open.filter(pass);
-  const late = mine.filter((t) => t.due && t.due < today);
-  const todays = mine.filter((t) => t.due === today);
-  const next7 = mine.filter((t) => t.due && t.due > today && t.due <= lastNext);
+  const late = open.filter((t) => t.due && t.due < today);
+  const todays = open.filter((t) => t.due === today);
+  const next7 = open.filter((t) => t.due && t.due > today && t.due <= lastNext);
   const decide = open.filter((t) => t.kind === '결정' && !(t.due && t.due <= lastNext));
 
   const questions = Object.values(doc.questions ?? {}).filter((q) => !q.deletedAt);
@@ -131,19 +123,13 @@ export function summaryOf(steps: TimelineStep[], doc: SummaryDoc, today: string,
     return { id: st.id, title: st.title, type: st.type, index, state };
   });
 
-  // 할 일 그림: 지남 + 오늘 ~ 6일 뒤(담당 거르기 반영 — ②의 목록과 같은 할 일)
+  // 할 일 그림: 지남 + 오늘 ~ 6일 뒤(②의 목록과 같은 할 일)
   const typeOf = new Map(steps.map((st) => [st.id, st.type]));
   const item = (t: TaskItem): WeekItem => ({ id: t.id, type: typeOf.get(t.stepId) ?? 'prep' });
   const days: WeekDay[] = Array.from({ length: NEXT_DAYS }, (_, i) => {
     const date = addDays(today, i);
-    return { date, items: mine.filter((t) => t.due === date).map(item) };
+    return { date, items: open.filter((t) => t.due === date).map(item) };
   });
-  const windowAll = open.filter((t) => t.due && t.due <= lastNext);
-  const ownerCounts = {
-    all: windowAll.length,
-    남편: windowAll.filter(ownerPass('남편')).length,
-    아내: windowAll.filter(ownerPass('아내')).length,
-  };
 
   const recentLog = (doc.log ?? []).filter((l) => !l.deletedAt).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 3);
   const moneyItems = Object.values(doc.money ?? {}).filter((m) => !m.deletedAt);
@@ -176,7 +162,6 @@ export function summaryOf(steps: TimelineStep[], doc: SummaryDoc, today: string,
     finish, dday: finish ? diffDays(today, finish.date) : null,
     start, elapsed, span, stepStates,
     week: { late: late.map(item), days },
-    ownerCounts,
   };
 }
 
