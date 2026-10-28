@@ -19,13 +19,13 @@ import { addCardNote, removeCardNote, restoreCardNote, useCardNotes, type CardNo
 export const blockCls = 'bg-surface md:border md:border-line';
 
 /**
- * 블록 머리(데일리 .sec-h): 52px 줄, 제목 19/800 + 글자 밑 짧은 형광 밑줄(다크는 22/700 · 밑줄 없음). 오른쪽에 메타(13) · 꼬리표 · 작은 글자 단추.
+ * 블록 머리(데일리 .sec-h): 52px 줄, 제목 19/800 + 글자 밑 짧은 형광 밑줄(다크도 19/800 — 밑줄만 없음). 오른쪽에 메타(13) · 꼬리표 · 작은 글자 단추.
  * 좁아서 한 줄에 안 들어가면 오른쪽 메타가 제목 밑 줄로 내려간다.
  */
 export function BlockHead({ id, title, count, right }: { id?: string; title: ReactNode; count?: ReactNode; right?: ReactNode }) {
   return (
     <div className="flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-5 py-2.5">
-      <h2 id={id} className="flex min-w-0 items-baseline gap-2 text-head font-extrabold tracking-[-0.01875rem] text-ink dark:text-2xl dark:font-bold">
+      <h2 id={id} className="flex min-w-0 items-baseline gap-2 text-head font-extrabold tracking-[-0.01875rem] text-ink">
         <span className="head-mark min-w-0">{title}</span>
         {count != null && <small className="shrink-0 text-meta font-normal tracking-normal text-muted tabular-nums">{count}</small>}
       </h2>
@@ -80,16 +80,17 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
   return (
     <section aria-labelledby={`${uid}-t`} className={blockCls}>
       {/* 머리 줄: 제목 속 단추가 줄 전체를 덮어(::after) 어디를 눌러도 접고 편다.
-          제목만 제 칸 안에서 줄바꿈하고, 오른쪽 메타(날짜 · 꼬리표 · 개수 · 꺾쇠)는 한 덩어리로 오른쪽 세로 가운데.
+          오른쪽 메타(날짜 · 꼬리표 · 개수 · 꺾쇠)는 쪼개지지 않는 한 덩어리로 오른쪽 세로 가운데. 제목 옆에 다 안 들어가면
+          덩어리째 아래 줄로 내려 오른쪽 정렬(flex-wrap — 제목은 한 줄 폭을 다 쓰니 많아야 2줄).
           다 끝낸 블록은 「완료」 꼬리표만 — 제목은 muted · 형광 밑줄 없음(훑어볼 때 뒤로 물러나게) */}
-      <div className="relative flex min-h-13 items-center gap-3 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink">
-        <h2 id={`${uid}-t`} className={`min-w-0 flex-1 text-head font-extrabold tracking-[-0.01875rem] ${done ? 'text-muted' : 'text-ink'}`}>
+      <div className="relative flex min-h-13 flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink">
+        <h2 id={`${uid}-t`} className={`min-w-0 flex-auto text-head font-extrabold tracking-[-0.01875rem] ${done ? 'text-muted' : 'text-ink'}`}>
           <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={onToggle}
             className="text-left outline-none after:absolute after:inset-0 after:content-['']">
             {done ? title : <span className="head-mark">{title}</span>}
           </button>
         </h2>
-        <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
+        <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
           {!done && summary.deadline && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
           <StateBadge summary={summary} today={today} date={summary.deadline} />
           {/* 개수 칸: 개수가 없거나 다 끝낸 블록도 같은 너비를 비워 둔다(꼬리표 오른쪽 끝이 모든 머리에서 한 세로줄에 서게) */}
