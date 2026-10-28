@@ -68,14 +68,14 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
               {guestLine && <span className="text-meta">{guestLine}</span>}
             </p>
           )}
-          <div className="ml-auto flex shrink-0 items-center gap-0.5 md:gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 self-stretch md:gap-1">
             {items.length > 0 ? (
-              <nav aria-label="사이트" className="flex items-center">
+              <nav aria-label="사이트" className="flex self-stretch">
                 {items.map((it) => <Door key={it.href} item={it} on={it.match(path)} onClick={guard(it.href)} />)}
               </nav>
             ) : pending && (
               // 불러오는 중: 새 홈 뼈대 화면(로그인한 사람만 본다)이 떠 있을 때만 로그인한 문 둘을 미리 보인다(CSS :has — 서버 그리기부터 같다)
-              <nav aria-label="사이트" className="hidden items-center [body:has([data-home-skeleton])_&]:flex">
+              <nav aria-label="사이트" className="hidden self-stretch [body:has([data-home-skeleton])_&]:flex">
                 {NAV_ITEMS.map((it) => <Door key={it.href} item={it} on={false} onClick={guard(it.href)} />)}
               </nav>
             )}
@@ -104,7 +104,7 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
 
 /**
  * 머리 띠 오른쪽 문 하나: 선 아이콘 + 글자 — 분야 탭 칸과 같은 값(아이콘 24px · 선 1.8, 글자 14/800). 폰은 아이콘 위 · 글자 아래, PC 는 한 줄.
- * 지금 화면이면 아이콘 선 굵게(2.3) + 아래 3px 검정 선(형광 채움 없음)
+ * 지금 화면이면 아이콘 선 굵게(2.3) + 문 폭 전체 3px 검정 선(형광 채움 없음). 문은 띠 높이만큼 늘어나 선이 띠 아래 끝에 붙는다(분야 탭처럼)
  */
 function Door({ item, on, onClick }: { item: NavItem; on: boolean; onClick: ReturnType<ReturnType<typeof useGuardedLinkClick>> }) {
   return (
@@ -112,7 +112,7 @@ function Door({ item, on, onClick }: { item: NavItem; on: boolean; onClick: Retu
       className="relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-control px-2 text-sm font-extrabold leading-none tracking-[-0.02em] transition-colors hover:bg-black/10 md:flex-row md:gap-1.5 md:px-2.5">
       <LineIcon name={item.icon} className="size-6" stroke={on ? 2.3 : 1.8} />
       <span className="whitespace-nowrap">{item.label}</span>
-      {on && <span className="absolute inset-x-2 bottom-0 h-[3px] bg-on-marker" aria-hidden />}
+      {on && <span className="absolute inset-x-0 bottom-0 h-[3px] bg-on-marker" aria-hidden />}
     </Link>
   );
 }

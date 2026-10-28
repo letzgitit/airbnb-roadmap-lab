@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNetworkBusy } from '@/lib/client/busy';
 
 // 화면 맨 위의 얇은 진행 막대. 진행 중인 요청이 하나라도 있으면 보이고, 다 끝나면 끝까지 채운 뒤 사라진다.
-// 색은 흰색(on-accent): 늘 강조색 머리글 띠 위에 그려진다(DESIGN.md 2.2 (가)). 머리글이 없는 지인 답 화면(/q/)은 보통 폼 전송이라 이 막대가 뜨지 않는다.
+// 색은 검정(on-marker): 늘 형광 머리 띠 위에 그려진다(밝게 · 어둡게 모두 형광 띠 — 흰색은 형광 위 1.1:1이라 안 보였다, 2026-10-29). 머리글이 없는 지인 답 화면(/q/)은 보통 폼 전송이라 이 막대가 뜨지 않는다.
 // 200ms 안에 끝나는 짧은 요청에는 나타나지 않는다. 사진 올리기처럼 오래 걸리는 요청(slow)은 끝까지 가지 않고 천천히 찬다.
 const SHOW_DELAY = 200;
 const FADE_MS = 300;
@@ -48,7 +48,7 @@ export function TopLoader() {
     <div aria-busy={busy} className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-[3px]">
       {shown && (
         <div role="progressbar" aria-label="불러오는 중" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}
-          className={`h-full bg-on-accent transition-[width,opacity] duration-200 ease-out motion-reduce:transition-none ${leaving ? 'opacity-0 !duration-300' : 'opacity-100'}`}
+          className={`h-full bg-on-marker transition-[width,opacity] duration-200 ease-out motion-reduce:transition-none ${leaving ? 'opacity-0 !duration-300' : 'opacity-100'}`}
           style={{ width: `${pct}%` }} />
       )}
     </div>

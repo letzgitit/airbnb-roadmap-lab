@@ -26,36 +26,53 @@ export const blockCls = 'bg-surface md:border md:border-line';
  */
 const stickyHeadCls = 'sticky top-tabbar z-20 bg-surface';
 const stuckLineCls = 'shadow-[0_1px_0_var(--color-line)]';
+/** 한 줄로 줄인 붙은 머리 높이(min-h-13) — 줄이는 시점을 잡는 데 쓴다 */
+const SLIM_H = 52;
 /**
- * 블록 맨 위 1px 표시(sentinel)가 탭 줄 밑으로 지나가 숨었으면 머리가 붙은 것. 기준 선은 머리의 계산된 top(= 탭 줄 높이)을 읽는다.
- * 붙은 동안 머리가 한 줄로 줄어들면(단계 블록 — 긴 이름 말줄임) 줄어든 만큼 머리 아래 여백으로 채워 둔다 — 아래 할 일 줄이 위로 튀지 않게.
+ * 붙은 머리 상태: 0 = 안 붙음, 1 = 붙음(평소 모양 + 아래 선), 2 = 붙음 + 한 줄로 줄임(slim — 단계 블록만).
+ * 블록 맨 위 1px 표시(sentinel)가 탭 줄 밑선(머리의 계산된 top) 위로 올라가면 붙은 것.
+ * 한 줄로 줄이는 것은 붙고 나서 (평소 머리 높이 − 52)px 더 내린 뒤 — 그때 몸통 첫 줄이 줄인 머리 바로 밑에 와 있어 빈 띠 없이 선 하나로 이어진다.
+ * 줄인 높이만큼은 몸통(body) 위 안쪽 여백으로 채운다 — 아래 줄이 튀지 않고, 머리 자신은 52px라 블록 끝에서 제때 밀려 올라간다. 위로 되돌릴 때도 같은 기준.
  */
-function useStuck(on: boolean) {
+function useStuck(on: boolean, canSlim = false) {
   const sentinel = useRef<HTMLDivElement>(null);
   const head = useRef<HTMLDivElement>(null);
-  const fullH = useRef(0); // 붙기 직전(평소 모양) 머리 높이
-  const [stuck, setStuck] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  const fullH = useRef(0); // 줄이지 않은(평소 모양) 머리 높이
+  const [phase, setPhase] = useState<0 | 1 | 2>(0);
+  const phaseRef = useRef(phase);
   useEffect(() => {
     const s = sentinel.current;
     const h = head.current;
     if (!on || !s || !h) return;
     const top = parseFloat(getComputedStyle(h).top) || 0;
-    const io = new IntersectionObserver(([e]) => {
-      const now = !e.isIntersecting && e.boundingClientRect.top < top + 1;
-      if (now && h.style.marginBottom === '') fullH.current = h.offsetHeight;
-      setStuck(now);
-    }, { rootMargin: `-${top}px 0px 0px 0px`, threshold: 0 });
-    io.observe(s);
-    return () => io.disconnect();
-  }, [on]);
-  const isStuck = on && stuck;
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      if (phaseRef.current !== 2) fullH.current = h.offsetHeight;
+      const y = s.getBoundingClientRect().top;
+      const next = y >= top ? 0 : canSlim && y < top - Math.max(0, fullH.current - SLIM_H) ? 2 : 1;
+      if (next !== phaseRef.current) { phaseRef.current = next; setPhase(next); }
+    };
+    const ask = () => { if (!raf) raf = window.requestAnimationFrame(check); };
+    ask();
+    window.addEventListener('scroll', ask, { passive: true });
+    window.addEventListener('resize', ask);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', ask);
+      window.removeEventListener('resize', ask);
+    };
+  }, [on, canSlim]);
+  const cur = on ? phase : 0;
   useLayoutEffect(() => {
     const h = head.current;
-    if (!h) return;
-    h.style.marginBottom = '';
-    if (isStuck) h.style.marginBottom = `${Math.max(0, fullH.current - h.offsetHeight)}px`;
-  }, [isStuck]);
-  return { sentinel, head, stuck: isStuck };
+    const b = body.current;
+    if (!b) return;
+    b.style.paddingTop = '';
+    if (cur === 2 && h) b.style.paddingTop = `${Math.max(0, fullH.current - h.offsetHeight)}px`;
+  }, [cur]);
+  return { sentinel, head, body, stuck: cur > 0, slim: cur === 2 };
 }
 /** 머리 위치를 재는 기준(머리의 계산된 top = 탭 줄 높이) */
 const stickyTop = (head: HTMLElement | null) => (head ? parseFloat(getComputedStyle(head).top) || 0 : 0);
@@ -123,7 +140,7 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
   );
   const progress = progressText(summary);
   const done = summary.finished;
-  const { sentinel, head, stuck } = useStuck(open);
+  const { sentinel, head, body, stuck, slim } = useStuck(open, true);
   const section = useRef<HTMLElement>(null);
   // 붙은 머리에서 접으면 접은 뒤 그 머리가 탭 줄 바로 밑에 오게 스크롤을 되돌린다(접히면 블록이 짧아져 머리가 화면 위로 사라지므로)
   //   기준 선(탭 줄 높이)은 접기 전에 잰다 — 접힌 머리는 sticky 가 아니어서 top 을 읽을 수 없다
@@ -152,16 +169,16 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
           ::after 위에 그려지므로, 이게 없으면 꺾쇠를 정확히 누를 때 단추가 안 눌린다(2026-10-29 폰 제보).
           펼친 블록은 머리가 탭 줄 밑에 붙는다(useStuck — 붙은 동안만 아래 선, 한 줄로 줄임).
           다 끝낸 블록은 「완료」 꼬리표만 — 제목은 muted · 형광 밑줄 없음(훑어볼 때 뒤로 물러나게) */}
-      <div ref={head} className={`flex min-h-13 ${stuck ? 'flex-nowrap' : 'flex-wrap'} items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'} ${stuck ? stuckLineCls : ''}`}>
+      <div ref={head} className={`flex min-h-13 ${slim ? 'flex-nowrap' : 'flex-wrap'} items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'} ${stuck ? stuckLineCls : ''}`}>
         <h2 id={`${uid}-t`} className={`min-w-0 flex-auto text-head font-extrabold tracking-[-0.01875rem] ${done ? 'text-muted' : 'text-ink'}`}>
           <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={toggle}
-            className={`text-left outline-none after:absolute after:inset-0 after:content-[''] ${stuck ? 'block w-full truncate' : ''}`}>
+            className={`text-left outline-none after:absolute after:inset-0 after:content-[''] ${slim ? 'block w-full truncate' : ''}`}>
             {done ? title : <span className="head-mark">{title}</span>}
           </button>
         </h2>
         <div className="pointer-events-none ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
-          {/* 붙은 동안은 한 줄로: 이름 말줄임 + 날짜 숨김(꼬리표 · 개수 · 꺾쇠는 남김 — 탭 줄 밑을 많이 먹지 않게) */}
-          {!done && summary.deadline && !stuck && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
+          {/* 붙고 조금 더 내리면 한 줄로: 이름 말줄임 + 날짜 숨김(꼬리표 · 개수 · 꺾쇠는 남김 — 탭 줄 밑을 많이 먹지 않게) */}
+          {!done && summary.deadline && !slim && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
           <StateBadge summary={summary} today={today} date={summary.deadline} />
           {/* 개수 칸: 개수가 없거나 다 끝낸 블록도 같은 너비를 비워 둔다(꼬리표 오른쪽 끝이 모든 머리에서 한 세로줄에 서게) */}
           <span className="min-w-9 text-right font-semibold text-ink-soft tabular-nums" aria-hidden>{done ? '' : progress}</span>
@@ -170,7 +187,7 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
         </div>
       </div>
       {/* 몸통: 펼쳤을 때만 그린다(접힌 동안 할 일 줄이 없어 「이번 주 할 일」 건너가기는 먼저 펼친다) */}
-      <div id={`${uid}-b`} hidden={!open}>
+      <div ref={body} id={`${uid}-b`} hidden={!open}>
         {open && (
           <>
             {card.sub && <p className="truncate px-5 pb-2.5 text-sm text-sub">{card.sub}</p>}
