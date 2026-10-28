@@ -18,7 +18,7 @@ import { ContactsTab } from './ContactsTab';
 import { PhotosTab, type PhotoSub } from './PhotosTab';
 import { BlockHead, blockCls, StepBlock } from './StepBlock';
 import {
-  CARD_TABS, TABS, askOnly, blockId, contacts, daysBetween, isAsk, isWorkTab, relDay, orderBlocks, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
+  CARD_TABS, TABS, askOnly, blockId, contacts, daysBetween, isAsk, isWorkTab, relDay, sortCards, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
   type CardDef, type TabId, type WorkTabId,
 } from './home-model';
 
@@ -44,7 +44,7 @@ const savedTab = (): TabId => {
 };
 
 /**
- * 분야 탭 줄(대메뉴, 기획 27의 9절): 흰 면 줄 + 아래 1px 선, 여섯 칸이 줄 폭을 같은 너비로 나눠 꽉 채운다(글자는 칸 가운데, 아이콘 없음).
+ * 분야 탭 줄(대메뉴, 기획 27의 9절): 흰 면 줄 + 아래 1px 선, 여섯 칸이 줄 폭을 꽉 채운다 — 칸은 글자 너비 + 같은 좌우 여백에서 남는 폭을 나눠 늘어난다(flex 1 1 auto, 글자는 칸 가운데, 아이콘 없음).
  * 글자 19(데일리 --f19 — 18은 데일리 단계에 없어 가장 가까운 값)/800, 안 고른 탭도 본문색(ink-soft)으로 진하게, 고른 탭 = ink + 칸 너비 3px 밑줄. 360px 폰에서도 한 줄.
  * 화면 맨 위에 붙어 따라오고, 붙은 동안은 줄이 머리 띠와 같은 형광 면 + 검정 글자가 된다(데일리 .tabs--stuck).
  * 기한 지난 안 끝난 일이 있는 탭(고르지 않은 것)은 이름 옆 작은 빨강 점.
@@ -74,7 +74,7 @@ export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
           {TABS.map((t) => {
             const on = t.id === tab;
             const dot = !on && (late[t.id] ?? 0) > 0;
-            const cls = `relative inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap px-0.5 text-head font-extrabold leading-none tracking-[-0.02em] transition-opacity active:opacity-60 ${stuck ? '' : on ? 'text-ink' : 'text-ink-soft'}`;
+            const cls = `relative inline-flex h-12 flex-auto items-center justify-center whitespace-nowrap px-1.5 text-head font-extrabold leading-none tracking-[-0.02em] transition-opacity active:opacity-60 ${stuck ? '' : on ? 'text-ink' : 'text-ink-soft'}`;
             const body = (
               <>
                 {t.label}
@@ -112,10 +112,12 @@ export function SimpleHome() {
   const pickSub = (s: PhotoSub) => { setPhotoSub(s); write(PHOTO_SUB_KEY, s); };
   // 「이번 주 할 일」에서 고른 할 일: 그 탭으로 가서(그 할 일이 든 블록이 접혀 있으면 펼쳐) 그 줄로 내려간다. 탭을 손으로 바꾸면 잊는다
   const [reveal, setReveal] = useState<{ id: string; tab: WorkTabId; n: number } | null>(null);
-  const pick = (t: TabId) => { setTab(t); write(TAB_KEY, t); setReveal(null); window.scrollTo({ top: 0 }); };
+  // 「문의 필요만 보기」(일터 탭): 단추는 늘 「이번 주 할 일」 머리 오른쪽(폰은 본문, PC는 곁 칸). 탭을 바꾸면 끈다
+  const [askOn, setAskOn] = useState(false);
+  const pick = (t: TabId) => { setTab(t); write(TAB_KEY, t); setReveal(null); setAskOn(false); window.scrollTo({ top: 0 }); };
   const today = todayStr();
   const goTask = (id: string, t: WorkTabId) => {
-    if (t !== tab) { setTab(t); write(TAB_KEY, t); }
+    if (t !== tab) { setTab(t); write(TAB_KEY, t); setAskOn(false); }
     setReveal((r) => ({ id, tab: t, n: (r?.n ?? 0) + 1 }));
   };
 
@@ -135,6 +137,8 @@ export function SimpleHome() {
     .sort((a, b) => (a.task.due ?? '').localeCompare(b.task.due ?? ''));
   const asideWeek = weekFor(isWorkTab(tab) ? [tab] : CARD_TABS.map((c) => c.tab));
   const weekTitle = '이번 주 할 일';
+  const askCount = isWorkTab(tab) ? Object.values(work[tab]).flat().filter((t) => isAsk(t) && !t.done).length : 0;
+  const ask = isWorkTab(tab) && (askCount > 0 || askOn) ? <AskToggle on={askOn} count={askCount} onToggle={() => setAskOn((v) => !v)} /> : null;
 
   return (
     <>
@@ -146,7 +150,7 @@ export function SimpleHome() {
           {isWorkTab(tab) ? (
             <WorkTab key={tab} tab={tab} groups={work[tab]} doc={doc} steps={steps} today={today}
               weekItems={weekFor([tab])} weekTitle={weekTitle} onPickWeek={goTask}
-              reveal={reveal?.tab === tab ? reveal : null} />
+              reveal={reveal?.tab === tab ? reveal : null} ask={ask} askOn={askOn} onAskOff={() => setAskOn(false)} />
           ) : tab === 'contacts' ? (
             <div className="px-safe pb-2 md:px-0"><ContactsTab /></div>
           ) : (
@@ -160,7 +164,10 @@ export function SimpleHome() {
         {/* 곁 칸(PC): 위에 붙어 따라온다(분야 탭 줄 아래) */}
         <aside aria-label="곁 칸" className="hidden lg:sticky lg:top-16 lg:flex lg:flex-col lg:gap-2">
           {/* 달력 탭에서는 달력이 같은 일을 하므로 이번 주 할 일을 숨긴다 */}
-          {tab !== 'calendar' && <WeekBlock title={weekTitle} items={asideWeek} today={today} onPick={goTask} showTab={!isWorkTab(tab)} />}
+          {/* 「문의 필요만 보기」는 이번 주 블록 머리 오른쪽. 이번 주가 비어 블록이 없으면 같은 자리(곁 칸 맨 위 오른쪽)에 단추만 */}
+          {tab !== 'calendar' && (asideWeek.length > 0
+            ? <WeekBlock title={weekTitle} items={asideWeek} today={today} onPick={goTask} showTab={!isWorkTab(tab)} headRight={ask} />
+            : ask && <AskRow>{ask}</AskRow>)}
           <QuickCalls doc={doc} onMore={() => pick('contacts')} />
         </aside>
       </div>
@@ -173,22 +180,24 @@ export function SimpleHome() {
 }
 
 /**
- * 일터 탭 하나(행정 · 설비 · 운영): 이번 주 할 일(폰 · 태블릿 — 머리 오른쪽에 「문의 필요만 보기」) → 단계 블록들(한 목록, orderBlocks 순서).
+ * 일터 탭 하나(행정 · 설비 · 운영): 이번 주 할 일(폰 · 태블릿 — 머리 오른쪽에 「문의 필요만 보기」) → 단계 블록들(한 목록, sortCards 순서).
  * 블록 사이는 바탕 회색 8px(데일리 --gap). 블록은 처음에 모두 접혀 있고(머리 줄만), 펼친 블록 id 는 이 기기에 기억한다(OPEN_KEY).
  * 다 끝낸 블록 · 행정의 1~3단계도 따로 묶지 않고 마감 순서 제자리에 접힌 채 둔다.
- * 「문의 필요만 보기」는 따로 한 줄(회색 띠)을 쓰지 않고 「이번 주 할 일」 머리 오른쪽 작은 글자 단추. 그 블록이 없으면(또는 PC — 이번 주는 곁 칸) 첫 블록 위 오른쪽.
+ * 「문의 필요만 보기」(ask — 상태는 SimpleHome)는 늘 「이번 주 할 일」 머리 오른쪽(폰 · 태블릿은 여기, PC는 곁 칸). 켜도 자리를 옮기지 않는다.
+ * 이번 주가 비어 그 블록이 없으면 같은 자리(본문 맨 위 오른쪽)에 단추만 둔다.
  */
-function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickWeek, reveal }: {
+function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickWeek, reveal, ask, askOn, onAskOff }: {
   tab: WorkTabId; groups: Record<string, TaskItem[]>; doc: ProgressDoc; steps: StepRef[]; today: string;
   weekItems: WeekItem[]; weekTitle: string; onPickWeek: (id: string, tab: WorkTabId) => void;
   reveal: { id: string; n: number } | null;
+  ask: React.ReactNode; askOn: boolean; onAskOff: () => void;
 }) {
   const def = workTab(tab);
   const cards = def.cards;
   const sums = Object.fromEntries(cards.map((c) => [c.id, summarize(c, groups[c.id], doc, today)]));
   // 낱말 블록의 「그 밖에」는 할 일이 없으면 숨긴다
   const visible = cards.filter((c) => c.match || c.id !== 'other' || groups[c.id].length > 0);
-  const list = orderBlocks(visible, sums, def.alwaysDone);
+  const list = sortCards(visible, sums);
   const [opened, setOpened] = useState<Set<string>>(savedOpen);
   const setOpen = (id: string, on: boolean) => setOpened((prev) => {
     if (prev.has(id) === on) return prev;
@@ -197,13 +206,13 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
     write(OPEN_KEY, JSON.stringify([...next]));
     return next;
   });
-  // 「문의 필요만 보기」: 문의 할 일이 있는 블록만, 그 안에 문의 할 일(과 세부 항목 · 부모)만
-  const [askOn, setAskOn] = useState(false);
-  // 「문의 필요만 보기」를 켠 동안은 걸러 낸 블록을 펼쳐 보인다(접은 것만 따로 — 기기에 기억하지 않고, 끄면 원래 펼침으로)
+  // 「문의 필요만 보기」를 켠 동안은 문의 할 일이 있는 블록만, 그 안에 문의 할 일(과 세부 항목 · 부모)만 펼쳐 보인다
+  // (켠 동안 접은 것만 따로 — 기기에 기억하지 않고, 껐다 켜면 다시 다 펼침)
   const [askClosed, setAskClosed] = useState<Set<string>>(() => new Set());
-  const askCount = Object.values(groups).flat().filter((t) => isAsk(t) && !t.done).length;
+  const [askSeen, setAskSeen] = useState(askOn);
+  if (askSeen !== askOn) { setAskSeen(askOn); setAskClosed(new Set()); }
   const titleOf = (c: CardDef) => (c.stepTitle ? steps.find((s) => s.id === c.stepTitle)?.title ?? c.title : c.title);
-  const block = (c: CardDef, tasks = groups[c.id], extra?: React.ReactNode) => {
+  const block = (c: CardDef, tasks = groups[c.id]) => {
     const id = blockId(tab, c.id);
     const on = askOn ? !askClosed.has(id) : opened.has(id);
     const toggle = askOn
@@ -211,7 +220,7 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
       : () => setOpen(id, !on);
     return (
       <StepBlock key={c.id} blockId={id} card={c} cards={cards} title={titleOf(c)} tasks={tasks} summary={sums[c.id]} steps={steps} today={today}
-        headExtra={extra} open={on} onToggle={toggle} />
+        open={on} onToggle={toggle} />
     );
   };
 
@@ -226,7 +235,7 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
     let raf = 0;
     const tryGo = () => {
       if (focusTask(reveal.id) || tries++ > 30) return;
-      setAskOn(false);
+      onAskOff();
       raf = window.requestAnimationFrame(tryGo);
     };
     raf = window.requestAnimationFrame(tryGo);
@@ -234,30 +243,19 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reveal(누를 때마다 새 값)에만 반응한다
   }, [reveal]);
 
-  if (askOn) {
-    const shown = list.filter((c) => askOnly(groups[c.id]).length > 0);
-    const on = <AskToggle on count={askCount} onToggle={() => setAskOn(false)} />;
-    return (
-      <div className="flex flex-col gap-2">
-        {shown.length === 0 && <><AskRow>{on}</AskRow><p className={`${blockCls} px-5 py-4 text-base text-muted`}>문의할 일이 없어요.</p></>}
-        {shown.map((c, i) => block(c, askOnly(groups[c.id]), i === 0 ? on : undefined))}
-      </div>
-    );
-  }
-  const ask = askCount > 0 ? <AskToggle on={false} count={askCount} onToggle={() => setAskOn(true)} /> : null;
-  const hasWeek = weekItems.length > 0;
-  // 「문의 필요만 보기」 자리: 이번 주 블록이 있으면 그 머리 오른쪽(폰 · 태블릿), PC(이번 주가 곁 칸)이거나 이번 주가 없으면 첫 단계 블록 머리 오른쪽
-  const firstExtra = ask ? (hasWeek ? <span className="hidden lg:inline-flex">{ask}</span> : ask) : undefined;
+  const shown = askOn ? list.filter((c) => askOnly(groups[c.id]).length > 0) : list;
   return (
     <div className="flex flex-col gap-2">
-      {ask && list.length === 0 && <AskRow className={hasWeek ? 'hidden lg:flex' : ''}>{ask}</AskRow>}
-      <WeekBlock title={weekTitle} items={weekItems} today={today} onPick={onPickWeek} headRight={ask} className="lg:hidden" />
-      {list.map((c, i) => block(c, groups[c.id], i === 0 ? firstExtra : undefined))}
+      {weekItems.length > 0
+        ? <WeekBlock title={weekTitle} items={weekItems} today={today} onPick={onPickWeek} headRight={ask} className="lg:hidden" />
+        : ask && <AskRow className="lg:hidden">{ask}</AskRow>}
+      {askOn && shown.length === 0 && <p className={`${blockCls} px-5 py-4 text-base text-muted`}>문의할 일이 없어요.</p>}
+      {shown.map((c) => block(c, askOn ? askOnly(groups[c.id]) : groups[c.id]))}
     </div>
   );
 }
 
-/** 「문의 필요만 보기」를 블록 밖에 둘 때의 자리(첫 블록 위 오른쪽 — 띠 없이 단추만) */
+/** 「문의 필요만 보기」를 블록 밖에 둘 때의 자리(이번 주 할 일이 없어 그 블록이 숨었을 때 — 같은 자리 오른쪽, 띠 없이 단추만) */
 function AskRow({ className = '', children }: { className?: string; children: React.ReactNode }) {
   return <div className={`-mb-1 flex justify-end px-2 md:px-0 ${className}`}>{children}</div>;
 }
@@ -313,7 +311,7 @@ function WeekBlock({ title, items, today, onPick, showTab = false, headRight, cl
       {/* 5개를 넘으면 「n개 더 보기」(접는 줄 꼴 — 펼치면 「접기」) */}
       {rest > 0 && (
         <span className="block border-t border-line px-1">
-          <FoldRow label={all ? '접기' : `${rest}개 더 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={`${uid}-l`} />
+          <FoldRow strongChevron label={all ? '접기' : `${rest}개 더 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={`${uid}-l`} />
         </span>
       )}
     </section>

@@ -36,17 +36,16 @@ export function BlockHead({ id, title, count, right }: { id?: string; title: Rea
 
 /**
  * 일터 탭(행정 · 설비 · 운영)의 단계 블록 하나(기획 27의 3절 · 9절 — 예전 「카드」). 접고 펴는 블록(처음엔 접힘 — 펼친 블록은 부르는 쪽이 기기에 기억).
- * 머리 = 제목(형광 밑줄) + 오른쪽 「11월 9일(월)까지」 · 꼬리표(D-12 · 기한 지남 n · 완료) · 「2/7」 · 맨 끝 꺾쇠. 머리 줄 전체가 접기 · 펴기 단추.
+ * 머리 = 제목(형광 밑줄) + 오른쪽 「11월 9일(월)까지」 · 꼬리표(D-12 · 기한 지남 n) · 「2/7」 · 맨 끝 꺾쇠. 머리 줄 전체가 접기 · 펴기 단추.
+ * 다 끝낸 블록 머리 = 제목(muted, 밑줄 없음) + 「완료」 꼬리표 + 빈 개수 칸 + 꺾쇠.
  * 펼쳤을 때만 몸통 = 설명 한 줄 → 안 끝난 할 일 줄(마감 이른 순, 세부 항목은 부모 밑) → 「완료 n」(접음 — 펼치면 끝낸 줄)
  *   → 블록 메모(한 줄씩) → 블록 사진(64px 썸네일) → 맨 아래 단추 줄 「＋ 할 일 · ＋ 메모 · ＋ 사진」.
  * 빈 블록에 「할 일 없음」 같은 글은 쓰지 않는다 — 단추 줄만 보인다.
  * 할 일 줄은 TaskRow 쉬운 모양(simple) — 쓰기는 기존 /api/progress/mutate 그대로(Todoist 동기화도 같은 길).
  * 메모 · 사진은 더하기 · 지우기만(고치기 없음): 메모 = 별도 저장소(cardnotes-client), 사진 = 사진 저장소에 cardId(= blockId)를 달아서.
  */
-export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, today, headExtra, open, onToggle }: {
+export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, today, open, onToggle }: {
   blockId: string; card: CardDef; cards: CardDef[]; title: string; tasks: TaskItem[]; summary: CardSummary; steps: StepRef[]; today: string;
-  /** 머리 오른쪽(꺾쇠 앞)에 더할 작은 단추(첫 블록의 「문의 필요만 보기」) — 접기 단추 위에 따로 눌린다 */
-  headExtra?: ReactNode;
   /** 펼쳤는가 · 머리 줄을 눌렀을 때 */
   open: boolean; onToggle: () => void;
 }) {
@@ -76,23 +75,26 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
       onEditChange={reportEdit} onToggle={onToggleDone} onGone={() => undefined} />
   );
   const progress = progressText(summary);
+  const done = summary.finished;
 
   return (
     <section aria-labelledby={`${uid}-t`} className={blockCls}>
-      {/* 머리 줄: 제목 속 단추가 줄 전체를 덮어(::after) 어디를 눌러도 접고 편다. 「문의 필요만 보기」만 그 위에 따로 눌린다 */}
-      <div className="relative flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 py-2.5 pl-5 pr-3 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink">
-        <h2 id={`${uid}-t`} className="flex min-w-0 items-baseline text-head font-extrabold tracking-[-0.01875rem] text-ink dark:text-2xl dark:font-bold">
+      {/* 머리 줄: 제목 속 단추가 줄 전체를 덮어(::after) 어디를 눌러도 접고 편다.
+          제목만 제 칸 안에서 줄바꿈하고, 오른쪽 메타(날짜 · 꼬리표 · 개수 · 꺾쇠)는 한 덩어리로 오른쪽 세로 가운데.
+          다 끝낸 블록은 「완료」 꼬리표만 — 제목은 muted · 형광 밑줄 없음(훑어볼 때 뒤로 물러나게) */}
+      <div className="relative flex min-h-13 items-center gap-3 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink">
+        <h2 id={`${uid}-t`} className={`min-w-0 flex-1 text-head font-extrabold tracking-[-0.01875rem] ${done ? 'text-muted' : 'text-ink'}`}>
           <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={onToggle}
-            className="min-w-0 text-left outline-none after:absolute after:inset-0 after:content-['']">
-            <span className="head-mark">{title}</span>
+            className="text-left outline-none after:absolute after:inset-0 after:content-['']">
+            {done ? title : <span className="head-mark">{title}</span>}
           </button>
         </h2>
-        <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
-          {summary.deadline && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
+        <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
+          {!done && summary.deadline && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
           <StateBadge summary={summary} today={today} date={summary.deadline} />
-          {progress && <span className="font-semibold text-ink-soft tabular-nums" aria-hidden>{progress}</span>}
-          {progress && <span className="sr-only">{progressSr(summary)}</span>}
-          {headExtra && <span className="relative z-10 inline-flex">{headExtra}</span>}
+          {/* 개수 칸: 개수가 없거나 다 끝낸 블록도 같은 너비를 비워 둔다(꼬리표 오른쪽 끝이 모든 머리에서 한 세로줄에 서게) */}
+          <span className="min-w-9 text-right font-semibold text-ink-soft tabular-nums" aria-hidden>{done ? '' : progress}</span>
+          {!done && progress && <span className="sr-only">{progressSr(summary)}</span>}
           <LineIcon name="chevron" stroke={2} className={`size-5 text-ink-soft transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
         </div>
       </div>
@@ -104,7 +106,7 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
             {openRows.length > 0 && <ul className="border-t border-line px-5">{openRows.map(row)}</ul>}
             {doneRows.length > 0 && (
               <div className="border-t border-line">
-                <span className="block px-1"><FoldRow label="완료" count={doneRows.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
+                <span className="block px-1"><FoldRow strongChevron label="완료" count={doneRows.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
                 {showDone && <ul id={`${uid}-done`} className="border-t border-line px-5">{doneRows.map(row)}</ul>}
               </div>
             )}

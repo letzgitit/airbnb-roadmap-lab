@@ -2,8 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AIRBNB_CARDS, DOC_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
-  progressText, relDay, sortCards, summarize, tasksByCard, orderBlocks, workTab, isWorkTab,
+  AIRBNB_CARDS, DOC_CARDS, DONE_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
+  progressText, relDay, sortCards, summarize, tasksByCard, workTab, isWorkTab,
   TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos,
   dayTasks, dayDots, taskTabs, upcomingTasks, blockId, blockTab, docKind, docKindGroups, galleryParts, photoMatches, sortPhotos,
 } from './home-model.ts';
@@ -158,11 +158,14 @@ test('블록 순서(한 목록): 기한 지남 → 마감 이른 순(다 끝낸 
   sums.biz = summarize(DOC_CARDS[4], [T('d', 13, '끝', { due: '2026-11-01', done: true })], doc, today);
   assert.equal(sums['move-in'].nextDue, '2026-11-02');
   // 날짜 없는 블록(register · inspect · 다 끝낸 biz · 1~3단계)은 정의 순서로 맨 뒤
-  assert.deepEqual(orderBlocks(cards, sums, workTab('admin').alwaysDone).map((c) => c.id),
+  assert.deepEqual(sortCards(cards, sums).map((c) => c.id),
     ['safety', 'move-in', 'register', 'inspect', 'biz', 'step-1', 'step-2', 'step-3']);
   // 다 끝낸 블록도 마감이 있으면 제 마감 자리(맨 뒤로 빼지 않는다)
   const s2 = { ...sums, biz: { ...sums.biz, deadline: '2026-11-01' } };
-  assert.deepEqual(orderBlocks(cards, s2, workTab('admin').alwaysDone).slice(0, 3).map((c) => c.id), ['safety', 'biz', 'move-in']);
+  assert.deepEqual(sortCards(cards, s2).slice(0, 3).map((c) => c.id), ['safety', 'biz', 'move-in']);
+  // 행정 1~3단계도 기한 지난 일이 남아 있으면 맨 앞(단계 번호와 상관없이)
+  const s3 = { ...sums, 'step-3': summarize(DONE_CARDS[2], [T('x', 3, '특약', { due: '2026-10-24' })], doc, today) };
+  assert.deepEqual(sortCards(cards, s3).slice(0, 2).map((c) => c.id), ['step-3', 'safety']);
 });
 
 test('이번 주 할 일: 기한 지남 + 6일 뒤까지, 마감 이른 순 모두(자르지 않음), 끝낸 일 · 날짜 없는 일은 빠짐', () => {
