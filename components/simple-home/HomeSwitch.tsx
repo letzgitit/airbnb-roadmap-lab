@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Content } from '@/lib/core/types';
 import App from '@/components/App';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { useViewMode, VIEW_HREF } from '@/lib/client/view-mode';
-import { TABS } from './home-model';
+import { startTab } from './home-state';
 import { HomeTabBar, SimpleHome } from './SimpleHome';
 
 /**
@@ -27,11 +27,17 @@ export function HomeSwitch({ content, signedIn = false }: { content: Content; si
   return <App content={content} />;
 }
 
-/** 새 홈 틀: 분야 탭 줄 + 블록 자리(불러오는 동안). 탭 이름은 실제와 같고 아직 누를 수 없다 */
+const noSubscribe = () => () => undefined;
+/**
+ * 새 홈 틀: 분야 탭 줄 + 블록 자리(불러오는 동안). 탭 이름은 실제와 같고 아직 누를 수 없다.
+ * 고른 탭은 새 홈과 같은 규칙(startTab — 이 탭에서 고른 탭, 새로 들어왔으면 달력)으로 표시한다. 서버에서 그릴 때와 하이드레이션 중에는
+ * 고른 표시 없이(null) 그리고, 브라우저에서 곧바로 같은 탭을 표시한다 — 다른 탭(예전엔 늘 행정)이 잠깐 보였다 바뀌지 않게.
+ */
 function SimpleHomeSkeleton() {
+  const tab = useSyncExternalStore(noSubscribe, startTab, () => null);
   return (
     <div role="status" aria-label="불러오는 중" className="-mx-5 md:mx-0">
-      <HomeTabBar tab={TABS[0].id} />
+      <HomeTabBar tab={tab} />
       <div className="flex flex-col gap-2 pt-2">
         {Array.from({ length: 4 }, (_, i) => (
           <div key={i} className="bg-surface px-5 py-4">

@@ -18,32 +18,15 @@ import { ContactsTab } from './ContactsTab';
 import { PhotosTab, type PhotoSub } from './PhotosTab';
 import { BlockHead, blockCls, StepBlock } from './StepBlock';
 import { useTabSwipe } from './TabSwipe';
+import { OPEN_KEY, PHOTO_SUB_KEY, TAB_KEY, dropOldLocal, restoreScroll, savedOpen, savedSub, startTab, trackScroll, write } from './home-state';
 import {
   CARD_TABS, TABS, askOnly, blockId, contacts, daysBetween, isAsk, isWorkTab, relDay, sortCards, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
   type CardDef, type TabId, type WorkTabId,
 } from './home-model';
 
-// 고른 탭 · 갤러리 하위 탭은 이 브라우저에만 기억한다(두 사람 화면이 서로 바뀌지 않게)
-const TAB_KEY = 'home:sheet';
-const PHOTO_SUB_KEY = 'home:photos-sub';
-// 펼친 단계 블록 id 목록(행정 · 설비 · 운영 모두 한 목록 — 블록 id 가 「분야.블록」이라 겹치지 않는다). 없거나 못 읽으면 다 접힌 채
-const OPEN_KEY = 'home:open-blocks';
-// 2026-10-28 전 탭 이름(서류 · 인테리어 · 사진 · 에어비앤비)으로 기억된 값을 새 탭으로
-const OLD_TAB: Record<string, TabId> = { docs: 'admin', interior: 'facility', photos: 'gallery', airbnb: 'ops' };
+// 고른 탭 · 펼친 블록 · 갤러리 보조 탭 · 스크롤 위치는 이 브라우저 탭에만(sessionStorage — home-state.ts):
+// 새로 들어오면 달력 + 다 접힘 + 맨 위, 새로고침 · 시안이나 자금에 갔다 돌아오면 그대로
 const TAB_IDS = TABS.map((t) => t.id);
-const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
-const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 저장이 막혀도 이번 화면에는 적용 */ } };
-const savedOpen = (): Set<string> => {
-  try {
-    const v: unknown = JSON.parse(read(OPEN_KEY) ?? '[]');
-    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-  } catch { return new Set(); }
-};
-const savedTab = (): TabId => {
-  const v = read(TAB_KEY) ?? '';
-  if (TABS.some((t) => t.id === v)) return v as TabId;
-  return OLD_TAB[v] ?? 'admin';
-};
 
 /**
  * 분야 탭 줄(대메뉴, 기획 27의 9절): 흰 면 줄 + 아래 1px 선, **같은 너비 여섯 칸**이 줄 폭을 꽉 채운다(grid 6열 — 칸 너비가 글자에 따라 늘지 않아 320px 폰에서도 한 줄).
@@ -111,8 +94,8 @@ export function SimpleHome() {
   const uid = useId();
   // 할 일 사진 · 갤러리 개수를 보이려고 사진 목록도 처음에 한 번 받는다
   useEffect(() => { ensure(); }, [ensure]);
-  const [tab, setTab] = useState<TabId>(savedTab);
-  const [photoSub, setPhotoSub] = useState<PhotoSub>(() => { const v = read(PHOTO_SUB_KEY); return v === 'docs' || v === 'etc' ? v : 'photos'; });
+  const [tab, setTab] = useState<TabId>(startTab);
+  const [photoSub, setPhotoSub] = useState<PhotoSub>(savedSub);
   const pickSub = (s: PhotoSub) => { setPhotoSub(s); write(PHOTO_SUB_KEY, s); };
   // 「이번 주 할 일」에서 고른 할 일: 그 탭으로 가서(그 할 일이 든 블록이 접혀 있으면 펼쳐) 그 줄로 내려간다. 탭을 손으로 바꾸면 잊는다
   const [reveal, setReveal] = useState<{ id: string; tab: WorkTabId; n: number } | null>(null);
@@ -152,6 +135,16 @@ export function SimpleHome() {
     if (work) for (const c of CARD_TABS) out[c.tab] = tabCounts(work[c.tab], today).late;
     return out;
   }, [work, today]);
+
+  // 새로고침 · 돌아왔을 때 적어 둔 스크롤 위치로 한 번(데이터가 그려진 뒤), 그다음부터는 멈출 때마다 적는다
+  const shownOnce = !!doc && !!work;
+  useEffect(() => { dropOldLocal(); }, []);
+  useEffect(() => {
+    if (!shownOnce) return;
+    const undo = restoreScroll();
+    const untrack = trackScroll();
+    return () => { undo(); untrack(); };
+  }, [shownOnce]);
 
   if (!doc || !work) return null;
   const weekFor = (tabs: WorkTabId[]) => tabs.flatMap((t) => weekTasks(work[t], today).list.map((task) => ({ task, tab: t })))
@@ -202,7 +195,7 @@ export function SimpleHome() {
 
 /**
  * 일터 탭 하나(행정 · 설비 · 운영): 이번 주 할 일(폰 · 태블릿 — 머리 오른쪽에 「문의 필요만 보기」) → 단계 블록들(한 목록, sortCards 순서).
- * 블록 사이는 바탕 회색 8px(데일리 --gap). 블록은 처음에 모두 접혀 있고(머리 줄만), 펼친 블록 id 는 이 기기에 기억한다(OPEN_KEY).
+ * 블록 사이는 바탕 회색 8px(데일리 --gap). 블록은 처음에 모두 접혀 있고(머리 줄만), 펼친 블록 id 는 이 브라우저 탭에 기억한다(OPEN_KEY — sessionStorage, 새로 들어오면 다 접힘).
  * 다 끝낸 블록 · 행정의 1~3단계도 따로 묶지 않고 마감 순서 제자리에 접힌 채 둔다.
  * 「문의 필요만 보기」(ask — 상태는 SimpleHome)는 늘 「이번 주 할 일」 머리 오른쪽(폰 · 태블릿은 여기, PC는 곁 칸). 켜도 자리를 옮기지 않는다.
  * 이번 주가 비어 그 블록이 없으면 같은 자리(본문 맨 위 오른쪽)에 단추만 둔다.
