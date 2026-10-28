@@ -181,14 +181,14 @@ export function summarize(card: CardDef, tasks: TaskItem[], doc: Pick<ProgressDo
 }
 
 /**
- * 블록 순서: 기한 지난 일이 있는 안 끝난 블록 → 그 밖의 안 끝난 블록 중 마감 이른 순 → 날짜 없는 블록 → 다 끝낸 블록
+ * 블록 순서: 기한 지난 일이 있는 안 끝난 블록 → 마감 이른 순(다 끝낸 블록도 제 마감 자리에) → 날짜 없는 블록
  * (각 묶음 안에서는 마감 이른 순, 같으면 정의 순서). 2026-10-28 「가장 급한 일」 큰 카드는 없앴다.
+ * 2026-10-28 2차: 다 끝낸 블록을 맨 뒤 · 「완료한 단계」 묶음으로 빼지 않고 마감 순서 제자리에 둔다(블록은 처음에 다 접혀 있다).
  */
 export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'> & { late?: number }>): CardDef[] {
   const rank = (c: CardDef) => {
     const s = sums[c.id];
-    if (s.finished) return 3;
-    if ((s.late ?? 0) > 0) return 0;
+    if (!s.finished && (s.late ?? 0) > 0) return 0;
     return s.deadline ? 1 : 2;
   };
   return cards
@@ -198,12 +198,12 @@ export function sortCards(cards: CardDef[], sums: Record<string, Pick<CardSummar
 }
 
 /**
- * 일터 탭의 블록 나누기: open = 단계 블록들(sortCards 순서), done = 맨 위 「완료한 단계 n」 접는 줄 안에 둘 블록.
- * done = 늘 접어 두는 블록(alwaysDone — 행정의 1~3단계) + 다 끝낸 블록(summary.finished), 정의 순서 그대로.
+ * 일터 탭의 블록 순서(한 목록): sortCards 와 같되, 늘 끝난 것으로 치는 블록(alwaysDone — 행정의 1~3단계)은
+ * 기한 지남으로 앞에 끌어오지 않는다(다 끝낸 블록처럼 제 마감 자리에).
  */
-export function splitBlocks(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'> & { late?: number }>, alwaysDone: string[] = []): { open: CardDef[]; done: CardDef[] } {
-  const isDone = (c: CardDef) => alwaysDone.includes(c.id) || sums[c.id]?.finished;
-  return { open: sortCards(cards.filter((c) => !isDone(c)), sums), done: cards.filter(isDone) };
+export function orderBlocks(cards: CardDef[], sums: Record<string, Pick<CardSummary, 'deadline' | 'finished'> & { late?: number }>, alwaysDone: string[] = []): CardDef[] {
+  const s2 = Object.fromEntries(cards.map((c) => [c.id, alwaysDone.includes(c.id) ? { ...sums[c.id], finished: true } : sums[c.id]]));
+  return sortCards(cards, s2);
 }
 
 /** 블록 머리 진행 표시: 「1/3」(할 일이 없으면 빈 글자 — 「할 일 없음」 같은 말은 쓰지 않는다). 화면 읽기 프로그램에는 progressSr 의 긴 말 */

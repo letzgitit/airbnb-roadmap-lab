@@ -35,22 +35,24 @@ export function BlockHead({ id, title, count, right }: { id?: string; title: Rea
 }
 
 /**
- * 일터 탭(행정 · 설비 · 운영)의 단계 블록 하나(기획 27의 3절 — 예전 「카드」).
- * 머리 = 제목(형광 밑줄) + 오른쪽 「11월 9일(월)까지」 · 꼬리표(D-12 · 기한 지남 n · 완료) · 「2/7」. 설명 글은 한 줄만.
- * 몸통 = 안 끝난 할 일 줄(마감 이른 순, 세부 항목은 부모 밑) → 「완료 n」(접음) → 블록 메모(한 줄씩) → 블록 사진(64px 썸네일)
- *   → 맨 아래 단추 줄 「＋ 할 일 · ＋ 메모 · ＋ 사진」.
+ * 일터 탭(행정 · 설비 · 운영)의 단계 블록 하나(기획 27의 3절 · 9절 — 예전 「카드」). 접고 펴는 블록(처음엔 접힘 — 펼친 블록은 부르는 쪽이 기기에 기억).
+ * 머리 = 제목(형광 밑줄) + 오른쪽 「11월 9일(월)까지」 · 꼬리표(D-12 · 기한 지남 n · 완료) · 「2/7」 · 맨 끝 꺾쇠. 머리 줄 전체가 접기 · 펴기 단추.
+ * 펼쳤을 때만 몸통 = 설명 한 줄 → 안 끝난 할 일 줄(마감 이른 순, 세부 항목은 부모 밑) → 「완료 n」(접음 — 펼치면 끝낸 줄)
+ *   → 블록 메모(한 줄씩) → 블록 사진(64px 썸네일) → 맨 아래 단추 줄 「＋ 할 일 · ＋ 메모 · ＋ 사진」.
  * 빈 블록에 「할 일 없음」 같은 글은 쓰지 않는다 — 단추 줄만 보인다.
  * 할 일 줄은 TaskRow 쉬운 모양(simple) — 쓰기는 기존 /api/progress/mutate 그대로(Todoist 동기화도 같은 길).
  * 메모 · 사진은 더하기 · 지우기만(고치기 없음): 메모 = 별도 저장소(cardnotes-client), 사진 = 사진 저장소에 cardId(= blockId)를 달아서.
  */
-export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, today, headExtra }: {
+export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, today, headExtra, open, onToggle }: {
   blockId: string; card: CardDef; cards: CardDef[]; title: string; tasks: TaskItem[]; summary: CardSummary; steps: StepRef[]; today: string;
-  /** 머리 오른쪽 맨 끝에 더할 작은 단추(첫 블록의 「문의 필요만 보기」) */
+  /** 머리 오른쪽(꺾쇠 앞)에 더할 작은 단추(첫 블록의 「문의 필요만 보기」) — 접기 단추 위에 따로 눌린다 */
   headExtra?: ReactNode;
+  /** 펼쳤는가 · 머리 줄을 눌렀을 때 */
+  open: boolean; onToggle: () => void;
 }) {
   const { doc } = useProgress();
   const uid = useId();
-  const { isDone, onToggle } = useStickyDone();
+  const { isDone, onToggle: onToggleDone } = useStickyDone();
   const { editing, reportEdit } = useEditingSet();
   const [composing, setComposing] = useState<'task' | 'note' | null>(null);
   const [showDone, setShowDone] = useState(false);
@@ -71,51 +73,66 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
   const row = (r: (typeof openRows)[number]) => (
     // 마감이 블록 머리 날짜와 같은 줄은 「n월 n일까지」를 숨긴다(머리가 이미 말한다 — 남은 날 꼬리표만)
     <TaskRow key={r.item.id} t={r.item} steps={steps} listStepId={null} scope="page" simple depth={r.depth} parentTitle={r.parentTitle} hideDueOn={summary.deadline}
-      onEditChange={reportEdit} onToggle={onToggle} onGone={() => undefined} />
+      onEditChange={reportEdit} onToggle={onToggleDone} onGone={() => undefined} />
   );
   const progress = progressText(summary);
 
   return (
     <section aria-labelledby={`${uid}-t`} className={blockCls}>
-      <BlockHead id={`${uid}-t`} title={title} right={(
-        <>
+      {/* 머리 줄: 제목 속 단추가 줄 전체를 덮어(::after) 어디를 눌러도 접고 편다. 「문의 필요만 보기」만 그 위에 따로 눌린다 */}
+      <div className="relative flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 py-2.5 pl-5 pr-3 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink">
+        <h2 id={`${uid}-t`} className="flex min-w-0 items-baseline text-head font-extrabold tracking-[-0.01875rem] text-ink dark:text-2xl dark:font-bold">
+          <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={onToggle}
+            className="min-w-0 text-left outline-none after:absolute after:inset-0 after:content-['']">
+            <span className="head-mark">{title}</span>
+          </button>
+        </h2>
+        <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
           {summary.deadline && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
           <StateBadge summary={summary} today={today} date={summary.deadline} />
           {progress && <span className="font-semibold text-ink-soft tabular-nums" aria-hidden>{progress}</span>}
           {progress && <span className="sr-only">{progressSr(summary)}</span>}
-          {headExtra}
-        </>
-      )} />
-      {card.sub && <p className="-mt-1.5 truncate px-5 pb-2.5 text-sm text-sub">{card.sub}</p>}
-      {openRows.length > 0 && <ul className="border-t border-line px-5">{openRows.map(row)}</ul>}
-      {doneRows.length > 0 && (
-        <div className="border-t border-line">
-          <span className="block px-1"><FoldRow label="완료" count={doneRows.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
-          {showDone && <ul id={`${uid}-done`} className="border-t border-line px-5">{doneRows.map(row)}</ul>}
+          {headExtra && <span className="relative z-10 inline-flex">{headExtra}</span>}
+          <LineIcon name="chevron" stroke={2} className={`size-5 text-ink-soft transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
         </div>
-      )}
-      <BlockNotes blockId={blockId} title={title} />
-      <BlockPhotos blockId={blockId} title={title} />
-      {/* 맨 아래 단추 줄: 「＋ 할 일 · ＋ 메모 · ＋ 사진」. 할 일 · 메모는 누르면 그 자리에 폼, 사진은 바로 고르기 */}
-      <div className="border-t border-line">
-        {composing === 'task' ? (
-          <div className="px-3 pb-1">
-            <TaskComposer stepId={card.addStep} scope="page" simple prepare={prepare} dirtyKey={`form:add-task:card:${card.id}:${card.addStep}`} onClose={closeComposer} />
-          </div>
-        ) : composing === 'note' ? (
-          <NoteComposer blockId={blockId} title={title} onClose={closeComposer} />
-        ) : (
-          <div className="flex flex-wrap items-center px-2">
-            <button ref={addRef} type="button" onClick={() => setComposing('task')} className={addBtnCls}>
-              <LineIcon name="plus" className="size-4.5" stroke={2.2} />할 일
-              <span className="sr-only">: {title}에 더하기</span>
-            </button>
-            <button ref={noteRef} type="button" onClick={() => setComposing('note')} className={addBtnCls}>
-              <LineIcon name="plus" className="size-4.5" stroke={2.2} />메모
-              <span className="sr-only">: {title}에 더하기</span>
-            </button>
-            <AddPhotoButton blockId={blockId} stepId={card.addStep} title={title} />
-          </div>
+      </div>
+      {/* 몸통: 펼쳤을 때만 그린다(접힌 동안 할 일 줄이 없어 「이번 주 할 일」 건너가기는 먼저 펼친다) */}
+      <div id={`${uid}-b`} hidden={!open}>
+        {open && (
+          <>
+            {card.sub && <p className="truncate px-5 pb-2.5 text-sm text-sub">{card.sub}</p>}
+            {openRows.length > 0 && <ul className="border-t border-line px-5">{openRows.map(row)}</ul>}
+            {doneRows.length > 0 && (
+              <div className="border-t border-line">
+                <span className="block px-1"><FoldRow label="완료" count={doneRows.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
+                {showDone && <ul id={`${uid}-done`} className="border-t border-line px-5">{doneRows.map(row)}</ul>}
+              </div>
+            )}
+            <BlockNotes blockId={blockId} title={title} />
+            <BlockPhotos blockId={blockId} title={title} />
+            {/* 맨 아래 단추 줄: 「＋ 할 일 · ＋ 메모 · ＋ 사진」. 할 일 · 메모는 누르면 그 자리에 폼, 사진은 바로 고르기 */}
+            <div className="border-t border-line">
+              {composing === 'task' ? (
+                <div className="px-3 pb-1">
+                  <TaskComposer stepId={card.addStep} scope="page" simple prepare={prepare} dirtyKey={`form:add-task:card:${card.id}:${card.addStep}`} onClose={closeComposer} />
+                </div>
+              ) : composing === 'note' ? (
+                <NoteComposer blockId={blockId} title={title} onClose={closeComposer} />
+              ) : (
+                <div className="flex flex-wrap items-center px-2">
+                  <button ref={addRef} type="button" onClick={() => setComposing('task')} className={addBtnCls}>
+                    <LineIcon name="plus" className="size-4.5" stroke={2.2} />할 일
+                    <span className="sr-only">: {title}에 더하기</span>
+                  </button>
+                  <button ref={noteRef} type="button" onClick={() => setComposing('note')} className={addBtnCls}>
+                    <LineIcon name="plus" className="size-4.5" stroke={2.2} />메모
+                    <span className="sr-only">: {title}에 더하기</span>
+                  </button>
+                  <AddPhotoButton blockId={blockId} stepId={card.addStep} title={title} />
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </section>
