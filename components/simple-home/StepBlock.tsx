@@ -26,22 +26,36 @@ export const blockCls = 'bg-surface md:border md:border-line';
  */
 const stickyHeadCls = 'sticky top-tabbar z-20 bg-surface';
 const stuckLineCls = 'shadow-[0_1px_0_var(--color-line)]';
-/** 블록 맨 위 1px 표시(sentinel)가 탭 줄 밑으로 지나가 숨었으면 머리가 붙은 것. 기준 선은 머리의 계산된 top(= 탭 줄 높이)을 읽는다 */
+/**
+ * 블록 맨 위 1px 표시(sentinel)가 탭 줄 밑으로 지나가 숨었으면 머리가 붙은 것. 기준 선은 머리의 계산된 top(= 탭 줄 높이)을 읽는다.
+ * 붙은 동안 머리가 한 줄로 줄어들면(단계 블록 — 긴 이름 말줄임) 줄어든 만큼 머리 아래 여백으로 채워 둔다 — 아래 할 일 줄이 위로 튀지 않게.
+ */
 function useStuck(on: boolean) {
   const sentinel = useRef<HTMLDivElement>(null);
   const head = useRef<HTMLDivElement>(null);
+  const fullH = useRef(0); // 붙기 직전(평소 모양) 머리 높이
   const [stuck, setStuck] = useState(false);
   useEffect(() => {
     const s = sentinel.current;
     const h = head.current;
     if (!on || !s || !h) return;
     const top = parseFloat(getComputedStyle(h).top) || 0;
-    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top < top + 1),
-      { rootMargin: `-${top}px 0px 0px 0px`, threshold: 0 });
+    const io = new IntersectionObserver(([e]) => {
+      const now = !e.isIntersecting && e.boundingClientRect.top < top + 1;
+      if (now && h.style.marginBottom === '') fullH.current = h.offsetHeight;
+      setStuck(now);
+    }, { rootMargin: `-${top}px 0px 0px 0px`, threshold: 0 });
     io.observe(s);
     return () => io.disconnect();
   }, [on]);
-  return { sentinel, head, stuck: on && stuck };
+  const isStuck = on && stuck;
+  useLayoutEffect(() => {
+    const h = head.current;
+    if (!h) return;
+    h.style.marginBottom = '';
+    if (isStuck) h.style.marginBottom = `${Math.max(0, fullH.current - h.offsetHeight)}px`;
+  }, [isStuck]);
+  return { sentinel, head, stuck: isStuck };
 }
 /** 머리 위치를 재는 기준(머리의 계산된 top = 탭 줄 높이) */
 const stickyTop = (head: HTMLElement | null) => (head ? parseFloat(getComputedStyle(head).top) || 0 : 0);
@@ -136,17 +150,18 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
           덩어리째 아래 줄로 내려 오른쪽 정렬(flex-wrap — 제목은 한 줄 폭을 다 쓰니 많아야 2줄).
           메타 덩어리는 누를 것이 없는 장식이라 pointer-events-none — 꺾쇠의 회전(transform)이 쌓임 맥락을 만들어
           ::after 위에 그려지므로, 이게 없으면 꺾쇠를 정확히 누를 때 단추가 안 눌린다(2026-10-29 폰 제보).
-          펼친 블록은 머리가 탭 줄 밑에 붙는다(useStuck — 붙은 동안만 아래 선).
+          펼친 블록은 머리가 탭 줄 밑에 붙는다(useStuck — 붙은 동안만 아래 선, 한 줄로 줄임).
           다 끝낸 블록은 「완료」 꼬리표만 — 제목은 muted · 형광 밑줄 없음(훑어볼 때 뒤로 물러나게) */}
-      <div ref={head} className={`flex min-h-13 flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'} ${stuck ? stuckLineCls : ''}`}>
+      <div ref={head} className={`flex min-h-13 ${stuck ? 'flex-nowrap' : 'flex-wrap'} items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'} ${stuck ? stuckLineCls : ''}`}>
         <h2 id={`${uid}-t`} className={`min-w-0 flex-auto text-head font-extrabold tracking-[-0.01875rem] ${done ? 'text-muted' : 'text-ink'}`}>
           <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={toggle}
-            className="text-left outline-none after:absolute after:inset-0 after:content-['']">
+            className={`text-left outline-none after:absolute after:inset-0 after:content-[''] ${stuck ? 'block w-full truncate' : ''}`}>
             {done ? title : <span className="head-mark">{title}</span>}
           </button>
         </h2>
         <div className="pointer-events-none ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
-          {!done && summary.deadline && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
+          {/* 붙은 동안은 한 줄로: 이름 말줄임 + 날짜 숨김(꼬리표 · 개수 · 꺾쇠는 남김 — 탭 줄 밑을 많이 먹지 않게) */}
+          {!done && summary.deadline && !stuck && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
           <StateBadge summary={summary} today={today} date={summary.deadline} />
           {/* 개수 칸: 개수가 없거나 다 끝낸 블록도 같은 너비를 비워 둔다(꼬리표 오른쪽 끝이 모든 머리에서 한 세로줄에 서게) */}
           <span className="min-w-9 text-right font-semibold text-ink-soft tabular-nums" aria-hidden>{done ? '' : progress}</span>

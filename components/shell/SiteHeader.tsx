@@ -11,7 +11,7 @@ import { FIXED_DAY0, toTimelineSteps } from '@/components/home/timeline-config';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { AccountMenu } from './AccountMenu';
 import { useGuardedLinkClick } from './useGuardedNav';
-import { isHomePath, navItemsFor, type NavItem } from './nav';
+import { isHomePath, NAV_ITEMS, navItemsFor, type NavItem } from './nav';
 import { useSite } from './SiteShell';
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
@@ -27,7 +27,8 @@ function useToday(): string | null {
 /**
  * 머리 띠(데일리 형광펜 .hd — 형광 면 통째 + 검정 글자, 다크에서도 같은 형광). 모든 페이지 공통, 위에 붙지 않고 함께 넘어간다.
  * 한 줄: 왼쪽 제호 「외도민 준비」(22/800 — 곧 홈 링크. 시안 · 자금에서는 앞에 「‹」) · 날짜 「10월 28일(수)」 · 「첫 손님까지 D-40」(13 — 로그인했을 때)
- *        / 오른쪽 문 「시안」 「자금」(선 아이콘 + 글자, 지금 화면이면 굵게 + 아래 2px 검정 선) · 로그인 · 설정(톱니).
+ *        / 오른쪽 문 「시안」 「자금」(분야 탭과 같은 모양 — 선 아이콘 24px + 글자 14/800, 지금 화면이면 선 굵게 + 아래 3px 검정 선) · 로그인 · 설정(톱니).
+ * 새 홈 뼈대 화면(불러오는 중, data-home-skeleton)이 떠 있는 동안에도 문 둘과 「첫 손님까지」 자리를 그려 둔다 — 다 불러온 뒤 모양이 바뀌지 않게.
  * 폰(768px 미만)은 띠가 제호 · 문 · 톱니 한 줄이고, 날짜 · 첫 손님 줄은 그 밑 흰 면 줄(데일리 좁은 화면의 날짜 줄과 같다). 문은 아이콘 위 · 글자 아래.
  * wide = 홈 PC 화면(본문 + 곁 칸 1080px)과 왼쪽 선을 맞춘다.
  */
@@ -46,7 +47,10 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
   const dateText = today ? `${Number(today.slice(5, 7))}월 ${Number(today.slice(8))}일(${WEEK[new Date(`${today}T00:00:00`).getDay()]})` : null;
   const n = guest?.dday ?? null;
   const ddayText = n == null ? null : n > 0 ? `D-${n}` : n === 0 ? '오늘' : `D+${-n}`;
-  const guestLine = ddayText && <span className="whitespace-nowrap">첫 손님까지 <b className="font-bold">{ddayText}</b></span>;
+  const pending = status === 'loading';
+  // 「첫 손님까지」는 현황을 받아야 안다 — 받는 동안은 같은 폭의 빈 자리(보이지 않음)
+  const guestLine = ddayText ? <span className="whitespace-nowrap">첫 손님까지 <b className="font-bold">{ddayText}</b></span>
+    : pending && <span className="invisible whitespace-nowrap" aria-hidden>첫 손님까지 <b className="font-bold">D-00</b></span>;
 
   return (
     <header className="pt-[env(safe-area-inset-top)]">
@@ -65,9 +69,14 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
             </p>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-0.5 md:gap-1">
-            {items.length > 0 && (
+            {items.length > 0 ? (
               <nav aria-label="사이트" className="flex items-center">
                 {items.map((it) => <Door key={it.href} item={it} on={it.match(path)} onClick={guard(it.href)} />)}
+              </nav>
+            ) : pending && (
+              // 불러오는 중: 새 홈 뼈대 화면(로그인한 사람만 본다)이 떠 있을 때만 로그인한 문 둘을 미리 보인다(CSS :has — 서버 그리기부터 같다)
+              <nav aria-label="사이트" className="hidden items-center [body:has([data-home-skeleton])_&]:flex">
+                {NAV_ITEMS.map((it) => <Door key={it.href} item={it} on={false} onClick={guard(it.href)} />)}
               </nav>
             )}
             {status === 'anon' && (loginReady ? (
@@ -93,14 +102,17 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
   );
 }
 
-/** 머리 띠 오른쪽 문 하나: 선 아이콘 + 글자. 폰은 아이콘 위 · 글자 아래(13), PC 는 한 줄(15). 지금 화면이면 굵게 + 아래 2px 검정 선(형광 채움 없음) */
+/**
+ * 머리 띠 오른쪽 문 하나: 선 아이콘 + 글자 — 분야 탭 칸과 같은 값(아이콘 24px · 선 1.8, 글자 14/800). 폰은 아이콘 위 · 글자 아래, PC 는 한 줄.
+ * 지금 화면이면 아이콘 선 굵게(2.3) + 아래 3px 검정 선(형광 채움 없음)
+ */
 function Door({ item, on, onClick }: { item: NavItem; on: boolean; onClick: ReturnType<ReturnType<typeof useGuardedLinkClick>> }) {
   return (
     <Link href={item.href} onClick={onClick} aria-current={on ? 'page' : undefined}
-      className={`relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-control px-2 text-meta leading-none transition-colors hover:bg-black/10 md:flex-row md:gap-1.5 md:px-2.5 md:text-cta ${on ? 'font-bold' : 'font-semibold'}`}>
-      <LineIcon name={item.icon} className="size-5.5 md:size-5" stroke={on ? 2.2 : 1.7} />
+      className="relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-control px-2 text-sm font-extrabold leading-none tracking-[-0.02em] transition-colors hover:bg-black/10 md:flex-row md:gap-1.5 md:px-2.5">
+      <LineIcon name={item.icon} className="size-6" stroke={on ? 2.3 : 1.8} />
       <span className="whitespace-nowrap">{item.label}</span>
-      {on && <span className="absolute inset-x-2 bottom-0 h-0.5 bg-on-marker" aria-hidden />}
+      {on && <span className="absolute inset-x-2 bottom-0 h-[3px] bg-on-marker" aria-hidden />}
     </Link>
   );
 }

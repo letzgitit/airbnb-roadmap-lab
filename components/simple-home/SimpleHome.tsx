@@ -62,7 +62,7 @@ export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
               <>
                 <span className="relative">
                   <LineIcon name={t.icon} className="size-6" stroke={on ? 2.3 : 1.8} />
-                  {dot && <span className="absolute -right-1 -top-0.5 size-1.5 rounded-full bg-danger-ink" aria-hidden />}
+                  {dot && <span className={`absolute -right-1 -top-0.5 size-1.5 rounded-full ${stuck ? 'bg-danger-on-marker' : 'bg-danger-ink'}`} aria-hidden />}
                 </span>
                 {t.label}
                 {dot && <span className="sr-only">(기한 지남 있음)</span>}

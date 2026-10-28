@@ -36,7 +36,8 @@ const noSubscribe = () => () => undefined;
 function SimpleHomeSkeleton() {
   const tab = useSyncExternalStore(noSubscribe, startTab, () => null);
   return (
-    <div role="status" aria-label="불러오는 중" className="-mx-5 md:mx-0">
+    // data-home-skeleton: 머리 띠가 이걸 보고 문 둘 · 「첫 손님까지」 자리를 미리 그린다. -mt-4 = 틀(main)의 위 여백을 지워 탭 줄을 다 불러온 화면과 같은 자리에
+    <div role="status" aria-label="불러오는 중" data-home-skeleton className="-mx-5 -mt-4 md:mx-0">
       <HomeTabBar tab={tab} />
       <div className="flex flex-col gap-2 pt-2">
         {Array.from({ length: 4 }, (_, i) => (
