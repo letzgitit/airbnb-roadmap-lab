@@ -75,7 +75,8 @@ test('검색용 본문(guideBodies): 지운 할 일 뺌 · 마크다운 기호�
   const out = G.guideBodies(await G.listGuides(), doc);
   assert.deepEqual(Object.keys(out), ['t_a1']);
   assert.equal(out.t_a1.version, 1);
-  assert.equal(out.t_a1.text, '왜.\n서류 두 부.\n안내'); // 소제목 · 목록 줄 끝엔 「.」(조각에서 문장 사이에 끼어 읽히지 않게)
+  assert.equal(out.t_a1.text, '서류 두 부.\n안내'); // 소제목 줄은 조각용 글에서 빼고 목록 줄 끝엔 「.」(조각에서 문장 사이에 끼어 읽히지 않게)
+  assert.equal(out.t_a1.heads, '왜.'); // 소제목은 따로(찾기에만)
 });
 
 test('import: 미리 보기 · 새로/바꿈/지움/그대로 · 틀린 것이 하나라도 있으면 아무것도 안 씀', async () => {

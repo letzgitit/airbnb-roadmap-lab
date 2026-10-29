@@ -155,14 +155,17 @@ export function guideIndex(guides: Record<string, GuideRecord>, doc: Pick<Progre
 }
 
 /**
- * 검색용 본문(GET /api/guides?body=1): 지우지 않은 할 일에 달린 설명서만 { text, version } — text 는 마크다운 기호 · 링크 주소를 뺀 글(검색 창이 찾고 조각으로 보인다).
+ * 검색용 본문(GET /api/guides?body=1): 지우지 않은 할 일에 달린 설명서만 { text, heads?, version }.
+ * text = 마크다운 기호 · 링크 주소 · 소제목 줄을 뺀 글(검색 창이 찾고 조각으로 보인다), heads = 소제목만(조각에는 안 보이고 찾기에만 — 소제목 안의 말로도 찾히게).
  * 화면은 검색 단추에 손이 닿을 때 한 번 받는다(components/search/guide-bodies.ts).
  */
-export function guideBodies(guides: Record<string, GuideRecord>, doc: Pick<ProgressDoc, 'tasks'>): Record<string, { text: string; version: number }> {
-  const out: Record<string, { text: string; version: number }> = {};
+export function guideBodies(guides: Record<string, GuideRecord>, doc: Pick<ProgressDoc, 'tasks'>): Record<string, { text: string; heads?: string; version: number }> {
+  const out: Record<string, { text: string; heads?: string; version: number }> = {};
   for (const [id, g] of Object.entries(guides)) {
     const t = Object.hasOwn(doc.tasks, id) ? doc.tasks[id] : undefined;
-    if (t && !t.deletedAt && g.md) out[id] = { text: stripMarkdown(g.md), version: g.version };
+    if (!t || t.deletedAt || !g.md) continue;
+    const heads = stripMarkdown(g.md, { headings: 'only' });
+    out[id] = { text: stripMarkdown(g.md, { headings: 'drop' }), ...(heads ? { heads } : {}), version: g.version };
   }
   return out;
 }

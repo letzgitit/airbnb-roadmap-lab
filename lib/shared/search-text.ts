@@ -243,18 +243,19 @@ export function snippet(p: Prepared, ranges: Range[], o: { before?: number; max?
   const max = o.max ?? 140;
   const hit = ranges[0]?.[0] ?? 0;
   let start = Math.max(0, hit - before);
+  let sentence = false; // 문장 처음에서 시작하면 앞에 「…」를 붙이지 않는다
   if (start > 0) {
     // 끊긴 말처럼 읽히지 않게: before 범위 안에 문장 끝(「. 」 「? 」 「! 」)이 있으면 걸린 말에 가장 가까운 그 뒤부터(걸린 말이 든 문장 처음),
     // 없으면 범위 안 첫 띄어쓰기 뒤부터(낱말 가운데서 시작하지 않게)
     const win = p.raw.slice(start, hit);
     const ends = [...win.matchAll(/[.!?。…] /g)];
     const sp = win.indexOf(' ');
-    if (ends.length) start += ends[ends.length - 1].index + ends[ends.length - 1][0].length;
+    if (ends.length) { start += ends[ends.length - 1].index + ends[ends.length - 1][0].length; sentence = true; }
     else if (sp >= 0) start += sp + 1;
   }
   const k = p.raw.charCodeAt(start);
   if (k >= 0xdc00 && k <= 0xdfff) start -= 1; // 써로게이트 짝 가운데서 자르지 않게
-  const lead = start > 0 ? '…' : '';
+  const lead = start > 0 && !sentence ? '…' : '';
   let end = Math.min(p.raw.length, start + max);
   const e = p.raw.charCodeAt(end - 1);
   if (end < p.raw.length && e >= 0xd800 && e <= 0xdbff) end -= 1;
@@ -276,7 +277,10 @@ const inline = (l: string) => l
   .replace(/[ \t]+/g, ' ')
   .trim();
 /** 소제목 · 목록 · 인용 기호, 표의 칸 줄, 가로줄, **굵게**, [글](주소)의 주소, 맨 주소를 뺀 글(줄은 그대로, 소제목 · 목록 · 표 줄 끝엔 「.」) */
-export function stripMarkdown(md: string): string {
+// headings: keep = 소제목도 남김(기본), drop = 소제목 줄을 뺀 본문(검색 조각용 — 「어떻게 하나요.」 같은 소제목이 문장 사이에 끼지 않게),
+//           only = 소제목만(조각에는 안 보이지만 소제목 안의 말로도 찾히게 따로 둔다)
+export function stripMarkdown(md: string, o: { headings?: 'keep' | 'drop' | 'only' } = {}): string {
+  const mode = o.headings ?? 'keep';
   return String(md ?? '')
     .replace(/\r\n?/g, '\n')
     .split('\n')
@@ -287,6 +291,7 @@ export function stripMarkdown(md: string): string {
       const head = /^\s{0,3}#{1,6}\s+/.test(body);
       const item = /^\s*(?:[-*+•]|\d{1,3}[.)])\s+/.test(body);
       const row = /\|/.test(body);
+      if ((mode === 'drop' && head) || (mode === 'only' && !head)) return '';
       const t = inline(body
         .replace(/^\s{0,3}#{1,6}\s+/, '')
         .replace(/\s+#+\s*$/, '')

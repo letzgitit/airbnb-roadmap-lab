@@ -39,7 +39,8 @@ export type Entry =
   | (Base & { kind: 'question'; item: QuestionItem });
 
 /** 도움말 본문 캐시: text = 서버가 마크다운 기호를 뺀 글, md = 방금 저장한 원문(여기서 기호를 뺀다) */
-export type GuideBodies = Record<string, { text?: string; md?: string; version: number }>;
+// heads = 소제목만(조각에는 안 보이고 찾기에만 — 서버가 따로 보낸다, md 면 여기서 뽑는다)
+export type GuideBodies = Record<string, { text?: string; heads?: string; md?: string; version: number }>;
 
 const field = (name: string, text: string | null | undefined, show: Field['show'], guide = false): Field | null => {
   const p = prepText(text);
@@ -68,9 +69,10 @@ export function buildIndex(doc: Pick<ProgressDoc, 'tasks' | 'log' | 'property' |
   for (const t of Object.values(doc.tasks)) {
     if (t.deletedAt) continue;
     const g = Object.hasOwn(bodies, t.id) ? bodies[t.id] : undefined;
-    const guide = g ? (g.text ?? stripMarkdown(g.md ?? '')) : '';
+    const guide = g ? (g.text ?? stripMarkdown(g.md ?? '', { headings: 'drop' })) : '';
+    const heads = g ? (g.heads ?? (g.md ? stripMarkdown(g.md, { headings: 'only' }) : '')) : '';
     out.push({ kind: 'task', id: t.id, item: t, tab: tabs.get(t.id) ?? null, ...head(t.text),
-      fields: fields(field('종류', t.kind, 'meta'), field('메모', t.note, 'snippet'), field('도움말', guide, 'snippet', true)) });
+      fields: fields(field('종류', t.kind, 'meta'), field('메모', t.note, 'snippet'), field('도움말', guide, 'snippet', true), field('도움말', heads, 'none', true)) });
   }
   for (const l of doc.log ?? []) {
     if (l.deletedAt) continue;

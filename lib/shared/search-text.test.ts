@@ -109,12 +109,16 @@ test('많이 나온 말: 이름을 자르거나 빼지 않음(냉장고 · 영�
   assert.deepEqual(ws('커튼 고르기 문고리 바꾸기 하고 했다'), ['커튼', '문고리']);
 });
 
-test('조각: 소제목 · 목록 줄 끝에 「.」, 시작은 걸린 말이 든 문장 처음 · 없으면 띄어쓰기 뒤', () => {
-  const s = stripMarkdown('## 어떻게 하나요\n- 짧고 부르기 쉬운 이름\n- **계약서 주소**와 헷갈리지 않게\n이름이 있어야 써요.');
-  assert.equal(s, '어떻게 하나요.\n짧고 부르기 쉬운 이름.\n계약서 주소와 헷갈리지 않게.\n이름이 있어야 써요.');
+test('조각: 소제목은 조각에서 빼고(따로 두어 찾기는 됨) · 목록 줄 끝에 「.」 · 문장 처음부터면 「…」 없이 · 없으면 띄어쓰기 뒤', () => {
+  const md = '이름이 있어야 등록 서류에 쓸 수 있어요.\n## 어떻게 하나요\n- 짧고 부르기 쉬운 이름\n- **계약서 주소**와 헷갈리지 않게';
+  assert.equal(stripMarkdown(md), '이름이 있어야 등록 서류에 쓸 수 있어요.\n어떻게 하나요.\n짧고 부르기 쉬운 이름.\n계약서 주소와 헷갈리지 않게.');
+  const s = stripMarkdown(md, { headings: 'drop' });
+  assert.equal(s, '이름이 있어야 등록 서류에 쓸 수 있어요.\n짧고 부르기 쉬운 이름.\n계약서 주소와 헷갈리지 않게.');
+  assert.equal(stripMarkdown(md, { headings: 'only' }), '어떻게 하나요.');
   const p = prepText(s);
   const a = snippet(p, markRanges(p, ['계약서']));
-  assert.ok(a.text.startsWith('…계약서 주소와'), a.text);
+  assert.equal(a.text, '계약서 주소와 헷갈리지 않게.');
+  assert.deepEqual(a.ranges.map(([x, y]) => a.text.slice(x, y)), ['계약서']);
   const q = prepText('가나다라마바사아자차카타파하 가나다 계약서 사본');
   assert.equal(snippet(q, markRanges(q, ['계약서'])).text, '…가나다 계약서 사본');
 });

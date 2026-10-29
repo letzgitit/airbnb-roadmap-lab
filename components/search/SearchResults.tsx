@@ -25,8 +25,9 @@ import {
 // 입력칸은 바로 바뀌고 결과는 useDeferredValue 로 뒤에서 다시 그린다(debounce 없음 — 다음 글자가 오면 하던 그리기를 버린다).
 // 도움말 본문이 도착해 다시 찾는 것도 같은 방식(뒤에서). 찾을 항목은 문서의 실제 내용 · 도움말이 바뀔 때만 다시 만든다.
 const EMPTY: SearchResult = { q: '', terms: [], groups: [], total: 0 };
-const WHERE = '할 일, 도움말, 기록, 연락처, 집 정보, 자금, 질문';
-const WHERE_NO_GUIDE = '할 일, 기록, 연락처, 집 정보, 자금, 질문';
+// 「할 일」 「집 정보」는 한 덩어리로 줄을 넘기게 붙지 않는 띄어쓰기(\u00a0)로 — 「집 / 정보」로 갈리지 않게
+const WHERE = '할\u00a0일, 도움말, 기록, 연락처, 집\u00a0정보, 자금, 질문';
+const WHERE_NO_GUIDE = '할\u00a0일, 기록, 연락처, 집\u00a0정보, 자금, 질문';
 
 export function SearchResults({ query, onClose, onQuery }: { query: string; onClose: (then?: () => void) => void; onQuery: (q: string) => void }) {
   const { doc, hasDirty, confirmDiscard } = useProgress();

@@ -125,6 +125,17 @@ test('줄 모양: 제목 밑줄 · 메타 · 제목 밖이면 조각(필드 이�
   assert.deepEqual(vc.meta.find((m) => m.text === '구매')?.ranges, [[0, 2]]);
 });
 
+test('도움말 소제목: 조각에는 안 보이고 소제목 안의 말로는 찾힘(도움말에서만 → 도움말 창)', () => {
+  const index = buildIndex(doc(), { t_h: { md: '## 배관 길이 확인\n- 실외기 둘 자리 재기', version: 1 } });
+  const r = search(index, '배관');
+  const hit = r.groups[0].hits[0];
+  assert.equal(hit.entry.id, 't_h');
+  assert.equal(hit.needGuide, true);
+  assert.equal(rowView(hit, r.terms).snip, null);
+  const r2 = search(index, '실외기');
+  assert.equal(rowView(r2.groups[0].hits[0], r2.terms).snip?.text, '실외기 둘 자리 재기.');
+});
+
 test('갈 곳: 할 일 → 분야 탭(세부 항목은 부모를 따라감) · 도움말에서만이면 guide, 연락처 · 자금, 기록 · 집 정보 · 질문은 펼침(null)', () => {
   const index = buildIndex(doc(), { t_h: { text: '계약서', version: 1 } });
   const r = search(index, '계약서');
