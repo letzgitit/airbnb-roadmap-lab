@@ -17,6 +17,7 @@ import { GroupHead } from '@/components/ui/GroupHead';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { blockCls } from './StepBlock';
 import { useMonthSwipe } from './TabSwipe';
+import { CAL_FOLD_KEY, savedCalFolded, write, type CalGroup } from './home-state';
 import {
   addMonths, dateParts, daysBetween, dayDots, dayTasks, fieldLabel, monthOf, monthWeeks, relDay, taskTabs, upcomingTasks, UPCOMING_DAYS,
   type DayDot, type WorkTabId,
@@ -42,6 +43,8 @@ const SAT_DIM = 'text-[color-mix(in_srgb,var(--color-info-ink),var(--color-muted
  *   날을 누르면 이 자리가 그날 할 일로 바로 바뀐다(한 번 더 누르게 하지 않는다).
  * - 「다가오는 일정 n건」: 내일부터 14일 안 마감인 안 끝난 할 일 — 위 묶음에 나온 것은 뺀다(데일리 일정 줄 — 왼쪽 체크 칸, 큰 날짜 「29 / 10월 목」, 제목,
  *   분야 점 + 꼬리표, 오른쪽 남은 날 — 3일 안 = 주의 꼬리표, 그 밖 = 13 보조 글자). 줄을 누르면 그 자리에서 펼쳐 메모 · 사진 · 도움말 · 고치기 · 지우기.
+ * - 두 묶음은 머리 줄 전체를 눌러 접고 편다(오른쪽 꺾쇠 — 접히면 머리 「이름 n건」만 남고 줄 · 빈 안내가 숨는다). 처음엔 펼침.
+ *   접은 것은 이 브라우저 탭에 기억한다(home-state.ts — 새로고침엔 남음). 「오늘」 묶음은 날을 바꿔도 같은 접힘 하나(DayList 는 날마다 새로 그려져 상태를 여기 둔다).
  * 「첫 손님까지」 큰 카드는 없앴다(머리 띠에 있다).
  */
 export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: string }) {
@@ -60,6 +63,13 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
   // 달력 판(요일 줄 + 날짜 칸)을 좌우로 쓸면 달을 넘긴다 — ‹ › 단추와 같다. 판에는 data-noswipe 를 달아 탭 넘기기가 이 터치를 받지 않게
   const board = useRef<HTMLDivElement>(null);
   useMonthSwipe(board, month, (step) => setMonth((v) => addMonths(v, step)));
+  const [folded, setFolded] = useState<Set<CalGroup>>(savedCalFolded);
+  const toggleFold = (g: CalGroup) => setFolded((prev) => {
+    const next = new Set(prev);
+    if (next.has(g)) next.delete(g); else next.add(g);
+    write(CAL_FOLD_KEY, JSON.stringify([...next]));
+    return next;
+  });
   if (!doc) return null;
 
   const thisMonth = monthOf(today);
@@ -127,15 +137,18 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
       </div>
 
       <div id={`${uid}-day`} ref={dayRef} aria-live="polite" className="scroll-mt-[calc(var(--spacing-tabbar)+0.5rem)]">
-        <DayList key={picked} doc={doc} date={picked} today={today} steps={rowSteps} />
+        <DayList key={picked} doc={doc} date={picked} today={today} steps={rowSteps} open={!folded.has('day')} onToggle={() => toggleFold('day')} />
       </div>
-      <Upcoming doc={doc} today={today} picked={picked} steps={rowSteps} tabOf={tabOf} />
+      <Upcoming doc={doc} today={today} picked={picked} steps={rowSteps} tabOf={tabOf} open={!folded.has('upcoming')} onToggle={() => toggleFold('upcoming')} />
     </section>
   );
 }
 
-/** 「오늘」(또는 고른 날) 묶음: 그날 마감 + 그날 시작 할 일 줄(쉬운 모양 — 체크 · 설명서 · 연필 · 휴지통). 마감 쪽은 날짜 줄을 숨긴다(머리가 말한다) */
-function DayList({ doc, date, today, steps }: { doc: ProgressDoc; date: string; today: string; steps: StepRef[] }) {
+/**
+ * 「오늘」(또는 고른 날) 묶음: 그날 마감 + 그날 시작 할 일 줄(쉬운 모양 — 체크 · 설명서 · 연필 · 휴지통). 마감 쪽은 날짜 줄을 숨긴다(머리가 말한다).
+ * 접힘(open)은 부르는 쪽이 들고 있다 — 날을 바꾸면 이 묶음은 새로 그려지지만 접힘은 그대로.
+ */
+function DayList({ doc, date, today, steps, open, onToggle }: { doc: ProgressDoc; date: string; today: string; steps: StepRef[]; open: boolean; onToggle: () => void }) {
   const uid = useId();
   const { reportEdit } = useEditingSet();
   const { due, starting } = useMemo(() => dayTasks(doc, date), [doc, date]);
@@ -149,34 +162,40 @@ function DayList({ doc, date, today, steps }: { doc: ProgressDoc; date: string; 
   const n = due.length + starting.length;
   return (
     <section aria-labelledby={`${uid}-h`}>
-      <GroupHead id={`${uid}-h`} name={name} count={n} />
-      {n === 0 ? (
-        <p className="px-5 pb-3 pt-2 text-cta text-muted">{isToday ? '오늘은 할 일이 없어요.' : '이날은 할 일이 없어요.'}</p>
-      ) : (
-        <ul className="px-5">{rows(due, true)}{rows(starting, false)}</ul>
-      )}
+      <GroupHead id={`${uid}-h`} name={name} count={n} fold={{ open, onToggle, controls: `${uid}-b` }} />
+      <div id={`${uid}-b`} hidden={!open}>
+        {!open ? null : n === 0 ? (
+          <p className="px-5 pb-3 pt-2 text-cta text-muted">{isToday ? '오늘은 할 일이 없어요.' : '이날은 할 일이 없어요.'}</p>
+        ) : (
+          <ul className="px-5">{rows(due, true)}{rows(starting, false)}</ul>
+        )}
+      </div>
     </section>
   );
 }
 
 /**
  * 「다가오는 일정 n건」: 내일부터 14일 안 마감인 안 끝난 할 일(방금 체크한 줄은 8초 동안 자리를 지킨다).
- * 위 「오늘」 · 고른 날 묶음에 이미 나온 할 일(그날 마감 · 그날 시작)은 뺀다(같은 줄이 두 번 나오지 않게).
+ * 위 「오늘」 · 고른 날 묶음에 이미 나온 할 일(그날 마감 · 그날 시작)은 뺀다(같은 줄이 두 번 나오지 않게). 접힘(open)은 부르는 쪽이 기억한다.
  */
-function Upcoming({ doc, today, picked, steps, tabOf }: { doc: ProgressDoc; today: string; picked: string; steps: StepRef[]; tabOf: Map<string, WorkTabId> }) {
+function Upcoming({ doc, today, picked, steps, tabOf, open, onToggle }: {
+  doc: ProgressDoc; today: string; picked: string; steps: StepRef[]; tabOf: Map<string, WorkTabId>; open: boolean; onToggle: () => void;
+}) {
   const uid = useId();
-  const { isDone, onToggle } = useStickyDone();
+  const { isDone, onToggle: onToggleDone } = useStickyDone();
   const list = useMemo(() => upcomingTasks(doc, today, UPCOMING_DAYS, isDone).filter((t) => t.due !== picked && t.start !== picked), [doc, today, picked, isDone]);
   return (
     <section aria-labelledby={`${uid}-h`}>
-      <GroupHead id={`${uid}-h`} name="다가오는 일정" count={list.length} />
-      {list.length === 0 ? (
-        <p className="px-5 pb-3 pt-2 text-cta text-muted">앞으로 2주 안에 마감인 할 일이 없어요.</p>
-      ) : (
-        <ul className="px-5">
-          {list.map((t) => <UpcomingRow key={t.id} t={t} today={today} steps={steps} tab={tabOf.get(t.id) ?? null} onToggle={onToggle} />)}
-        </ul>
-      )}
+      <GroupHead id={`${uid}-h`} name="다가오는 일정" count={list.length} fold={{ open, onToggle, controls: `${uid}-b` }} />
+      <div id={`${uid}-b`} hidden={!open}>
+        {!open ? null : list.length === 0 ? (
+          <p className="px-5 pb-3 pt-2 text-cta text-muted">앞으로 2주 안에 마감인 할 일이 없어요.</p>
+        ) : (
+          <ul className="px-5">
+            {list.map((t) => <UpcomingRow key={t.id} t={t} today={today} steps={steps} tab={tabOf.get(t.id) ?? null} onToggle={onToggleDone} />)}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }
