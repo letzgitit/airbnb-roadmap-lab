@@ -1,7 +1,7 @@
 // 검색 계산 확인(node --test). 값은 모두 가짜 일반 낱말 · 가짜 번호(010-0000-0000 꼴)다 — 공개 저장소.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildIndex, countText, jumpOf, rowView, search, GROUPS, type GuideBodies } from './search-model.ts';
+import { buildIndex, countText, hotOfDoc, jumpOf, rowView, search, GROUPS, type GuideBodies } from './search-model.ts';
 
 const iso = '2026-10-20T00:00:00.000Z';
 const base = { version: 1, createdAt: iso, updatedAt: iso, updatedBy: '나', deletedAt: null, deletedBy: null };
@@ -139,6 +139,28 @@ test('갈 곳: 할 일 → 분야 탭(세부 항목은 부모를 따라감) · �
     const g = r.groups.find((x) => x.kind === k)!;
     assert.equal(jumpOf(g.hits[0]), null, k);
   }
+  // 「자세히 보기」 기기: 연락처는 갈 화면이 없어 null(그 자리에서 보임), 할 일 · 자금은 그대로
+  assert.equal(jumpOf(search(index, '도배집').groups[0].hits[0], { detail: true }), null);
+  assert.equal(jumpOf(task('t_a'), { detail: true })?.kind, 'task');
+  // 분야 탭을 못 찾은 할 일: 단계가 있으면 갈 곳(단계 시트로), 단계도 없으면 null(펼침)
+  const orphan = buildIndex({ ...(doc() as object), tasks: byId([T('t_x', 7, '부모 지운 세부', { parentId: 't_gone' }), T('t_y', 0, '단계 없는 일')]) } as never);
+  const ox = search(orphan, '부모 지운').groups[0].hits[0];
+  assert.deepEqual(jumpOf(ox), { kind: 'task', id: 't_x', tab: null, stepId: 7, guide: false });
+  assert.equal(jumpOf(search(orphan, '단계 없는').groups[0].hits[0]), null);
+});
+
+test('줄 모양: 기록은 쓴 사람을 싣지 않음 · 집 정보 조각 이름은 「내용」 · 답 개수', () => {
+  const index = buildIndex(doc());
+  const log = search(index, '도장').groups[0].hits[0];
+  assert.deepEqual(rowView(log, ['도장']).meta.map((m) => m.text), ['결정', '10월 21일']);
+  const prop = search(index, '더블');
+  assert.equal(rowView(prop.groups[0].hits[0], prop.terms).snip?.name, '내용');
+  const q = search(index, '침구');
+  assert.ok(rowView(q.groups[0].hits[0], q.terms).meta.some((m) => m.text === '답 1개'));
+  // 많이 나온 말은 안 끝난 할 일 제목에서만(끝난 「계약서 원본 보관」은 세지 않아 계약서는 1번 — 빠짐)
+  assert.deepEqual(hotOfDoc(doc()), []);
+  const two = { tasks: byId([T('a', 4, '계약서 챙기기'), T('b', 4, '계약서를 복사'), T('c', 4, '계약서 보관', { done: true })]) } as never;
+  assert.deepEqual(hotOfDoc(two), [{ word: '계약서', n: 2 }]);
 });
 
 test('입력 중 · 초성으로도 결과가 같다(깜빡임 없음)', () => {

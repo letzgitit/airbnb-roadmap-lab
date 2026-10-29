@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IconButton } from '@/components/ui/IconButton';
-import { prefetchGuideBodies } from './guide-bodies';
-import { preloadResults, SearchFrame } from './SearchFrame';
+import { clearGuideBodies, prefetchGuideBodies } from './guide-bodies';
+import { clearLastQuery, preloadResults, SearchFrame } from './SearchFrame';
 
 /**
  * 머리 띠 돋보기(로그인한 두 사람만 — 부르는 쪽이 정한다, DESIGN.md 8장 「검색」): 톱니와 같은 44px band 아이콘 단추 + 키보드 「/」.
@@ -56,7 +57,8 @@ export function SearchButton() {
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, [open, finish]);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  // 돋보기는 로그인한 동안만 있다 — 사라지면(로그아웃 · 401 · 403) 받아 둔 도움말 본문과 직전 검색어를 메모리에서 지운다
+  useEffect(() => () => { window.clearTimeout(timer.current); clearGuideBodies(); clearLastQuery(); }, []);
 
   // 결과 조각 JS: 홈이 한가해지면 한 번(없으면 3초 뒤). 그 전에 누르면 그때 받는다
   useEffect(() => {
@@ -84,7 +86,8 @@ export function SearchButton() {
     <>
       <IconButton buttonRef={btn} label="검색" icon="search" variant="band" aria-haspopup="dialog" aria-expanded={open} onClick={show}
         onPointerEnter={warm} onFocus={warm} onPointerDown={warm} onTouchStart={warm} />
-      {open && <SearchFrame onClose={close} />}
+      {/* body 에 포털로: 머리 띠의 색 변수(띠 위 포커스 고리 = 검정)를 물려받지 않게 */}
+      {open && createPortal(<SearchFrame onClose={close} />, document.body)}
     </>
   );
 }

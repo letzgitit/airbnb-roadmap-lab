@@ -22,11 +22,17 @@ export function prefetchGuideBodies(force = false): void {
   if (inflight || (!force && (state.status === 'ready' || state.status === 'loading'))) return;
   if (state.status !== 'ready') set({ ...state, status: 'loading' });
   inflight = fetch('/api/guides?body=1', { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-    .then((j: { bodies?: GuideBodies }) => set({ status: 'ready', bodies: j.bodies ?? {} }))
+    .then((r) => {
+      // 로그인이 끊겼다(401 · 403): 받아 둔 본문을 메모리에서 지운다(현황 문서를 지우는 것과 같은 원칙)
+      if (r.status === 401 || r.status === 403) { set({ status: 'idle', bodies: {} }); return null; }
+      return r.ok ? r.json() : Promise.reject(new Error(String(r.status)));
+    })
+    .then((j: { bodies?: GuideBodies } | null) => { if (j) set({ status: 'ready', bodies: j.bodies ?? {} }); })
     .catch(() => set({ ...state, status: state.status === 'ready' ? 'ready' : 'error' }))
     .finally(() => { inflight = null; });
 }
+/** 로그아웃 · 로그인 끊김: 받아 둔 본문을 비운다 */
+export function clearGuideBodies() { if (state.status !== 'idle' || Object.keys(state.bodies).length) set({ status: 'idle', bodies: {} }); }
 
 /** 도움말을 저장했다(빈 글 = 지움): 받아 둔 본문이 있으면 그 항목만 바꾼다. 기호는 찾을 때 뺀다(md) */
 export function noteGuideSaved(id: string, md: string | null, version: number) {

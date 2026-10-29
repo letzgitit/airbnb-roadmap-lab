@@ -9,7 +9,7 @@ import path from 'node:path';
 import { Redis } from '@upstash/redis';
 import { redisEnv, sanitize } from './store.ts';
 import type { ProgressDoc } from './types.ts';
-import { stripMarkdown } from '../client/search-text.ts';
+import { stripMarkdown } from '../shared/search-text.ts';
 
 export const GUIDES_KEY = 'oedomin:guides';
 export const GUIDE_MAX = 6000;

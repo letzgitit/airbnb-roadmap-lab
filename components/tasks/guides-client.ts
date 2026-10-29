@@ -32,6 +32,8 @@ export function useGuideIds(): Record<string, GuideMeta> {
   return v ?? EMPTY;
 }
 const EMPTY: Record<string, GuideMeta> = {};
+/** 도움말 목록을 받았나(받기 전 빈 값과 「도움말이 하나도 없음」을 가른다 — 검색이 본문 version 을 견줄 때) */
+export const guideIdsLoaded = () => ids !== null;
 
 export async function fetchGuide(id: string): Promise<GuideBody | null> {
   const r = await fetch(`/api/guides/${encodeURIComponent(id)}`, { cache: 'no-store' });

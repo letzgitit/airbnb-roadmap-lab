@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 // 결과 부분(찾기 계산 · 결과 화면 · es-hangul)은 따로 받는 조각 — 홈 첫 로딩에 싣지 않는다. 같은 import() 를 미리 불러 두면 같은 조각을 받아 둔다.
 // next/dynamic 대신 React lazy: next/dynamic 은 불러오기 장치(약 2KB gzip)를 홈 첫 로딩에 더 싣는다. 이 창은 누른 뒤에만 그려 서버 그리기가 없으니 lazy 로 충분하다
@@ -8,12 +8,14 @@ const loadResults = () => import('./SearchResults');
 const SearchResults = lazy(() => loadResults().then((m) => ({ default: m.SearchResults })));
 export const preloadResults = () => { void loadResults(); };
 
-// 다시 열면 직전 검색어를 채워 둔다(이 탭 동안만, 메모리 — 주소 · 방문 기록 · 기기 저장소에 남기지 않는다)
+// 다시 열면 직전 검색어를 채워 둔다(이 탭 동안만, 메모리 — 주소 · 방문 기록 · 기기 저장소에 남기지 않는다). 로그인이 끊기면 비운다
 let lastQuery = '';
+export const clearLastQuery = () => { lastQuery = ''; };
 
 /**
  * 검색 창(데일리 .search — 화면 전체를 덮는 흰 면, 각짐): 위 줄 = 입력칸 + 「닫기」, 아래 = 결과(따로 받는 조각, 오기 전엔 빈 자리).
  * 덮는 면 · 입력칸 · 닫기는 첫 로딩 묶음에 있어 누름과 같은 렌더에서 그려진다(입력칸 autoFocus — 아이폰 키보드).
+ * 부르는 쪽(SearchButton)이 body 에 포털로 그린다 — 머리 띠 안에 두면 띠가 덮어쓴 색 변수(포커스 고리 · 밑줄을 검정으로)를 물려받아 어두운 화면에서 안 보인다.
  * 열린 동안 뒤 화면은 스크롤 잠금, Tab 은 창 안에서만 돈다. Esc = 닫기, Enter = 키보드 내리기(결과 그대로), ↓ = 첫 결과로.
  */
 export function SearchFrame({ onClose }: { onClose: (then?: () => void) => void }) {
@@ -22,6 +24,8 @@ export function SearchFrame({ onClose }: { onClose: (then?: () => void) => void 
   const showResults = useDeferredValue(true, false);
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  // 빈 검색어 화면의 「많이 나온 말」을 누르면 그 말로 찾는다(입력칸에도 채운다)
+  const pickWord = useCallback((w: string) => { lastQuery = w; setQ(w); }, []);
   useLayoutEffect(() => {
     const el = input.current;
     if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
@@ -35,6 +39,8 @@ export function SearchFrame({ onClose }: { onClose: (then?: () => void) => void 
   }, []);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    // 한글 조합 중의 Esc · 화살표는 입력기 몫(조합을 끝내거나 고르는 키) — 창을 닫거나 결과로 옮기지 않는다
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
     const rows = () => [...(box.current?.querySelectorAll<HTMLElement>('[data-search-row]') ?? [])];
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -70,7 +76,7 @@ export function SearchFrame({ onClose }: { onClose: (then?: () => void) => void 
       </form>
       <div className="flex-1 overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+32px)]">
         <div className="md:mx-auto md:max-w-content">
-          {showResults && <Suspense fallback={null}><SearchResults query={q} onClose={onClose} /></Suspense>}
+          {showResults && <Suspense fallback={null}><SearchResults query={q} onClose={onClose} onQuery={pickWord} /></Suspense>}
         </div>
       </div>
     </div>

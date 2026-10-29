@@ -1,4 +1,5 @@
-// 검색 글자 다루기(순수 함수 — 화면 없음). 외도민 · 지산이 글자 하나 다르지 않게 같은 파일을 쓴다(설계 볼트 29의 9절).
+// 검색 글자 다루기(순수 함수 — 화면 없음). 화면(검색 창) · 서버(도움말 본문 API) · CLI 가 같이 쓴다(그래서 lib/shared).
+// 외도민 · 지산이 글자 하나 다르지 않게 같은 파일을 쓴다(설계 볼트 29의 9절).
 //   지우기만 하면 되는 TS 문법만 쓴다(search-text.test.ts 가 node --test 로 바로 읽는다).
 // 찾는 법(설계 3.2): 정규화(NFC · 소문자 · 공백 하나) → 낱말(공백으로 나눔, 8개까지)이 모두 들어 있어야 걸린다.
 //   낱말 하나는 ① 글에 그대로 ② 공백을 뺀 판에(「사업자등록」 ↔ 「사업자 등록」) ③ 초성만 두 글자 이상이면 제목 초성에(「ㄱㅇㅅ」 → 「계약서」)
@@ -165,6 +166,60 @@ export function markRanges(p: Prepared, terms: string[], o: { cho?: Cho; compose
     }
   });
   return mergeRanges(out);
+}
+
+/** 줄바꿈을 살린 긴 글(펼친 기록 · 답 · 메모)의 밑줄 자리: 글은 NFC 로만 맞추고(공백 · 줄바꿈 그대로) 그 위 자리를 돌려준다 */
+export function markText(text: string | null | undefined, terms: string[]): { text: string; ranges: Range[] } {
+  const raw = String(text ?? '').normalize('NFC');
+  return { text: raw, ranges: markRanges({ raw, norm: '', compact: '' }, terms, { composeLast: true }) };
+}
+
+// ── 많이 나온 말(빈 검색어 화면 — 데일리 「제목에 많이 나온 말」: src/lib/view/text.ts keywordPairs · related.ts hotWords) ──
+// 한글은 두 글자 이상 낱말에서 뒤 조사를 떼고(데일리와 같은 조사 목록), 동사 꼬리 · 흔한 말은 뺀다. 할 일 제목에 흔한 「○○하기」는 「○○」로.
+const PARTICLES = ['에서는', '으로는', '에게', '에서', '으로', '까지', '부터', '처럼', '보다', '이다', '은', '는', '이', '가', '을', '를', '에', '의', '도', '로', '와', '과', '만'];
+// 동사 꼬리(데일리 「다요게고며서지면돼해」에서 「서」만 뺌 — 여기는 계약서 · 신청서 · 세무서처럼 「서」로 끝나는 서류 · 기관 이름이 많다)
+const VERB_TAIL = '다요게고며지면돼해';
+const STOPWORDS = new Set((
+  '이유 관련 경우 가능 이번 올해 내년 대한 위한 통해 가지 정도 이상 이하 지금 오늘 그리고 하지만 때문 사실 기준 ' +
+  '최근 지난 가장 따라 추가 기간 예정 있는 없는 함께 모든 같은 하는 나온 ' +
+  '하기 받기 사기 보기 쓰기 달기 두기 찾기 넣기 알기 짓기 정하기 챙기기 알아보기 물어보기 확인 준비 다시 예시 시험'
+).split(' '));
+/** 글 하나의 [주제어, 글에 적힌 모양] 쌍(주제어 = 소문자 · 조사 뗀 꼴) */
+export function keywordPairs(text: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (const raw of String(text ?? '').normalize('NFC').match(/[가-힣]{2,}|[A-Za-z][A-Za-z0-9.]*/g) ?? []) {
+    let seen = raw.replace(/\.+$/, '');
+    let w = seen.toLowerCase();
+    const hangul = w[0] >= '가' && w[0] <= '힣';
+    if (hangul) {
+      for (const p of PARTICLES) {
+        if (w.endsWith(p) && w.length - p.length >= 2) { w = w.slice(0, -p.length); seen = seen.slice(0, -p.length); break; }
+      }
+      if (w.length > 3 && w.endsWith('하기')) { w = w.slice(0, -2); seen = seen.slice(0, -2); }
+    }
+    if (w.length < 2 || STOPWORDS.has(w) || (hangul && VERB_TAIL.includes(w[w.length - 1]))) continue;
+    out.push([w, seen]);
+  }
+  return out;
+}
+/** 제목들에 많이 나온 말: 제목 하나에 한 번만 세고 min 번 이상 나온 말을 많은 순으로 max 개(보이는 꼴은 가장 많이 적힌 모양) */
+export function hotWords(titles: string[], o: { min?: number; max?: number } = {}): { word: string; n: number }[] {
+  const forms = new Map<string, Map<string, number>>();
+  for (const t of titles) {
+    const mine = new Map<string, string>();
+    for (const [w, seen] of keywordPairs(t)) if (!mine.has(w)) mine.set(w, seen);
+    for (const [w, seen] of mine) {
+      const f = forms.get(w) ?? new Map<string, number>();
+      f.set(seen, (f.get(seen) ?? 0) + 1);
+      forms.set(w, f);
+    }
+  }
+  return [...forms]
+    .map(([w, f]) => ({ w, n: [...f.values()].reduce((a, b) => a + b, 0), word: [...f].sort((a, b) => b[1] - a[1])[0][0] }))
+    .filter((x) => x.n >= (o.min ?? 2))
+    .sort((a, b) => b.n - a.n || a.word.localeCompare(b.word))
+    .slice(0, o.max ?? 12)
+    .map((x) => ({ word: x.word, n: x.n }));
 }
 
 /** 조각: 첫 걸린 자리 앞 18자쯤부터(잘렸으면 앞에 「…」). 밑줄 자리도 조각 기준으로 옮긴다. 걸린 데가 없으면 글 앞부분 */

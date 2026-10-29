@@ -4,11 +4,12 @@
 // 끝난 할 일은 묶음 맨 아래. 찾을 항목은 검색 창을 열 때 한 번 만들고(buildIndex) 문서 · 도움말이 바뀌면 다시 만든다.
 import type { LogEntry, MoneyItem, ProgressDoc, PropertyItem, QuestionItem, TaskItem } from '@/lib/core/types';
 import {
-  choseongOf, composable, composingAt, isChoseongTerm, markRanges, prepText, searchTerms, snippet, stripMarkdown,
+  choseongOf, composable, composingAt, hotWords, isChoseongTerm, markRanges, prepText, searchTerms, snippet, stripMarkdown,
   type Cho, type Prepared, type Range,
-} from '../../lib/client/search-text.ts';
+} from '../../lib/shared/search-text.ts';
 import { contacts, fieldLabel, taskTabs, type Contact, type WorkTabId } from '../simple-home/home-model.ts';
 import { manwon } from '../../lib/plan.ts';
+import { STEP_COUNT } from '../../lib/core/types.ts';
 
 export type SearchKind = 'task' | 'log' | 'contact' | 'property' | 'money' | 'question';
 export const GROUPS: { kind: SearchKind; label: string }[] = [
@@ -81,7 +82,8 @@ export function buildIndex(doc: Pick<ProgressDoc, 'tasks' | 'log' | 'property' |
   });
   for (const p of Object.values(doc.property ?? {})) {
     if (p.deletedAt || p.label.startsWith('연락처 · ')) continue;
-    out.push({ kind: 'property', id: p.id, item: p, ...head(p.label), fields: fields(field('값', p.value, 'snippet')) });
+    // 조각 이름은 「내용」(집 정보 줄에는 칸 이름이 보이지 않아 — 2026-10-29 말 검수)
+    out.push({ kind: 'property', id: p.id, item: p, ...head(p.label), fields: fields(field('내용', p.value, 'snippet')) });
   }
   for (const m of Object.values(doc.money ?? {})) {
     if (m.deletedAt) continue;
@@ -185,8 +187,8 @@ export function rowView(hit: Hit, terms: string[]): RowView {
       if (done) meta.push({ text: '완료' });
       break;
     case 'log':
+      // 쓴 사람은 싣지 않는다(기록 목록도 보여 주지 않는다)
       meta.push(...metaField('종류'), { text: dayOf(e.item.at), date: true });
-      if (e.item.by) meta.push({ text: e.item.by });
       break;
     case 'contact':
       meta.push(...metaField('무슨 일'), ...metaField('전화').map((p) => ({ ...p, date: true })));
@@ -200,7 +202,7 @@ export function rowView(hit: Hit, terms: string[]): RowView {
     case 'question': {
       meta.push(...metaField('받는 사람'), { text: e.item.status === 'open' ? '답 기다림' : e.item.status === 'answered' ? '답함' : '닫음' });
       const n = e.item.answers.filter((a) => !a.deletedAt).length;
-      if (n) meta.push({ text: `답 ${n}` });
+      if (n) meta.push({ text: `답 ${n}개` });
       break;
     }
   }
@@ -216,15 +218,25 @@ export function rowView(hit: Hit, terms: string[]): RowView {
   return { title: marked(e.title, terms, e.cho), meta: meta.filter((m) => m.text), snip, done };
 }
 
-/** 갈 곳: 할 일 · 연락처 · 자금은 창을 닫고 그 줄로, 기록 · 집 정보 · 질문은 null(검색 창 안에서 펼친다) */
+/**
+ * 갈 곳: 할 일 · 연락처 · 자금은 창을 닫고 그 줄로, 기록 · 집 정보 · 질문은 null(검색 창 안에서 펼친다).
+ * detail = 「자세히 보기」(예전 화면)를 골라 둔 기기: 연락처는 갈 화면이 없어(새 홈 연락처 탭) 그 자리에서 펼친다. 할 일은 그 단계 시트로(부르는 쪽).
+ * 분야 탭을 못 찾은 할 일(부모를 지운 세부 항목 등)도 단계가 있으면 그 단계 시트로, 단계도 없으면 그 자리에서 펼친다.
+ */
 export type Jump =
   | { kind: 'task'; id: string; tab: WorkTabId | null; stepId: number; guide: boolean }
   | { kind: 'contact'; id: string }
   | { kind: 'money'; id: string };
-export function jumpOf(hit: Hit): Jump | null {
+export const hasStep = (stepId: number) => Number.isInteger(stepId) && stepId >= 1 && stepId <= STEP_COUNT;
+export function jumpOf(hit: Hit, o: { detail?: boolean } = {}): Jump | null {
   const e = hit.entry;
-  if (e.kind === 'task') return { kind: 'task', id: e.id, tab: e.tab, stepId: e.item.stepId, guide: hit.needGuide };
-  if (e.kind === 'contact') return { kind: 'contact', id: e.id };
+  if (e.kind === 'task') return e.tab || hasStep(e.item.stepId) ? { kind: 'task', id: e.id, tab: e.tab, stepId: e.item.stepId, guide: hit.needGuide } : null;
+  if (e.kind === 'contact') return o.detail ? null : { kind: 'contact', id: e.id };
   if (e.kind === 'money') return { kind: 'money', id: e.id };
   return null;
+}
+
+/** 빈 검색어 화면의 「많이 나온 말」: 안 끝난 할 일 제목(세부 항목 포함)에서 */
+export function hotOfDoc(doc: Pick<ProgressDoc, 'tasks'>): { word: string; n: number }[] {
+  return hotWords(Object.values(doc.tasks).filter((t) => !t.deletedAt && !t.done).map((t) => t.text));
 }

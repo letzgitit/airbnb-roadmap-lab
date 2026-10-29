@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  choseongOf, composingAt, fieldHas, isChoseongTerm, isLoneJamo, markRanges, mergeRanges, normalizeQuery, prepText, searchTerms, snippet, stripMarkdown,
+  choseongOf, composingAt, fieldHas, hotWords, isChoseongTerm, isLoneJamo, keywordPairs, markRanges, markText, mergeRanges, normalizeQuery, prepText, searchTerms, snippet, stripMarkdown,
 } from './search-text.ts';
 
 const cut = (raw: string, rs: [number, number][]) => rs.map(([a, b]) => raw.slice(a, b));
@@ -91,6 +91,21 @@ test('조각: 첫 걸린 자리 앞 18자쯤부터 · 잘렸으면 「…」 · 
   const short = prepText('줄눈 다시 하기');
   const t = snippet(short, markRanges(short, ['다시']));
   assert.equal(t.text, '줄눈 다시 하기');
+});
+
+test('많이 나온 말: 조사 떼기(데일리 규칙) · 「○○하기」 · 흔한 말 빼기 · 제목 하나에 한 번 · 2번 이상', () => {
+  assert.deepEqual(keywordPairs('계약서를 챙기기').map((p) => p[0]), ['계약서']);
+  assert.deepEqual(keywordPairs('욕실에서 줄눈 다시 하기').map((p) => p[0]), ['욕실', '줄눈']);
+  assert.deepEqual(keywordPairs('사업자 등록 신청하기').map((p) => p[0]), ['사업자', '등록', '신청']);
+  const hot = hotWords(['계약서 사본 챙기기', '계약서를 다시 확인', '욕실 줄눈 계약서 계약서', '욕실 타일', '도배 견적']);
+  assert.deepEqual(hot, [{ word: '계약서', n: 3 }, { word: '욕실', n: 2 }]);
+  assert.equal(hotWords(['가 나 다']).length, 0);
+});
+
+test('줄바꿈을 살린 긴 글의 밑줄(펼친 기록 · 답)', () => {
+  const m = markText('첫 줄\n계약서 사본\n끝', ['계약서']);
+  assert.equal(m.text, '첫 줄\n계약서 사본\n끝');
+  assert.deepEqual(m.ranges.map(([a, b]) => m.text.slice(a, b)), ['계약서']);
 });
 
 test('마크다운 기호 · 링크 주소 빼기', () => {

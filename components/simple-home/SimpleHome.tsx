@@ -128,16 +128,22 @@ export function SimpleHome() {
     if (t !== tab) { setTab(t); write(TAB_KEY, t); setAskOn(false); }
     setReveal((r) => ({ id, tab: t, n: (r?.n ?? 0) + 1, guide }));
   };
-  // 검색 결과에서 고른 할 일 · 연락처(components/search/jump.ts): 다른 탭으로 옮겨야 하고 쓰다 만 폼이 있으면 탭 바꾸기와 같이 먼저 확인
+  // 할 일로 건너가기(「이번 주 할 일」 · 검색 결과): 같은 탭이어도 그 탭의 다른 블록을 접으므로(그 안의 쓰다 만 폼이 사라진다)
+  // 쓰다 만 폼이 있으면 늘 먼저 「저장 안 한 내용」 확인을 받는다
+  const pickTask = (id: string, t: WorkTabId, guide = false) => {
+    if (!hasDirty()) { goTask(id, t, guide); return; }
+    void confirmDiscard().then((ok) => { if (ok) goTask(id, t, guide); });
+  };
+  // 검색 결과에서 고른 할 일 · 연락처(components/search/jump.ts). 연락처는 다른 탭으로 옮길 때만 확인(같은 탭이면 줄로 내려가기만 한다)
   //   처음 그릴 때 꺼냈으면(다른 화면에서 옮겨 옴) 스크롤 위치 되돌리기는 하지 않는다 — 그 줄로 가는 것과 부딪치지 않게
   const jumped = useRef(false);
-  const guarded = (to: TabId, go: () => void) => {
+  useJump('task', (j) => { jumped.current = true; if (j.tab) pickTask(j.id, j.tab, j.guide); });
+  useJump('contact', (j) => {
     jumped.current = true;
-    if (to === tab || !hasDirty()) { go(); return; }
+    const go = () => { if (tab !== 'contacts') openTab('contacts'); revealRow(`contact-${j.id}`); };
+    if (tab === 'contacts' || !hasDirty()) { go(); return; }
     void confirmDiscard().then((ok) => { if (ok) go(); });
-  };
-  useJump('task', (j) => { if (j.tab) guarded(j.tab, () => goTask(j.id, j.tab!, j.guide)); });
-  useJump('contact', (j) => guarded('contacts', () => { if (tab !== 'contacts') openTab('contacts'); revealRow(`contact-${j.id}`); }));
+  });
 
   // 탭마다 블록 묶음 · 이번 주 할 일(곁 칸은 지금 탭, 일터가 아닌 탭에서는 셋 다 모아서)
   const work = useMemo(() => {
@@ -177,7 +183,7 @@ export function SimpleHome() {
         <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-${tab}`} className="min-w-0">
           {isWorkTab(tab) ? (
             <WorkTab key={`${tab}:${fresh}`} tab={tab} groups={work[tab]} doc={doc} steps={steps} today={today}
-              weekItems={weekFor([tab])} weekTitle={weekTitle} onPickWeek={goTask}
+              weekItems={weekFor([tab])} weekTitle={weekTitle} onPickWeek={pickTask}
               reveal={reveal?.tab === tab ? reveal : null} ask={ask} askOn={askOn} onAskOff={() => setAskOn(false)} />
           ) : tab === 'contacts' ? (
             <div className="px-safe pb-2 md:px-0"><ContactsTab /></div>
@@ -194,7 +200,7 @@ export function SimpleHome() {
           {/* 달력 탭에서는 달력이 같은 일을 하므로 이번 주 할 일을 숨긴다 */}
           {/* 「문의 필요만 보기」는 이번 주 블록 머리 오른쪽. 이번 주가 비어 블록이 없으면 같은 자리(곁 칸 맨 위 오른쪽)에 단추만 */}
           {tab !== 'calendar' && (asideWeek.length > 0
-            ? <WeekBlock title={weekTitle} items={asideWeek} today={today} onPick={goTask} showTab={!isWorkTab(tab)} headRight={ask} />
+            ? <WeekBlock title={weekTitle} items={asideWeek} today={today} onPick={pickTask} showTab={!isWorkTab(tab)} headRight={ask} />
             : ask && <AskRow>{ask}</AskRow>)}
           <QuickCalls doc={doc} onMore={() => pick('contacts')} />
         </aside>
