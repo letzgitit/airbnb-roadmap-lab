@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { shortDate } from '@/lib/client/format';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { ToggleChips } from '@/components/ui/ToggleChips';
@@ -47,6 +47,9 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   fixedDay0?: string; marks: Pin[]; guest: boolean;
 }) {
   const progress = useProgress();
+  // 늘 최신 현황: 끌기 뒤 알림의 「되돌리기」는 몇 초 뒤에 눌리므로, 끌 때 붙잡은 현황(옛 version)이 아니라 누르는 때의 version 을 보낸다(옛 값이면 409)
+  const docRef = useRef(progress.doc);
+  useEffect(() => { docRef.current = progress.doc; }, [progress.doc]);
   const phone = useMedia('(max-width: 767.98px)');
   const mouse = useMedia('(hover: hover) and (pointer: fine) and (min-width: 768px)');
   const canDrag = mouse && !guest;
@@ -153,11 +156,12 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
     const back = { ...('start' in patch ? { start: t.start ?? null } : {}), ...('due' in patch ? { due: t.due } : {}) };
     const r = await progress.send({ op: 'task.update', id, baseVersion: t.version, patch }, { quiet: true });
     if (!r.ok) { const msg = taskErrorMessage(r); if (msg) progress.toast(msg, { kind: 'error' }); return; }
-    const nf = patch.start !== undefined ? patch.start ?? (patch.due ?? to) : from;
+    // 알림 글자의 새 기간: 시작일을 안 건드렸으면 원래 시작일, 시작일이 없던 하루짜리를 통째로 옮겼으면 새 마감일 하루
     const nt = patch.due ?? to;
+    const nf = patch.start !== undefined ? patch.start ?? nt : t.start ? from : nt;
     progress.toast(`‘${clipLabel(t.text)}’ 날짜를 바꿨어요(${nf && nf !== nt ? `${shortDate(nf)}~${shortDate(nt)}` : shortDate(nt)}).`, {
       ms: 8000,
-      action: { label: '되돌리기', run: () => { const c = progress.doc?.tasks[id]; if (c) void progress.send({ op: 'task.update', id, baseVersion: c.version, patch: back }); } },
+      action: { label: '되돌리기', run: () => { const c = docRef.current?.tasks[id]; if (c) void progress.send({ op: 'task.update', id, baseVersion: c.version, patch: back }); } },
     });
   };
 
