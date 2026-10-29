@@ -213,7 +213,8 @@ function Row({ hit, terms, detail, onPick, open, onToggle, panelId }: {
   const phone = e.kind === 'contact' ? e.contact.phone : null;
   const text = (
     <span className="min-w-0 flex-1">
-      <span className={`block break-words text-base font-semibold ${v.done ? 'text-muted line-through' : 'text-ink'} ${full ? 'whitespace-pre-line' : e.kind === 'log' ? 'line-clamp-2' : ''}`}>
+      {/* 접힌 기록은 두 줄 자르기 — line-clamp 가 display(-webkit-box)를 쓰므로 block 과 같이 두지 않는다(block 이 덮어써 안 잘림) */}
+      <span className={`break-words text-base font-semibold ${v.done ? 'text-muted line-through' : 'text-ink'} ${full ? 'block whitespace-pre-line' : e.kind === 'log' ? 'line-clamp-2' : 'block'}`}>
         <Mark m={full ? markText(e.item.text, terms) : v.title} />
       </span>
       {v.meta.length > 0 && (
