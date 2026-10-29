@@ -8,7 +8,7 @@ import { useProgress } from '@/components/progress/ProgressProvider';
 import { TrashCard } from '@/components/progress/TrashCard';
 import { AddTextButton } from '@/components/ui/AddButton';
 import { dateCls, textBtn } from '@/components/ui/buttonCls';
-import { Card, cardRowCls } from '@/components/ui/Card';
+import { cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { LoginGate } from '@/components/ui/LoginGate';
 import { TYPE_COLOR } from '@/components/TimelineChart';
@@ -113,7 +113,7 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
   const typeOf = (id: number) => steps.find((s) => s.id === id)?.type ?? '';
   // 세부 항목은 같은 묶음 안에 부모가 있으면 바로 밑에 들여 쓰고, 없으면 맨 위 층 + 「‘부모’의 세부」
   const rows = (list: TaskItem[], showStep: (t: TaskItem) => boolean = () => false) => treeRows(list, doc.tasks).map(({ item: t, depth, parentTitle }) => (
-    <TaskRow key={t.id} t={t} steps={stepRefs} listStepId={null} showStep={showStep(t)} scope="modal" inset depth={depth} parentTitle={parentTitle}
+    <TaskRow key={t.id} t={t} steps={stepRefs} listStepId={null} showStep={showStep(t)} scope="modal" depth={depth} parentTitle={parentTitle}
       quietLate={lateIds.has(t.id)} onEditChange={reportEdit} onToggle={onToggle} onGone={focusTop} />
   ));
   const defaultStep = groupIds[0] ?? currentId ?? steps[0]?.id ?? 1;
@@ -132,15 +132,16 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
         </div>
         {shifting && <ShiftDates from={sel} titleOf={titleOf} getDoc={getDoc} onClose={() => setShifting(false)} />}
       </div>
-      <Card>
+      {/* 할 일 줄은 단계 창 「우리 할 일」처럼 상자 없이 줄 사이 선만(들임 0 — 2026-10-29 디자인 검수) */}
+      <div className="border-y border-line">
         <div className={cardRowCls}>
           {composing
-            ? <div className="px-3"><TaskComposer stepId={defaultStep} steps={stepRefs} scope="modal" initialDue={sel} onClose={() => setComposing(false)} /></div>
-            : <div className="px-1"><AddTextButton label="할 일" onClick={() => { setComposing(true); setShifting(false); }} /></div>}
+            ? <div><TaskComposer stepId={defaultStep} steps={stepRefs} scope="modal" initialDue={sel} onClose={() => setComposing(false)} /></div>
+            : <div className="-mx-3"><AddTextButton label="할 일" onClick={() => { setComposing(true); setShifting(false); }} /></div>}
         </div>
         {late.length > 0 && (
           <section aria-labelledby={`${uid}-late`} className={cardRowCls}>
-            <h3 id={`${uid}-late`} className="px-4 pt-3 text-sm font-bold text-danger-ink">기한 지남</h3>
+            <h3 id={`${uid}-late`} className="pt-3 text-sm font-bold text-danger-ink">기한 지남</h3>
             {/* 바로 아래 같은 단계 머리가 있으면 단계 이름은 빼고 */}
             <ul>{rows(late, (t) => !groupIds.includes(t.stepId))}</ul>
           </section>
@@ -151,7 +152,7 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
             <section key={id} aria-labelledby={`${uid}-g${id}`} className={cardRowCls}>
               <h3 id={`${uid}-g${id}`}>
                 <button type="button" onClick={() => onStep(indexOf(id))}
-                  className="flex min-h-11 w-full items-center gap-2 px-4 text-left text-sm font-bold text-ink-soft transition-colors hover:bg-sunken focus-visible:-outline-offset-2">
+                  className="flex min-h-11 w-full items-center gap-2 text-left text-sm font-bold text-ink-soft transition-colors hover:bg-sunken focus-visible:-outline-offset-2">
                   <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: colorOf(typeOf(id)) }} aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{id}단계 {titleOf(id)}</span>
                   <i className="fas fa-chevron-right text-xs text-muted" aria-hidden />
@@ -161,14 +162,14 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
             </section>
           );
         })}
-        {late.length === 0 && groupIds.length === 0 && <p className={`${cardRowCls} px-4 py-3 text-base text-muted`}>이날은 할 일이 없어요.</p>}
+        {late.length === 0 && groupIds.length === 0 && <p className={`${cardRowCls} py-3 text-base text-muted`}>이날은 할 일이 없어요.</p>}
         {noDate.length > 0 && (
-          <div className={cardRowCls}>
+          <div className={`${cardRowCls} [&>button]:px-0`}>
             <FoldRow label="날짜 없음" count={noDate.length} open={noDateOpen} onToggle={() => setShowNoDate((v) => !v)} controls={`${uid}-nodate`} />
             {noDateOpen && <ul id={`${uid}-nodate`} className="border-t border-line">{rows(noDate, () => true)}</ul>}
           </div>
         )}
-      </Card>
+      </div>
       <TrashCard kinds={['task']} />
     </div>
   );

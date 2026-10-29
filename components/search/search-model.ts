@@ -159,9 +159,9 @@ export function search(index: Entry[], q: string): SearchResult {
   return { q: terms.join(' '), terms, groups, total: groups.reduce((n, g) => n + g.hits.length, 0) };
 }
 
-/** 화면 읽기 프로그램에 한 번 읽어 줄 개수: 「할 일 3건, 기록 1건」 */
+/** 화면 읽기 프로그램에 한 번 읽어 줄 개수: 「할 일 3개, 기록 1개」(묶음 머리 · 「n개 더 보기」와 같은 단위) */
 export function countText(r: SearchResult): string {
-  return r.groups.map((g) => `${g.label} ${g.hits.length}건`).join(', ');
+  return r.groups.map((g) => `${g.label} ${g.hits.length}개`).join(', ');
 }
 
 // ── 줄 하나의 보이는 모양 ──

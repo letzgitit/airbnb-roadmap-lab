@@ -75,7 +75,7 @@ test('순위: 제목 전부 > 제목 일부 > 본문 > 도움말만, 끝난 할 
   const order = GROUPS.map((g) => g.kind);
   const seen = r.groups.map((g) => order.indexOf(g.kind));
   assert.deepEqual(seen, [...seen].sort((a, b) => a - b));
-  assert.match(countText(r), /^할 일 4건, 기록 1건/);
+  assert.match(countText(r), /^할 일 4개, 기록 1개/);
 });
 
 test('빼는 것: 지운 할 일 · 기록 · 집 정보 · 자금 · 질문, 지운 답, 지운 할 일의 도움말, 손님 링크', () => {

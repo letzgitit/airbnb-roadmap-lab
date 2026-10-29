@@ -78,16 +78,17 @@
 
 /* 1층: 단계 머리 띠 */
 .rPhase { --rowbg: var(--cs); background: var(--cs); cursor: pointer; }
-.rPhase .nl { height: 62px; padding-left: 68px; flex-direction: column; align-items: stretch; justify-content: center; gap: 2px; }
+.rPhase .nl { height: 62px; padding-left: 52px; padding-right: 44px; flex-direction: column; align-items: stretch; justify-content: center; gap: 2px; }
 .pTop { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .pSub { display: flex; align-items: center; gap: 12px; font-size: 13px; line-height: 18px; color: var(--ci); padding-left: 2px; white-space: nowrap; }
 .pSub b { font-weight: 700; }
 .rPhase .bl { height: 30px; }
-.chevBtn { position: absolute; left: 0; top: 0; width: 44px; height: 62px; display: grid; place-items: start start; padding: 9px 0 0 4px; color: var(--ci); z-index: 3; border-radius: 8px; }
-.chevBtn svg { width: 24px; height: 24px; transition: transform .18s; transform: rotate(180deg); }
-/* 꺾쇠 방향은 사이트 한 규칙(새 홈 단계 블록 · 할 일 줄과 같음): 접힘 = 아래 · 펼침 = 위 */
+.chevBtn { position: absolute; right: 0; top: 0; width: 44px; height: 62px; display: grid; place-items: start center; padding-top: 11px; color: var(--ink-soft); z-index: 3; border-radius: 8px; }
+.chevBtn svg { width: 20px; height: 20px; transition: transform .18s; transform: rotate(180deg); }
+/* 단계 머리 꺾쇠 = 할 일 줄 꺾쇠와 같은 20px · ink-soft · 같은 세로줄(줄 오른쪽 끝, 가운데 = 보이는 폭 − 22px), 제목 줄 높이(가운데 21px).
+   방향은 사이트 한 규칙(새 홈 단계 블록 · 할 일 줄과 같음): 접힘 = 아래 · 펼침 = 위 */
 .shut .chevBtn svg { transform: none; }
-.badge { position: absolute; left: 30px; top: 8px; width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: var(--on-type);
+.badge { position: absolute; left: 14px; top: 8px; width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: var(--on-type);
   display: grid; place-items: center; font-size: 13px; line-height: 1; font-weight: 700; box-shadow: 0 0 0 2px var(--cs); z-index: 2; pointer-events: none; }
 .badge svg { width: 15px; height: 15px; }
 .badge.todo { background: var(--surface); color: var(--ci); box-shadow: inset 0 0 0 2px var(--c), 0 0 0 2px var(--cs); }
@@ -103,12 +104,11 @@
 .sb > i { display: block; height: 100%; background: var(--cb); }
 .dia { position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px; background: var(--milestone); transform: rotate(45deg); box-shadow: 0 0 0 2.5px var(--cs); z-index: 3; }
 .rPhase.done { --rowbg: var(--sunken); background: var(--sunken); }
-.rPhase.done .pName, .rPhase.done .chevBtn, .rPhase.done .pSub { color: var(--muted); }
+.rPhase.done .pName, .rPhase.done .pSub { color: var(--muted); }
 .rPhase.done .badge { background: var(--muted); color: var(--surface); box-shadow: 0 0 0 2px var(--sunken); }
 .rPhase.done .sb, .rPhase.done .sb > i { background: var(--line-strong); box-shadow: none; }
 .rPhase.done .dia { background: var(--faint); box-shadow: 0 0 0 2.5px var(--sunken); }
-.guest.rPhase .nl { padding-left: 50px; }
-.guest .badge { left: 14px; }
+.guest.rPhase .nl { padding-left: 50px; padding-right: 12px; }
 /* 로그인 전: 진행이 없어 막대가 늘 「안 채운」 옅은 면이라 띠와 구분이 안 된다 → 종류색으로 칠하고 옅은 면 위 글자색 1px 테두리(그림 3:1) */
 .guest .sb { background: var(--c); box-shadow: inset 0 0 0 1px var(--ci); }
 :global(.dark) .guest .sb { background: var(--c); }
@@ -117,7 +117,7 @@
 .rTask .nl, .rSub .nl { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; }
 .tLine { display: flex; align-items: center; min-width: 0; height: 24px; }
 .kLine { display: flex; align-items: center; height: 26px; padding-top: 2px; }
-.rTask .nl { height: 32px; padding-left: 86px; padding-top: 7px; }
+.rTask .nl { height: 32px; padding-left: 70px; padding-top: 7px; }
 .rTask.hasKids .nl { height: 58px; }
 .rTask .bl { height: 28px; }
 .rTask, .rSub { cursor: pointer; }
@@ -144,10 +144,17 @@
 .tb.bDone { background: var(--line-strong); box-shadow: none; }
 .tb.narrow { border-radius: 3px; }
 .done.rTask .tName { color: var(--muted); font-weight: 400; }
+/* 펼친 할 일 · 세부 항목: 제목 말줄임을 풀어 전체를 보인다(낱말 · 숫자 덩어리 중간에선 안 꺾임). 이름 줄만 높아지고 막대 줄 · 트리 자리는 그대로 —
+   첫 줄 가운데(동그라미 높이 --my)와 날짜 · 꺾쇠 자리는 접혔을 때와 같다 */
+.rTask:not(.rShut) .nl, .rSub:not(.rShut) .nl { height: auto; padding-bottom: 1px; }
+.rTask:not(.rShut) .tLine, .rSub:not(.rShut) .tLine { height: auto; align-items: flex-start; }
+.rTask:not(.rShut) .tName, .rSub:not(.rShut) .tName { white-space: normal; overflow: visible; text-overflow: clip; word-break: keep-all; overflow-wrap: anywhere; padding-top: 1px; padding-bottom: 1px; }
+.rTask:not(.rShut) .tMeta { align-self: flex-start; height: 24px; }
+.rSub:not(.rShut) .tMeta { align-self: flex-start; height: 20px; }
 .done .tMeta { color: var(--muted); }
 
 /* 3층: 세부 항목 */
-.rSub .nl { height: 26px; padding-left: 104px; padding-top: 5px; }
+.rSub .nl { height: 26px; padding-left: 88px; padding-top: 5px; }
 .rSub .tLine { height: 20px; }
 .rSub .bl { height: 22px; }
 .rSub .node { width: 12px; height: 12px; margin: -6px 0 0 -6px; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 70%, var(--surface)); }
@@ -165,8 +172,10 @@
 .rchev { flex: none; width: 20px; height: 20px; color: var(--ink-soft); transition: transform .18s; transform: rotate(180deg); }
 .rchev svg { width: 20px; height: 20px; }
 .rShut .rchev { transform: none; }
-.detail { position: sticky; left: 0; z-index: 4; width: var(--vw); padding: 0 12px 8px 0; background: var(--rowbg); cursor: auto; user-select: text; -webkit-user-select: text; }
-.dActs { margin-left: auto; display: inline-flex; color: var(--ink-soft); }
+/* 펼친 칸 바닥 = 맨 아래 글자 ~ 줄 끝 14px(다른 화면 할 일 줄 아래 여백과 같음 — 44px 누르는 칸은 그 여백과 겹쳐 걸친다).
+   연필 · 휴지통 = 첫 줄 오른쪽에 띄움(float — 메모 글이 옆으로 흐른다). 오른쪽 −12px 로 휴지통 가운데 = 이름 줄 꺾쇠 가운데(보이는 폭 − 22px) */
+.detail { position: sticky; left: 0; z-index: 4; width: var(--vw); display: flow-root; padding: 0 12px 14px 0; background: var(--rowbg); cursor: auto; user-select: text; -webkit-user-select: text; }
+.dActs { float: right; position: relative; z-index: 1; margin: -6px -12px 0 8px; display: inline-flex; color: var(--ink-soft); }
 .dBtn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 8px; }
 .dBtn svg { width: 20px; height: 20px; }
 .dBtn:hover { background: var(--sunken); }
@@ -181,20 +190,21 @@
 .dragTip { position: absolute; top: -20px; padding: 0 6px; height: 18px; border-radius: 6px; background: var(--ink); color: var(--surface); font-size: 12px; line-height: 18px; font-weight: 700; white-space: nowrap; z-index: 6; pointer-events: none; transform: translateX(-50%); }
 
 /* 「＋ 할 일」 줄(펼친 단계 끝): 다른 화면 「＋ 할 일」(AddTextButton)과 같은 이름 · 모양 — 15/700 검정 + 18px ＋ 선 아이콘(글자 앞 6px),
-   44px, 누르면 옅은 면 · 모서리 10. ＋ 가운데가 할 일 동그라미 가운데(R2 = 66px)에 오게 왼쪽 여백 66 − 9 − 12 = 45px(트리 자리 그대로) */
-.rAdd .nl { height: 44px; padding-left: 45px; }
+   44px, 누르면 옅은 면 · 모서리 10. ＋ 가운데가 할 일 동그라미 가운데(R2 = 50px)에 오게 왼쪽 여백 50 − 9 − 12 = 29px(트리 자리 그대로) */
+.rAdd .nl { height: 44px; padding-left: 29px; }
 .addBtn { position: static; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px; border-radius: 10px; color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 700; }
 .addBtn svg { width: 18px; height: 18px; stroke-width: 2.2; }
 .addBtn::after { content: ''; position: absolute; inset: 0; z-index: 1; }
 .addBtn:hover { background: var(--sunken); }
 
 /* 접은 끝난 단계 · 묶음 사이 */
-/* 「끝난 단계 n개」: 다른 화면 접는 줄(FoldRow)과 같은 모양 — 44px, 이름 15/600 ink + 숫자 muted 400, 오른쪽 꺾쇠 20px ink-soft(접힘 = 아래 · 펼침 = 위) */
+/* 「끝난 단계 n개」: 다른 화면 접는 줄(FoldRow)과 같은 모양 — 44px, 이름 15/600 ink + 숫자 muted 400, 오른쪽 꺾쇠 20px ink-soft(접힘 = 아래 · 펼침 = 위).
+   꺾쇠는 단계 머리 · 할 일 꺾쇠와 같은 세로줄(오른쪽 여백 12px). 숫자만 muted — 꺾쇠(span)까지 muted 로 덮지 않게 b 바로 뒤 span 만 */
 .rFold .nl { height: 44px; padding: 0; }
-.foldBtn { width: 100%; height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 16px; color: var(--ink); font-size: 15px; line-height: 22px; text-align: left; }
+.foldBtn { width: 100%; height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 12px 0 16px; color: var(--ink); font-size: 15px; line-height: 22px; text-align: left; }
 .foldBtn:hover { background: var(--sunken); }
 .foldBtn b { font-weight: 600; }
-.foldBtn span { color: var(--muted); }
+.foldBtn b + span { color: var(--muted); }
 .chev2 { margin-left: auto; width: 20px; height: 20px; color: var(--ink-soft); transition: transform .18s; }
 .foldOn .chev2 { transform: rotate(180deg); }
 .rGap { height: 8px; background: var(--page); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }

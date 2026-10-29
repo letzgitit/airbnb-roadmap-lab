@@ -57,9 +57,11 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
     <header className="pt-[env(safe-area-inset-top)]">
       {/* 띠 위에서는 포커스 고리도 검정(다크에서도 — 띠가 늘 형광이다) */}
       <div className="bg-marker text-on-marker [--color-accent-ink:var(--color-on-marker)]">
-        <div className={`mx-auto flex min-h-14 ${width} items-center gap-x-4 pl-[max(20px,env(safe-area-inset-left))] pr-[max(8px,env(safe-area-inset-right))]`}>
+        {/* 360px 보다 좁은 폰(320 등): 시안 · 자금 · 우리 집 화면은 제호 앞 「‹」 · 돋보기 · 톱니까지 한 줄이라 10px 넘쳤다 —
+            제호 22px · 제호와 문 사이 최소 4px 로 줄인다(누르는 칸 44px 그대로, 홈도 같은 값이라 화면마다 머리 띠 모양이 같다) */}
+        <div className={`mx-auto flex min-h-14 ${width} items-center gap-x-4 pl-[max(20px,env(safe-area-inset-left))] pr-[max(8px,env(safe-area-inset-right))] max-[359px]:gap-x-1`}>
           <Link href="/" onClick={guard('/')} aria-label={back ? '홈으로: 외도민 준비' : undefined}
-            className="group -ml-1.5 inline-flex min-h-11 shrink-0 items-center whitespace-nowrap px-1.5 text-2xl font-extrabold leading-none tracking-[-0.03em]">
+            className="group -ml-1.5 inline-flex min-h-11 shrink-0 items-center whitespace-nowrap px-1.5 text-2xl font-extrabold leading-none tracking-[-0.03em] max-[359px]:text-[22px]">
             {back && <span className="mr-1 font-normal" aria-hidden>‹</span>}
             <span className="decoration-2 underline-offset-4 group-hover:underline">외도민 준비</span>
           </Link>

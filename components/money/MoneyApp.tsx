@@ -6,6 +6,7 @@ import { textBtn } from '@/components/progress/bits';
 import { Badge } from '@/components/ui/Badge';
 import { Card, cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
+import { KeepText } from '@/components/ui/KeepText';
 import { Meta } from '@/components/ui/Meta';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -141,7 +142,7 @@ function JisanSection({ data, today, onReload }: { data: PlanPayload; today: str
   const open = items.filter((i) => !i.done);
   const late = open.filter((i) => i.due < today).length;
   const pastDone = items.filter((i) => i.done && i.due < today);
-  const shown = showPast ? items : items.filter((i) => !(i.done && i.due < today));
+  const rest = items.filter((i) => !(i.done && i.due < today));
 
   const summary = data.jisan === 'ok' && items.length > 0 ? (
     <Meta>
@@ -164,13 +165,15 @@ function JisanSection({ data, today, onReload }: { data: PlanPayload; today: str
           {items.length === 0 ? (
             <p className="px-4 py-3 text-base text-muted">지산 · 원주 일정이 없어요.</p>
           ) : (
+            // 「완료 n」은 다른 할 일 목록(단계 블록 · 단계 창)처럼 안 끝난 일 밑, 펼치면 그 밑에 지난 끝낸 일
             <>
+              <Timeline id="money-jisan-list" className={cardRowCls} items={rest} today={today} />
               {pastDone.length > 0 && (
                 <div className={cardRowCls}>
-                  <FoldRow label="완료" count={pastDone.length} unit="" open={showPast} onToggle={() => setShowPast((v) => !v)} controls="money-jisan-list" />
+                  <FoldRow label="완료" count={pastDone.length} unit="" open={showPast} onToggle={() => setShowPast((v) => !v)} controls="money-jisan-done" />
                 </div>
               )}
-              <Timeline id="money-jisan-list" items={shown} today={today} />
+              {showPast && pastDone.length > 0 && <Timeline id="money-jisan-done" className={cardRowCls} items={pastDone} today={today} noToday />}
             </>
           )}
         </Card>
@@ -180,8 +183,9 @@ function JisanSection({ data, today, onReload }: { data: PlanPayload; today: str
 }
 
 // 한 줄 흐름: 달마다 묶고, 오늘 자리에 강조색 선. 끝낸 일은 흐리게 줄긋기.
-function Timeline({ id, items, today }: { id: string; items: PlanItem[]; today: string }) {
-  const todayAt = items.findIndex((i) => i.due >= today);
+function Timeline({ id, className, items, today, noToday = false }: { id: string; className?: string; items: PlanItem[]; today: string; noToday?: boolean }) {
+  // noToday = 「완료 n」 밑 지난 끝낸 일(오늘 줄 없이 달 머리 · 줄만)
+  const todayAt = noToday ? -2 : items.findIndex((i) => i.due >= today);
   const todayMonth = today.slice(0, 7);
   const out: ReactNode[] = [];
   const todayLine = (
@@ -212,17 +216,17 @@ function Timeline({ id, items, today }: { id: string; items: PlanItem[]; today: 
         <span className={`w-25 shrink-0 whitespace-nowrap pt-0.5 text-sm tabular-nums ${isLate ? 'font-semibold text-danger-ink' : 'text-muted'}`}>
           {longDate(it.due)}
         </span>
-        <span className={`min-w-0 flex-1 text-base ${it.done ? 'text-muted line-through' : 'font-semibold text-ink'}`}>
+        <span className={`min-w-0 flex-1 break-keep text-base [overflow-wrap:anywhere] ${it.done ? 'text-muted line-through' : 'font-semibold text-ink'}`}>
           {it.done && <span className="sr-only">끝남 </span>}
           {isLate && <span className="sr-only">기한 지남 </span>}
-          {t.text}
+          <KeepText text={t.text} />
           {t.mark && <span className="ml-1.5 inline-block align-middle"><Badge>{t.mark}</Badge></span>}
         </span>
       </li>,
     );
   });
   if (todayAt === -1) out.push(todayLine);
-  return <ul id={id}>{out}</ul>;
+  return <ul id={id} className={className}>{out}</ul>;
 }
 
 function ForkSection({ fork }: { fork: string }) {

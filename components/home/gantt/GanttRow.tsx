@@ -8,11 +8,13 @@ import { daysFromPx } from './gantt-scale';
 import s from './gantt.module.css';
 import { Check, Chev, Plus } from './icons';
 import { TaskDetail } from './TaskDetail';
+import { KeepText } from '@/components/ui/KeepText';
 
 // 간트 한 줄씩(단계 머리 · 할 일 · 세부 항목 · 「＋ 할 일」 · 끝난 단계 접기 · 묶음 사이 · 편집 폼 자리).
 // 줄 = 이름 줄(nl, 보이는 폭만큼 왼쪽에 붙음) + 막대 줄(bl, 날짜 배율로 가로로 넘어감).
 // 트리 선 자리(px): 단계 번호 원 가운데 R1 · 할 일 동그라미 가운데 R2 · 세부 항목 동그라미 가운데 R3.
-const R1 = 43, R2 = 66, R3 = 92;
+// 단계 머리 꺾쇠가 줄 오른쪽 끝 열(할 일 꺾쇠와 같은 자리)로 옮겨 가 왼쪽 빈자리만큼 트리 전체를 16px 당겼다(번호 원 = 로그인 전 자리 14px).
+const R1 = 27, R2 = 50, R3 = 76;
 
 export interface Geo { x: (iso: string) => number; cx: (iso: string) => number; dw: number }
 export type DragMode = 'move' | 'start' | 'end';
@@ -23,23 +25,23 @@ const px = (v: Record<string, number | string>) => v as CSSProperties;
 
 type Railed = { k: string; more1: boolean; more2: boolean; lv?: 1 | 2 };
 
-/** 이름 줄의 트리 선: 높이 h, 동그라미 가운데 높이 mid */
-function RailsName({ r, h, mid }: { r: Railed; h: number; mid: number }) {
+/** 이름 줄의 트리 선: 동그라미 가운데 높이 mid, 이어지는 선은 이름 줄 아래 끝까지(펼친 할 일 제목이 여러 줄로 꺾여 줄이 높아져도 이어진다) */
+function RailsName({ r, mid }: { r: Railed; mid: number }) {
   const out: ReactNode[] = [];
-  if (r.k === 'phase' && r.more1) out.push(<i key="p" className={cls(s.rail, s.L1)} style={{ left: R1, top: mid, height: h - mid }} />);
+  if (r.k === 'phase' && r.more1) out.push(<i key="p" className={cls(s.rail, s.L1)} style={{ left: R1, top: mid, bottom: 0 }} />);
   if (r.lv === 1) {
     const nodeL = R2 - 10;
     if (r.more1) {
-      out.push(<i key="r1" className={cls(s.rail, s.L1)} style={{ left: R1, top: 0, height: h }} />);
+      out.push(<i key="r1" className={cls(s.rail, s.L1)} style={{ left: R1, top: 0, bottom: 0 }} />);
       out.push(<i key="t1" className={cls(s.tick, s.L1)} style={{ left: R1, top: mid, width: nodeL - R1 }} />);
     } else out.push(<i key="e1" className={cls(s.elbow, s.L1)} style={{ left: R1, height: mid + 1, width: nodeL - R1 + 1 }} />);
-    if (r.k === 'task' && r.more2) out.push(<i key="r2" className={cls(s.rail, s.L2)} style={{ left: R2, top: mid, height: h - mid }} />);
+    if (r.k === 'task' && r.more2) out.push(<i key="r2" className={cls(s.rail, s.L2)} style={{ left: R2, top: mid, bottom: 0 }} />);
   }
   if (r.lv === 2) {
     const nodeL = R3 - 6;
-    if (r.more1) out.push(<i key="r1" className={cls(s.rail, s.L1)} style={{ left: R1, top: 0, height: h }} />);
+    if (r.more1) out.push(<i key="r1" className={cls(s.rail, s.L1)} style={{ left: R1, top: 0, bottom: 0 }} />);
     if (r.more2) {
-      out.push(<i key="r2" className={cls(s.rail, s.L2)} style={{ left: R2, top: 0, height: h }} />);
+      out.push(<i key="r2" className={cls(s.rail, s.L2)} style={{ left: R2, top: 0, bottom: 0 }} />);
       out.push(<i key="t2" className={cls(s.tick, s.L2)} style={{ left: R2, top: mid, width: nodeL - R2 }} />);
     } else out.push(<i key="e2" className={cls(s.elbow, s.L2)} style={{ left: R2, height: mid + 1, width: nodeL - R2 + 1 }} />);
   }
@@ -88,7 +90,7 @@ export function PhaseRow({ r, geo, open, guest, onToggle, onStep }: {
   return (
     <div className={cls(s.r, s.rPhase, !open && !guest && s.shut, p.done && s.done, guest && s.guest)} style={typeVars(p.type)} onClick={onStep}>
       <div className={s.nl}>
-        {!guest && <RailsName r={r} h={62} mid={21} />}
+        {!guest && <RailsName r={r} mid={21} />}
         {!guest && (
           <button type="button" className={s.chevBtn} aria-expanded={open} aria-label={`${p.id}단계 할 일 ${open ? '접기' : '펴기'}`}
             onClick={(e) => { e.stopPropagation(); onToggle(); }}>
@@ -140,7 +142,6 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, reading, onRe
   const t = r.t;
   const sub = r.k === 'sub';
   const kids = r.k === 'task' ? r.kids : [];
-  const nh = sub ? 26 : kids.length ? 58 : 32;
   const my = sub ? 15 : 19;
   const nx = sub ? R3 : R2;
   const range = taskRange(t, kids);
@@ -149,12 +150,12 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, reading, onRe
   return (
     <div className={cls(s.r, sub ? s.rSub : s.rTask, t.done && s.done, kids.length > 0 && s.hasKids, !reading && s.rShut)} style={typeVars(r.p.type)} onClick={onRead}>
       <div className={s.nl} style={px({ '--my': `${my}px` })}>
-        <RailsName r={r} h={nh} mid={my} />
+        <RailsName r={r} mid={my} />
         <button type="button" className={s.nodeBtn} style={{ left: nx }} aria-pressed={t.done}
           aria-label={`${t.text} 끝냄`} onClick={(e) => { e.stopPropagation(); onToggleDone(); }} />
         <i className={cls(s.node, t.done && s.nDone)} style={{ left: nx }} aria-hidden>{t.done && !sub ? <Check /> : null}</i>
         <div className={s.tLine}>
-          <button type="button" className={s.tName} aria-expanded={reading} aria-label={`${t.text}${dt.text ? `, ${dt.text}` : ''}. 자세히 ${reading ? '접기' : '보기'}`}>{t.text}</button>
+          <button type="button" className={s.tName} aria-expanded={reading} aria-label={`${t.text}${dt.text ? `, ${dt.text}` : ''}. 자세히 ${reading ? '접기' : '보기'}`}><KeepText text={t.text} /></button>
           <span className={s.tMeta} aria-hidden>
             {dt.text && <span className={cls(s.dt, dt.tone === 'late' && s.lw, dt.tone === 'today' && s.tw)}>{dt.text}</span>}
             <span className={s.rchev}><Chev /></span>
@@ -174,7 +175,7 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, reading, onRe
         fill={kids.length && !t.done ? Math.round((kd / kids.length) * 100) : null}
         canDrag={canDrag && !!range && !range.derived} onDrag={onDrag} />
       {reading && (
-        <TaskDetail id={t.id} left={sub ? 104 : 86} onEdit={onEdit} onDelete={onDelete}
+        <TaskDetail id={t.id} left={sub ? 88 : 70}onEdit={onEdit} onDelete={onDelete}
           rails={<>
             {r.more1 && <i className={cls(s.rail, s.L1)} style={{ left: R1, top: 0, bottom: 0 }} aria-hidden />}
             {r.more2 && <i className={cls(s.rail, s.L2)} style={{ left: R2, top: 0, bottom: 0 }} aria-hidden />}
@@ -260,7 +261,7 @@ export function AddRow({ r, onNew }: { r: Extract<Row, { k: 'add' }>; onNew: () 
   return (
     <div className={cls(s.r, s.rAdd)} style={typeVars(r.p.type)}>
       <div className={s.nl} style={px({ '--my': '22px' })}>
-        <RailsName r={r} h={44} mid={22} />
+        <RailsName r={r} mid={22} />
         {/* 「＋ 할 일」 — 다른 화면 AddTextButton 과 같은 이름 · 모양, ＋ 는 할 일 동그라미 자리(R2) */}
         <button type="button" className={s.addBtn} onClick={onNew}><Plus />할 일<span className="sr-only">: {r.p.id}단계에 더하기</span></button>
       </div>

@@ -20,6 +20,7 @@ import { fetchGuide, saveGuide, useGuideIds } from './guides-client';
 import { usePhotos } from '@/components/progress/PhotosPanel';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { LineIcon } from '@/components/ui/LineIcon';
+import { KeepText } from '@/components/ui/KeepText';
 
 /**
  * 할 일 한 줄 — 어느 화면이든 같은 규칙(2026-10-29 사이트 주인 「모두 다 동일하게」): 새 홈 단계 블록 · 달력 「오늘」 · 고른 날 · 「다가오는 일정」,
@@ -317,7 +318,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   // 남은 날 꼬리표(제목 줄 오른쪽): 기한 지남 = 위험(빨강 테두리) · 3일 안 = 주의(검정 테두리) · 그 밖 = 회색. 누르지 못하는 표시라 빨강 면 · 검정 면을 쓰지 않는다.
   // 둘째 줄: 「10월 27일(화)까지」(13 메타) · 「문의 필요」 안내 꼬리표 · 「지금 하면 돼요」.
   // 마감이 블록 머리 날짜와 같으면(hideDueOn) 「n월 n일까지」를 숨긴다(머리가 이미 말한다 — 남은 날 꼬리표는 그대로).
-  // 둘째 줄에 보일 것이 없으면(날짜 없는 할 일 등) 단추를 제목 줄 오른쪽에 둬 빈 줄로 높아지지 않게 한다.
+  // 둘째 줄에 보일 글이 없어도(날짜 없는 할 일 · 날짜를 숨긴 달력 그날 목록) 단추는 둘째 줄 오른쪽 — 어느 줄이든 같은 자리.
   const phase = taskPhase(t, todayStr());
   // quietLate(자세히 보기 「기한 지남」 묶음 안): 묶음 이름이 이미 빨강이라 줄마다 빨강을 되풀이하지 않는다
   const tone: BadgeTone = late ? (quietLate ? 'neutral' : 'danger') : phase === 'soon' ? 'warn' : 'neutral';
@@ -339,7 +340,6 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const kindWord = !simple && t.kind && !ask ? t.kind : null;
   const autoWord = !simple && t.autoFill;
   const stepWord = showStep ? `${t.stepId}단계${stepName ? ` ${stepName}` : ''}` : null;
-  const hasSub = !!tag || showDate || (ask && !t.done) || phase === 'prep' || !!parentTitle || !!kindWord || !!autoWord || !!stepWord;
   const sub = (
     <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-meta font-normal text-muted">
       {tag}
@@ -387,14 +387,14 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             물음표 · 사진은 제목 글 바로 뒤(두 줄로 꺾여도 마지막 낱말 뒤) — 제목을 글 흐름(inline)으로 두고 이어 붙인다.
             메모를 펼치는 제목은 글 흐름 안에 있어야 해서 button 대신 role="button" 글(Enter · Space 로도 펼침) */}
         <div className="flex items-start gap-2">
-          <div className={`min-w-0 flex-1 break-words text-base ${depth ? 'font-medium' : 'font-semibold'} ${t.done ? 'text-muted line-through' : 'text-ink'}`}>
+          <div className={`min-w-0 flex-1 break-keep break-words text-base ${depth ? 'font-medium' : 'font-semibold'} ${t.done ? 'text-muted line-through' : 'text-ink'}`}>
             {expandable ? (
               <span role="button" tabIndex={0} aria-expanded={open} aria-controls={memoId} className="cursor-pointer rounded-sm"
                 onClick={toggleMemo}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleMemo(); } }}>
-                {t.text}<span className="sr-only">{open ? ' 메모 접기' : ' 메모 펼치기'}</span>
+                <KeepText text={t.text} /><span className="sr-only">{open ? ' 메모 접기' : ' 메모 펼치기'}</span>
               </span>
-            ) : <span>{t.text}</span>}
+            ) : <span><KeepText text={t.text} /></span>}
             {guideMeta && <GuideButton taskId={t.id} title={t.text} version={guideMeta.version} openKey={guideAsk} />}
             {photoN > 0 && (
               <button type="button" onClick={() => view(photos[0].id, undefined, photos.map((p) => p.id))} aria-label={`${t.text} 사진 ${photoN}장 크게 보기`}
@@ -408,15 +408,13 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             )}
           </div>
           {dl && !t.done && <Badge tone={tone} className="mt-px shrink-0">{dl.rel}</Badge>}
-          {!hasSub && buttons}
         </div>
-        {/* 둘째 줄: 날짜(13) + 오른쪽 단추(전화 · 고치기 · 지우기). 단추 칸은 44px 이고 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않는다 */}
-        {hasSub && (
-          <div className="mt-1 flex items-center gap-2">
-            {sub}
-            {buttons}
-          </div>
-        )}
+        {/* 둘째 줄: 날짜(13) + 오른쪽 단추(전화 · 고치기 · 지우기). 단추 칸은 44px 이고 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않는다.
+            날짜 글이 없어도(달력 그날 목록 · 날짜 없는 할 일) 단추는 이 줄 — 어느 줄이든 단추 자리가 같고 제목이 단추에 밀려 꺾이지 않게 */}
+        <div className="mt-1 flex items-center gap-2">
+          {sub}
+          {buttons}
+        </div>
         {/* 셋째 줄: 메모(단계 블록 머리처럼 접고 편다). 접힘 = 첫 줄 한 줄(14 요지 글, 넘치면 말줄임), 펼침 = 같은 자리에 메모 전체
             (16px · 행간 1.7 · 문단마다 간격 · 한 줄 최대 약 36em, 낱말 · 전화번호는 중간에 끊지 않는다 — break-keep).
             꺾쇠는 줄 오른쪽 끝 고정 자리(전화 · 연필 · 휴지통 단추 열과 같은 세로줄) — 펼쳐도 접어도 그 자리에서 위 · 아래로만 돈다.
@@ -429,7 +427,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               if (window.getSelection()?.toString()) return;
               toggleMemo();
             } : undefined}>
-            <div id={memoId} className={`min-w-0 flex-1 ${expandable ? 'cursor-pointer' : ''} ${open ? 'py-2' : 'flex min-h-11 items-center'}`}>
+            <div id={memoId} className={`min-w-0 flex-1 ${expandable ? 'cursor-pointer' : ''} ${open ? 'pt-2' : 'flex min-h-11 items-center'}`}>
               {open ? (
                 <div className="max-w-[36em] space-y-2 break-keep text-base font-normal leading-[1.7] text-ink-soft [overflow-wrap:anywhere]">
                   {noteLines.split(/\n+/).map((para, i) => <p key={i} className="whitespace-pre-wrap">{para}</p>)}
@@ -438,7 +436,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             </div>
             {expandable && (
               <button type="button" aria-expanded={open} aria-controls={memoId} aria-label={open ? `메모 접기: ${t.text}` : `메모 펼치기: ${t.text}`} onClick={toggleMemo}
-                className="-mr-2.5 flex size-11 shrink-0 items-center justify-center rounded-control text-ink-soft transition-colors hover:bg-sunken">
+                className="-mb-2.5 -mr-2.5 flex size-11 shrink-0 items-center justify-center rounded-control text-ink-soft transition-colors hover:bg-sunken">
                 <LineIcon name="chevron" stroke={2} className={`size-5 transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
               </button>
             )}
@@ -446,10 +444,11 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
         )}
         {/* 펼친 메모 밑: 메모 사진 · 「＋ 사진」, 메모 속 전화번호는 바로 건다(따로 접는 단추는 없다 — 꺾쇠 · 제목 · 메모 줄로 접는다) */}
         {open && (
-          <div className="pt-1">
-            <TaskPhotos taskId={t.id} stepId={t.stepId} />
+          <div>
+            {/* 간격: 메모 ~ 「＋ 사진」 8px, 맨 아래 글자 ~ 줄 끝 = 줄 아래 여백(14px)만(44px 누르는 칸은 위아래로 걸침 — TaskPhotos flush) */}
+            <TaskPhotos taskId={t.id} stepId={t.stepId} flush />
             {phones.length > 0 && (
-              <div className="flex flex-wrap items-center gap-x-4">
+              <div className="-mb-[11px] mt-[11px] flex flex-wrap items-center gap-x-4">
                 {phones.map((p) => <a key={p} href={telHref(p)} className={`${textBtn} mx-0 tabular-nums`}><i className="fas fa-phone mr-1.5" aria-hidden />{p}</a>)}
               </div>
             )}

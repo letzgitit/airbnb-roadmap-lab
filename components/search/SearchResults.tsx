@@ -152,7 +152,7 @@ const Results = memo(function Results({ result, guide, hot, detail, onPick, onQu
   );
 });
 
-/** 묶음 하나: 머리(이름 + n건) → 처음 5줄 → 「n개 더 보기」(50줄까지 — 새 홈 「이번 주 할 일」과 같은 이름) → 넘으면 「너무 많이 나왔어요. 찾을 말을 더 자세히 적어 보세요.」 */
+/** 묶음 하나: 머리(이름 + n개) → 처음 5줄 → 「n개 더 보기」(50줄까지 — 새 홈 「이번 주 할 일」과 같은 이름) → 넘으면 「너무 많이 나왔어요. 찾을 말을 더 자세히 적어 보세요.」 */
 function GroupBlock({ group, q, terms, detail, onPick, foot }: { group: Group; q: string; terms: string[]; detail: boolean; onPick: (j: Jump) => void; foot: ReactNode }) {
   const uid = useId();
   const [all, setAll] = useState(false);
