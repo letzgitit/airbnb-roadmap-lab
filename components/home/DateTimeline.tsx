@@ -95,7 +95,7 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
         </div>
       ) : view === 'steps' ? (
         <StepGantt steps={steps} doc={doc} today={today} types={types} onTypes={pickTypes} currentId={currentId} onStep={onStep}
-          onPick={openDay} fixedDay0={fixedDay0} marks={marks} guest={guest} />
+          fixedDay0={fixedDay0} guest={guest} />
       ) : (
         <Card>
           <div className="border-b border-line px-2">

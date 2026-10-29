@@ -8,10 +8,10 @@ import { TYPE_DOT, TYPE_LABEL, TYPE_ORDER } from '@/components/TimelineChart';
 import { taskErrorMessage } from '@/components/tasks/task-errors';
 import { clipLabel } from '@/components/progress/bits';
 import type { TimelineType } from '@/lib/timeline';
-import { addDays, diffDays, pinName, pinsOf, stepRanges, type DocLike, type Pin, type TimelineStep } from '../step-dates';
+import { addDays, diffDays, stepRanges, type DocLike, type TimelineStep } from '../step-dates';
 import { useDragScroll, useMedia } from '../use-drag-scroll';
 import { ganttRows, initialOpen, phasesOf, spanOf, tasksOf, type Editing, type Phase } from './gantt-model';
-import { axisOf, cxOf, dayWidth, isZoom, pinSpots, todayScroll, xOf, ZOOM_LABEL, ZOOMS, type Zoom } from './gantt-scale';
+import { axisOf, cxOf, dayWidth, isZoom, todayScroll, xOf, ZOOM_LABEL, ZOOMS, type Zoom } from './gantt-scale';
 import { GanttForm } from './GanttForm';
 import { AddRow, FoldRow, FormRow, PhaseRow, SepRow, TaskRow, type DragMode, type Geo } from './GanttRow';
 import s from './gantt.module.css';
@@ -21,7 +21,7 @@ import { FoldAll, OpenAll } from './icons';
 // ┌ 상자 ─────────────────────────────────────────────
 // │ [일 | 주 | 달]            「오늘」 「모두 접기」(펼친 단계가 없으면 「모두 펴기」)
 // │ 단계 종류 거르기 칩(준비 · 계약 …, 달력 탭과 같이 적용)
-// │ 날짜 머리(머리글 띠 바로 밑에 붙음): 달 이름 · 날짜 숫자 · 「오늘 27」 · 고정 일정 핀 + 짧은 이름(누르면 그날 창, 달 단위는 점선만)
+// │ 날짜 머리(머리글 띠 바로 밑에 붙음): 달 이름 · 날짜 숫자 · 「오늘 27」 — 고정 일정은 간트에 그리지 않는다(날짜 띠 · 그날 창 · 달력 · 요약이 보여 준다)
 // │   본문과 같은 세로 칸 선을 머리까지 이어 그어 숫자가 어느 칸인지 보인다(주말 면은 머리에 넣지 않는다)
 // │ 「끝난 단계 n개」(접음) → 단계 머리 띠 → 할 일 → 세부 항목 → 「＋ 할 일 추가」 …(gantt-model.ts)
 // │ 그림 읽는 법(범례)
@@ -29,22 +29,20 @@ import { FoldAll, OpenAll } from './icons';
 // 시간 단위: 일 · 주 · 달(기본 = 로그인 주 · 로그인 전 달, 고른 단위는 이 브라우저에 기억). 처음 · 단위를 바꿀 때 · 「오늘」 = 오늘을 보이는 폭 30% 자리에.
 // 누르기: 단계 머리 = 단계 창(왼쪽 꺾쇠만 접기 · 펴기), 할 일 줄 = 그 자리 편집 폼, 동그라미 = 끝냄 켜고 끄기, 「세부 1/4」 = 세부 항목 접기 · 펴기.
 // PC(마우스)에서만 막대를 끌어 날짜를 바꾼다(가운데 = 통째로, 양 끝 = 시작일 · 마감일만). 폰은 끌기 없음(가로 넘기기와 겹친다).
-// 로그인 전(guest): 단계 14줄만(할 일 · 목표일 · 고정 일정 없음), 기간 글자 「1~12일째」, 펼치기 · 편집 없음.
+// 로그인 전(guest): 단계 14줄만(할 일 · 목표일 없음), 기간 글자 「1~12일째」, 펼치기 · 편집 없음.
 const ZOOM_KEY = 'home:gantt-zoom';
 const EPOCH = '2026-01-01';
 // 처음 단위: 로그인 = 주, 로그인 전 = 달(공개 일정 약 45일이 한 화면에 — 날짜보다 순서와 길이를 보는 화면)
 const recallZoom = (fallback: Zoom): Zoom => { try { const v = JSON.parse(localStorage.getItem(ZOOM_KEY) ?? 'null'); return isZoom(v) ? v : fallback; } catch { return fallback; } };
 const rememberZoom = (z: Zoom) => { try { localStorage.setItem(ZOOM_KEY, JSON.stringify(z)); } catch { /* 기억 못 해도 화면은 그대로 */ } };
 
-export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep, onPick, fixedDay0, marks, guest }: {
+export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep, fixedDay0, guest }: {
   steps: TimelineStep[]; doc: DocLike; today: string;
   types: TimelineType[]; onTypes: (v: TimelineType[]) => void;
   currentId: number | null;
   /** 단계 창 열기(steps 배열의 순번) */
   onStep: (index: number) => void;
-  /** 그날 창 열기(로그인 전엔 없음) */
-  onPick?: (date: string) => void;
-  fixedDay0?: string; marks: Pin[]; guest: boolean;
+  fixedDay0?: string; guest: boolean;
 }) {
   const progress = useProgress();
   // 늘 최신 현황: 끌기 뒤 알림의 「되돌리기」는 몇 초 뒤에 눌리므로, 끌 때 붙잡은 현황(옛 version)이 아니라 누르는 때의 version 을 보낸다(옛 값이면 409)
@@ -71,16 +69,13 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   }), tasks, today), [steps, doc, today, fixedDay0, tasks, currentId, guest]);
   const [openState, setOpenState] = useState(() => initialOpen(phases, today));
   const { open, openTask } = openState;
-  const pins = guest ? [] : pinsOf(doc, marks);
-  const { first, last } = spanOf(phases, pins, today, { showDone, types });
+  const { first, last } = spanOf(phases, today, { showDone, types });
   const days = diffDays(first, last) + 1;
   const vw = viewW || 360;
   const dw = dayWidth(zoom, phone, vw, days);
-  const W = days * dw + 80; // 끝 여백: 마지막 칸의 ◆ · 고정 일정 이름 자리
+  const W = days * dw + 80; // 끝 여백: 마지막 칸의 ◆ 자리
   const ax = axisOf(first, last, dw, zoom, today);
   const geo: Geo = { x: xOf(first, dw), cx: cxOf(first, dw), dw };
-  const shownPins = pins.filter((p) => p.date >= first && p.date <= last);
-  const spots = zoom === 'month' ? [] : pinSpots(shownPins.map((p) => ({ x: geo.cx(p.date), name: pinName(p) })), ax.months, W);
   const rows = ganttRows(phases, { open, openTask, showDone, types, editing, guest });
   const anyOpen = phases.some((p) => !p.done && open.has(p.id));
 
@@ -194,16 +189,6 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
           {ax.lines.map((l) => <i key={`l${l.x}`} className={`${s.gl} ${l.kind === 'month' ? s.m : l.kind === 'faint' ? s.faint : ''}`} style={{ left: l.x }} aria-hidden />)}
           {ax.months.map((m) => <span key={`m${m.x}`} className={s.axM} style={{ left: m.x }} aria-hidden>{m.text}</span>)}
           {ax.days.map((d) => <span key={`d${d.x}`} className={`${s.axD} ${zoom === 'day' ? '' : s.wk}`} style={{ left: d.x }} aria-hidden>{d.text}</span>)}
-          {spots.map((sp, i) => {
-            const p = shownPins[i];
-            const name = pinName(p);
-            const label = `고정 일정 ${shortDate(p.date)} ${name}${p.label !== name ? ` — ${p.label}` : ''}`;
-            const inner = <><i className="fas fa-thumbtack" aria-hidden />{sp.max > 0 && <span style={{ maxWidth: sp.max }}>{name}</span>}</>;
-            const cn = `${s.axPin} ${sp.max > 0 ? '' : s.only}`;
-            return onPick && !guest
-              ? <button key={`p${p.date}${p.label}`} type="button" className={cn} style={{ left: sp.x }} title={label} aria-label={`${label}, 그날 할 일 보기`} onClick={() => onPick(p.date)}>{inner}</button>
-              : <span key={`p${p.date}${p.label}`} className={cn} style={{ left: sp.x }} title={label}>{inner}</span>;
-          })}
           {/* 「오늘 27」 글자는 축 첫머리에서 잘리지 않게(오늘이 첫 칸 근처면 글자만 조금 안쪽으로) */}
           {ax.todayX != null && <span className={s.axToday} style={{ left: ax.labelX ?? ax.todayX }}>{ax.todayText}</span>}
         </div>
@@ -214,7 +199,6 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
           <div className={s.grid} aria-hidden>
             {ax.weekends.map((x) => <i key={`w${x}`} className={s.wkend} style={{ left: x, width: dw }} />)}
             {ax.lines.map((l) => <i key={`l${l.x}`} className={`${s.gl} ${l.kind === 'month' ? s.m : l.kind === 'faint' ? s.faint : ''}`} style={{ left: l.x }} />)}
-            {shownPins.map((p) => <i key={`pl${p.date}${p.label}`} className={s.pinline} style={{ left: geo.cx(p.date) }} />)}
           </div>
           {rows.some((r) => r.k === 'phase')
             ? rows.map((r, i) => {
@@ -251,7 +235,6 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
         {!guest && <span><i className={s.lgTb} />할 일</span>}
         {!guest && <span><i className={s.lgSt} />세부 항목</span>}
         {!guest && <span><i className={s.lgDia} />단계 목표일</span>}
-        {pins.length > 0 && <span><i className={s.lgPin} />고정 일정</span>}
       </div>
     </section>
   );

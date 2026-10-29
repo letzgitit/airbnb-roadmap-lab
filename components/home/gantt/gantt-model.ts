@@ -1,5 +1,5 @@
 import type { ProgressDoc } from '@/lib/core/types';
-import { addDays, mondayOf, type Pin, type StepRange } from '../step-dates.ts';
+import { addDays, mondayOf, type StepRange } from '../step-dates.ts';
 
 // 홈 「단계」 탭 트리 간트의 줄 목록(화면 없이 계산). StepGantt 가 그리고 gantt-model.test.ts 가 node --test 로 확인한다.
 //   지우기만 하면 되는 TS 문법만 쓰고 import 에 .ts 를 붙여 Node 에서 바로 돈다(@/ 경로는 type import 에만).
@@ -175,9 +175,9 @@ export function ganttRows(phases: Phase[], o: RowOpts): Row[] {
 
 /**
  * 축 범위(월요일 ~ 일요일): 보이는 단계(거르기 · 끝난 단계 펼침 반영)의 기간 · 그 할 일 · 목표일 · 오늘을 다 담는다.
- * 고정 일정은 그 범위 끝에서 14일 안쪽만 넓힌다(먼 날 하나 때문에 축이 길어지지 않게).
+ * 고정 일정은 간트에 그리지 않으므로 범위를 넓히지 않는다(2026-10-29).
  */
-export function spanOf(phases: Phase[], pins: Pin[], today: string, o: { showDone: boolean; types: string[] }): { first: string; last: string } {
+export function spanOf(phases: Phase[], today: string, o: { showDone: boolean; types: string[] }): { first: string; last: string } {
   const pass = passType(o.types);
   const shown = phases.filter((p) => pass(p) && (!p.done || o.showDone));
   const starts: string[] = [today];
@@ -193,13 +193,5 @@ export function spanOf(phases: Phase[], pins: Pin[], today: string, o: { showDon
     }
   }
   starts.sort(); ends.sort();
-  let lo = starts[0];
-  let hi = ends[ends.length - 1];
-  const reach = addDays(hi, 14);
-  for (const pin of pins) {
-    if (pin.date > reach || pin.date < addDays(lo, -14)) continue;
-    if (pin.date < lo) lo = pin.date;
-    if (pin.date > hi) hi = pin.date;
-  }
-  return { first: mondayOf(lo), last: addDays(mondayOf(hi), 6) };
+  return { first: mondayOf(starts[0]), last: addDays(mondayOf(ends[ends.length - 1]), 6) };
 }
