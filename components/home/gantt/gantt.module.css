@@ -8,6 +8,8 @@
   --accent: var(--color-accent); --accent-ink: var(--color-accent-ink); --accent-soft: var(--color-accent-soft); --on-accent: var(--color-on-accent);
   --danger-ink: var(--color-danger-ink);
   --today: var(--color-today); --milestone: var(--color-milestone); --on-type: var(--color-on-type);
+  /* 고른 날 면: 「고른 것」 색(ink)을 아주 옅게 — 밝은 화면은 살짝 어둡게, 어두운 화면은 살짝 밝게. 투명이라 칸 선 · 줄 면이 비친다 */
+  --pk: color-mix(in srgb, var(--ink) 7%, transparent); --pa: 0px; --pb: 0px;
   position: relative;
 }
 .gantt svg { display: block; }
@@ -28,15 +30,28 @@
 .chips { padding: 8px 10px 8px; }
 
 /* ── 날짜 머리(화면 맨 위에 붙음 — 2026-10-28부터 머리 띠는 따라오지 않는다).
-   세로 칸 선은 본문 .gl 을 그대로 머리 높이만큼 잇는다(달이 바뀌는 선도 이것 하나, 주말 면은 머리에 넣지 않음) ── */
+   세로 칸 선은 본문 .gl 을 그대로 머리 높이만큼 잇는다(달이 바뀌는 선도 이것 하나, 주말 면은 머리에 넣지 않음).
+   머리는 손으로 넘기지 않고(overflow hidden) 본문 scrollLeft 를 그대로 받는다 — 그래야 달 이름(sticky)이 왼쪽에 붙는다 ── */
 .axisWrap { position: sticky; top: env(safe-area-inset-top); z-index: 20; background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
-.axis { position: relative; height: 52px; will-change: transform; }
-.axM { position: absolute; top: 6px; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--ink); padding: 0 4px 0 6px; white-space: nowrap; background: var(--surface); z-index: 2; }
-.axD { position: absolute; top: 28px; font-size: 12px; line-height: 16px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
-.axD.wk { transform: none; padding-left: 5px; }
-.axToday { position: absolute; top: 26px; transform: translateX(-50%); height: 20px; padding: 0 4px; background: var(--surface); color: var(--today); font-size: 12px; line-height: 20px; font-weight: 700; white-space: nowrap; z-index: 2; }
-/* 일 단위: 그날 칸의 숫자 하나만 오늘 색 700(바탕 없이 — 옆 칸 숫자 · 칸 선을 덮지 않는다). 자리는 다른 날 숫자(.axD)와 같다 */
-.axToday.axTodayD { top: 28px; height: 16px; padding: 0; line-height: 16px; background: none; }
+.axis { position: relative; height: 52px; }
+/* 달 이름: 그달 칸(.axMs — 달이 바뀌는 선 ~ 다음 선) 안에서 왼쪽에 붙는다. 칸 끝이 왼쪽에 다가오면 같이 밀려 나가고 다음 달 이름이 그 자리에 */
+.axMs { position: absolute; top: 6px; height: 16px; z-index: 2; pointer-events: none; }
+.axM { position: sticky; left: 0; display: inline-block; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--ink); padding: 0 4px 0 6px; white-space: nowrap; background: var(--surface); }
+/* 날짜 숫자 = 고르기 단추: 누르는 칸 44px(머리 아래쪽 — 윗줄 달 이름 자리까지), 폭 = 일 칸(주 · 달 단위는 그 주 7일).
+   숫자 자리는 전과 같다(일 단위 = 칸 가운데, 주 · 달 단위 = 월요일 칸 왼쪽 5px). 고른 숫자 = 검정 2px 고리 + 700(그날 창 날짜 띠 · 달력의 고른 날) */
+.axB { position: absolute; top: 8px; height: 44px; z-index: 1; display: flex; justify-content: center; align-items: flex-start; padding-top: 16px; }
+.axB.wk { justify-content: flex-start; padding-left: 1px; }
+.axN { height: 24px; min-width: 24px; padding: 0 3px; border-radius: 12px; font-size: 12px; line-height: 24px; color: var(--muted); text-align: center; white-space: nowrap; }
+.axB.wk .axN { padding: 0 4px; }
+/* 일 단위 오늘: 그날 숫자 하나만 오늘 색 700(바탕 없이 — 옆 칸 숫자 · 칸 선을 덮지 않는다) */
+.axB.axTodayD .axN { color: var(--today); font-weight: 700; }
+.axB[aria-pressed='true'] .axN { color: var(--ink); font-weight: 700; box-shadow: inset 0 0 0 2px var(--ink); }
+.axB.axTodayD[aria-pressed='true'] .axN { color: var(--today); }
+/* 「오늘 27」 글자에 가려 뺀 월요일 숫자: 단추는 남는다(그 글자를 누르면 그 주를 고른다) */
+.axHid .axN { visibility: hidden; }
+.axB:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; border-radius: 8px; }
+@media (hover: hover) { .axB:hover .axN { background: var(--sunken); } }
+.axToday { position: absolute; top: 26px; transform: translateX(-50%); height: 20px; padding: 0 4px; background: var(--surface); color: var(--today); font-size: 12px; line-height: 20px; font-weight: 700; white-space: nowrap; z-index: 2; pointer-events: none; }
 
 /* ── 본문 ── */
 .gx { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; user-select: none; -webkit-user-select: none; }
@@ -47,6 +62,12 @@
 .gl.faint { opacity: .55; }
 /* 어두운 화면 날짜 머리: line(#2e3033)이 머리 면 위에서 거의 안 보여 칸 선을 한 단계 진하게(본문은 그대로) */
 :global(.dark) .axis .gl { background: var(--line-strong); }
+/* 고른 날 면: 머리부터 맨 아래 줄까지 한 줄기(막대 z 2 · 오늘 선 아래). 줄 이름 칸(.nl · .detail · .fwrap)은 면이 불투명해
+   같은 색을 배경 그림으로 겹친다 — --pa · --pb = 보이는 폭 안의 면 왼쪽 · 오른쪽(가로로 넘길 때 StepGantt sync 가 옮긴다) */
+.pick { position: absolute; top: 0; bottom: 0; background: var(--pk); z-index: 1; pointer-events: none; }
+/* 머리에서는 달 이름 · 「오늘 27」 바탕(면색)보다 위에 — 옅어서 글자는 그대로 읽힌다 */
+.axis .pick { z-index: 3; }
+.picking .nl, .picking .detail, .picking .fwrap { background-image: linear-gradient(90deg, transparent var(--pa), var(--pk) var(--pa), var(--pk) var(--pb), transparent var(--pb)); }
 .today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--today); z-index: 1; pointer-events: none; } /* 막대(z 2) 아래 — 오늘 막대를 가르지 않게 */
 
 .r { position: relative; --rowbg: var(--surface); --cb: color-mix(in srgb, var(--c) 60%, var(--ci)); --rc1: color-mix(in srgb, var(--c) 55%, var(--surface)); --rc2: var(--line-strong); }

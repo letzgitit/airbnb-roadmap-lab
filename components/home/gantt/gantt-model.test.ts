@@ -132,11 +132,12 @@ test('날짜 머리: 달이 바뀌는 자리 · 월요일 숫자 · 오늘 글�
   assert.deepEqual(w.months.map((m) => m.text), ['10월', '11월']); // 첫 칸: 다음 달 선(11/2 첫 월요일)까지 84px > 40 이라 「10월」도
   assert.equal(w.months[1].x, 7 * 12); // 주 단위 달 이름 · 진한 선 = 그달 첫 월요일
   assert.equal(w.todayX, 1 * 12 + 6);
-  assert.deepEqual(w.days.map((d) => d.text), ['2']); // 10/26 은 오늘 글자와 겹쳐 뺀다
+  assert.deepEqual(w.days.filter((d) => !d.hidden).map((d) => d.text), ['2']); // 10/26 은 오늘 글자와 겹쳐 뺀다
+  assert.deepEqual(w.days.map((d) => [d.iso, !!d.hidden]), [['2026-10-26', true], ['2026-11-02', false]]); // 글자를 뺀 주도 고르는 단추는 있다
   assert.deepEqual(w.lines.map((l) => l.kind), ['month']); // 11/1 선을 따로 긋지 않고 11/2(첫 월요일) 선이 진한 선
   const d = axisOf('2026-10-26', '2026-11-08', 30, 'day', TODAY);
   assert.equal(d.todayText, '27'); // 일 단위: 그날 숫자 하나만 오늘 색(옆 칸 숫자는 그대로)
-  assert.ok(!d.days.some((x) => x.text === '27'));
+  assert.deepEqual(d.days.filter((x) => x.today).map((x) => [x.text, x.iso]), [['27', '2026-10-27']]); // 오늘 숫자도 고르는 단추(모양만 오늘 색)
   assert.ok(d.days.some((x) => x.text === '26') && d.days.some((x) => x.text === '28'));
   assert.ok(d.days.some((x) => x.text === '29'));
   const m = axisOf('2026-09-28', '2026-12-13', 4, 'month', TODAY);
@@ -147,9 +148,19 @@ test('날짜 머리: 달이 바뀌는 자리 · 월요일 숫자 · 오늘 글�
 test('날짜 머리: 주 · 달 단위 달이 바뀌는 선은 그달 첫 월요일 하나(월요일 선과 두 줄로 겹치지 않음), 월요일 숫자는 그대로', () => {
   const m = axisOf('2026-11-23', '2026-12-13', 8, 'month', '2026-11-01');
   assert.deepEqual(m.days.map((d) => d.text), ['23', '30', '7']);
+  assert.ok(m.days.every((d) => !d.hidden));
   assert.deepEqual(m.lines.map((l) => [l.x / 8, l.kind]), [[7, 'faint'], [14, 'month']]); // 11/30 흐린 선, 12/7 진한 선(12/1 선 없음)
   const w = axisOf('2026-11-23', '2026-12-13', 16, 'week', '2026-11-01');
   assert.ok(w.days.some((d) => d.text === '30'));
+});
+
+test('달 이름 칸: 달마다 그달 폭(달이 바뀌는 선 ~ 다음 선) — 글자가 그 안에서 왼쪽에 붙어 따라온다', () => {
+  const d = axisOf('2026-10-26', '2026-12-13', 30, 'day', TODAY); // 일 단위: 11/1 · 12/1 선
+  assert.deepEqual(d.months.map((m) => [m.text, m.x / 30, m.w / 30]), [['10월', 0, 6], ['11월', 6, 30], ['12월', 36, 13]]);
+  const w = axisOf('2026-10-26', '2026-12-13', 12, 'week', TODAY); // 주 단위: 그달 첫 월요일 11/2 · 12/7
+  assert.deepEqual(w.months.map((m) => [m.text, m.x / 12, m.w / 12]), [['10월', 0, 7], ['11월', 7, 35], ['12월', 42, 7]]);
+  // 첫 칸이 40px 이하면 첫 달 이름은 없다(바로 옆 다음 달 이름과 겹치지 않게)
+  assert.deepEqual(axisOf('2026-10-31', '2026-11-20', 30, 'day', TODAY).months.map((m) => m.text), ['11월']);
 });
 
 test('「오늘 27」: 달이 바뀌는 선을 넘거나 그달 이름이 없으면 「오늘 10/27」', () => {

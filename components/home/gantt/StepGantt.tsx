@@ -9,7 +9,7 @@ import { TYPE_DOT, TYPE_LABEL, TYPE_ORDER } from '@/components/TimelineChart';
 import { taskErrorMessage } from '@/components/tasks/task-errors';
 import { clipLabel } from '@/components/progress/bits';
 import type { TimelineType } from '@/lib/timeline';
-import { addDays, diffDays, stepRanges, type DocLike, type TimelineStep } from '../step-dates';
+import { addDays, diffDays, stepRanges, toDate, type DocLike, type TimelineStep } from '../step-dates';
 import { useDragScroll, useMedia } from '../use-drag-scroll';
 import { ganttRows, initialOpen, phasesOf, spanOf, tasksOf, type Editing, type Phase } from './gantt-model';
 import { axisOf, cxOf, dayWidth, isZoom, todayScroll, xOf, ZOOM_LABEL, ZOOMS, type Zoom } from './gantt-scale';
@@ -24,6 +24,10 @@ import { FoldAll, OpenAll } from './icons';
 // │ 단계 종류 거르기 칩(준비 · 계약 …, 달력 탭과 같이 적용)
 // │ 날짜 머리(머리글 띠 바로 밑에 붙음): 달 이름 · 날짜 숫자 · 「오늘 27」 — 고정 일정은 간트에 그리지 않는다(날짜 띠 · 그날 창 · 달력 · 요약이 보여 준다)
 // │   본문과 같은 세로 칸 선을 머리까지 이어 그어 숫자가 어느 칸인지 보인다(주말 면은 머리에 넣지 않는다)
+// │   달 이름은 보이는 맨 왼쪽 날의 달이 윗줄 왼쪽에 붙어 따라온다(그달 칸 안 sticky — 머리를 본문과 같은 scrollLeft 로 넘겨야 붙는다)
+// │   날짜 숫자 = 고르기 단추: 누르면 그 숫자에 고른 표시(검정 2px 고리 — 그날 창 날짜 띠 · 달력의 고른 날과 같음) +
+// │   그 칸이 머리부터 맨 아래 줄까지 옅은 면 하나(막대 · 글자 뒤). 다시 누르면 풀림. 주 · 달 단위는 월요일부터 7일. 단위를 바꾸면 풀림
+// │   (줄 이름 칸은 면이 불투명해 같은 옅은 면을 배경 그림으로 겹쳐 그린다 — 가로로 넘길 때 sync 가 --pa · --pb 를 옮긴다)
 // │ 「끝난 단계 n개」(접음) → 단계 머리 띠 → 할 일 → 세부 항목 → 「＋ 할 일」 …(gantt-model.ts)
 // │ 그림 읽는 법(범례)
 // └───────────────────────────────────────────────
@@ -60,8 +64,14 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   // 내용을 펼친 할 일 · 세부 항목(누르면 먼저 보기 — TaskDetail)
   const [reading, setReading] = useState<Set<string>>(() => new Set());
   const [viewW, setViewW] = useState(0);
+  // 고른 날(일 단위 = 그날, 주 · 달 단위 = 그 월요일). 이 화면에서만 — 새로고침하면 풀린다
+  const [pick, setPick] = useState<string | null>(null);
+  const secRef = useRef<HTMLElement>(null);
   const gxRef = useRef<HTMLDivElement>(null);
+  // 날짜 머리(가로 넘김 상자 — 본문 scrollLeft 를 그대로 받는다)
   const axisRef = useRef<HTMLDivElement>(null);
+  // 머리를 마지막으로 옮긴 자리(머리 스스로 넘어간 것 — 키보드로 숫자 단추에 갔을 때 — 만 본문을 따라 옮기려고)
+  const axisSl = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dayPos = useRef<number | null>(null);
   const lastZoom = useRef<Zoom | null>(null);
@@ -82,6 +92,8 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   const geo: Geo = { x: xOf(first, dw), cx: cxOf(first, dw), dw };
   const rows = ganttRows(phases, { open, openTask, showDone, types, editing, guest });
   const anyOpen = phases.some((p) => !p.done && open.has(p.id));
+  const pickX = pick ? geo.x(pick) : null;
+  const pickW = zoom === 'day' ? dw : dw * 7;
 
   // 보이는 폭 재기
   useLayoutEffect(() => {
@@ -93,12 +105,18 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
     return () => ro.disconnect();
   }, []);
 
-  // 가로로 넘길 때: 날짜 머리를 같이 옮기고, 화면 밖으로 나간 막대는 가장자리 조각으로(그리기 없이 바로 — 줄이 많아도 매끄럽게)
+  // 가로로 넘길 때: 날짜 머리를 같이 넘기고(transform 이 아니라 scrollLeft — 달 이름 sticky 가 붙으려면),
+  // 고른 날 면을 줄 이름 칸에서도 같은 자리로, 화면 밖으로 나간 막대는 가장자리 조각으로(그리기 없이 바로 — 줄이 많아도 매끄럽게)
   const sync = () => {
     const el = gxRef.current;
     if (!el) return;
     const sl = el.scrollLeft;
-    if (axisRef.current) axisRef.current.style.transform = `translateX(${-sl}px)`;
+    const head = axisRef.current;
+    if (head && head.scrollLeft !== sl) { head.scrollLeft = sl; axisSl.current = head.scrollLeft; }
+    if (pickX != null) {
+      secRef.current?.style.setProperty('--pa', `${pickX - sl}px`);
+      secRef.current?.style.setProperty('--pb', `${pickX + pickW - sl}px`);
+    }
     canvasRef.current?.querySelectorAll<HTMLElement>('[data-a]').forEach((b) => {
       b.classList.toggle(s.offL, Number(b.dataset.b) < sl + 4);
       b.classList.toggle(s.offR, Number(b.dataset.a) > sl + el.clientWidth - 4);
@@ -119,7 +137,17 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   }, [zoom, first, dw, viewW, today]);
   useLayoutEffect(sync);
 
-  const pickZoom = (z: Zoom) => { setZoom(z); rememberZoom(z); };
+  // 단위를 바꾸면 고른 날은 푼다(일 단위 하루 ↔ 주 · 달 단위 한 주 — 뜻이 달라진다)
+  const pickZoom = (z: Zoom) => { setZoom(z); rememberZoom(z); setPick(null); };
+  const togglePick = (iso: string) => setPick((p) => (p === iso ? null : iso));
+  // 머리가 스스로 넘어갔을 때만(키보드로 화면 밖 숫자 단추에 갔을 때) 본문을 따라 옮긴다 — 본문이 옮긴 것(sync)은 그냥 둔다
+  const onAxisScroll = () => {
+    const head = axisRef.current;
+    const el = gxRef.current;
+    if (!head || !el || Math.abs(head.scrollLeft - axisSl.current) < 1) return;
+    axisSl.current = head.scrollLeft;
+    el.scrollLeft = head.scrollLeft;
+  };
   const goToday = () => gxRef.current?.scrollTo({ left: todayScroll(first, dw, today, vw), behavior: 'smooth' });
   const toggleAll = () => {
     setOpenState((o) => ({ ...o, open: anyOpen ? new Set() : new Set(phases.filter((p) => !p.done).map((p) => p.id)) }));
@@ -179,7 +207,7 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   };
 
   return (
-    <section className={`${s.gantt} overflow-clip rounded-panel border border-line bg-surface`} style={{ '--vw': `${vw}px` } as CSSProperties} aria-label="단계별 일정">
+    <section ref={secRef} className={`${s.gantt} ${pick ? s.picking : ''} overflow-clip rounded-panel border border-line bg-surface`} style={{ '--vw': `${vw}px` } as CSSProperties} aria-label="단계별 일정">
       <div className={s.tools}>
         <div className={s.zoom}>
           {/* 고르개는 사이트 한 모양(Segmented — 굵은 글자 + 아래 2px 선, 바로 위 「요약 · 단계 · 달력」과 같음) */}
@@ -196,13 +224,27 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
           options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABEL[t], dot: TYPE_DOT[t] }))} />
       </div>
 
-      <div className={s.axisWrap}>
-        <div ref={axisRef} className={s.axis} style={{ width: W }}>
+      <div ref={axisRef} className={s.axisWrap} onScroll={onAxisScroll}>
+        <div className={s.axis} style={{ width: W }} role="group" aria-label={zoom === 'day' ? '날짜 고르기' : '주 고르기'}>
+          {pickX != null && <i className={s.pick} style={{ left: pickX, width: pickW }} aria-hidden />}
           {ax.lines.map((l) => <i key={`l${l.x}`} className={`${s.gl} ${l.kind === 'month' ? s.m : l.kind === 'faint' ? s.faint : ''}`} style={{ left: l.x }} aria-hidden />)}
-          {ax.months.map((m) => <span key={`m${m.x}`} className={s.axM} style={{ left: m.x }} aria-hidden>{m.text}</span>)}
-          {ax.days.map((d) => <span key={`d${d.x}`} className={`${s.axD} ${zoom === 'day' ? '' : s.wk}`} style={{ left: d.x }} aria-hidden>{d.text}</span>)}
+          {/* 달 이름: 그달 칸(달이 바뀌는 선 ~ 다음 선) 안에서 왼쪽에 붙는다 — 1일이 화면 밖으로 나가도 맨 왼쪽에 남고, 다음 달 이름이 밀어낸다 */}
+          {ax.months.map((m) => <span key={`m${m.x}`} className={s.axMs} style={{ left: m.x, width: m.w }} aria-hidden><span className={s.axM}>{m.text}</span></span>)}
+          {/* 날짜 숫자 = 고르기 단추(누르는 칸 높이 44 · 폭 = 일 칸, 주 · 달 단위는 그 주 7일 폭). 일 단위 오늘 숫자도 단추(모양만 오늘 색) */}
+          {ax.days.map((d) => {
+            const dt = toDate(d.iso);
+            const on = d.iso === pick;
+            return (
+              <button key={d.iso} type="button" aria-pressed={on} onClick={() => togglePick(d.iso)}
+                aria-label={`${dt.getMonth() + 1}월 ${dt.getDate()}일${d.today ? ' 오늘' : ''}${zoom === 'day' ? '' : '부터 한 주'} 고르기`}
+                className={`${s.axB} ${zoom === 'day' ? '' : s.wk} ${d.today ? s.axTodayD : ''} ${d.hidden ? s.axHid : ''}`}
+                style={{ left: zoom === 'day' ? d.x - dw / 2 : d.x, width: pickW }}>
+                <span className={s.axN}>{d.text}</span>
+              </button>
+            );
+          })}
           {/* 「오늘 27」 글자는 축 첫머리에서 잘리지 않게(오늘이 첫 칸 근처면 글자만 조금 안쪽으로) */}
-          {ax.todayX != null && <span className={`${s.axToday} ${zoom === 'day' ? s.axTodayD : ''}`} style={{ left: ax.labelX ?? ax.todayX }} aria-label={zoom === 'day' ? `오늘 ${ax.todayText}일` : undefined}>{ax.todayText}</span>}
+          {ax.todayX != null && zoom !== 'day' && <span className={s.axToday} style={{ left: ax.labelX ?? ax.todayX }} aria-hidden>{ax.todayText}</span>}
         </div>
       </div>
 
@@ -238,6 +280,8 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
               }
             })
             : <p className={s.empty} style={{ width: vw, position: 'sticky', left: 0 }}>고른 종류의 단계가 없어요. 다른 종류를 켜 보세요.</p>}
+          {/* 고른 날 면(오늘 선 · 막대 아래, 칸 선 위 — 옅어서 칸 선이 비친다) */}
+          {pickX != null && <i className={s.pick} style={{ left: pickX, width: pickW }} aria-hidden />}
           {ax.todayX != null && <i className={s.today} style={{ left: ax.todayX }} aria-hidden />}
         </div>
       </div>

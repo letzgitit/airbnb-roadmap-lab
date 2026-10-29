@@ -12,7 +12,9 @@ import { addDays, diffDays, toDate } from '../step-dates.ts';
 //   주 · 달 단위 = 「오늘 27」 글자(바탕 있음), 그 글자와 실제로 겹치는 월요일 숫자만 뺀다.
 // 칸 선: 달이 바뀌는 선 = 진한 선(line-strong) — 일 단위는 그달 1일, 주 · 달 단위는 그달 첫 월요일(월요일 선과 두 줄로 겹치지 않게).
 //   그 밖의 월요일 = 선(달 단위는 흐리게), 일 단위의 나머지 날 = 흐린 선. 주말 면은 없다(칸 선이 날짜를 맡는다).
-//   달 이름도 달이 바뀌는 선 자리에(첫 칸은 다음 달 선까지 40px 넘게 남을 때만).
+//   달 이름 = 달마다 그달 폭만큼의 칸(달이 바뀌는 선 ~ 다음 선) 안에서 왼쪽에 붙는 글자(CSS sticky) — 옆으로 넘겨 1일이 화면 밖으로 나가도
+//   보이는 맨 왼쪽 날의 달 이름이 머리 윗줄 왼쪽에 남고, 다음 달 선이 왼쪽 끝에 다가오면 다음 달 이름이 밀어내며 바뀐다(첫 칸은 40px 넘을 때만).
+// 날짜 고르기: 숫자 = 단추(days 의 iso). 일 단위 = 그날 하루, 주 · 달 단위 = 그 월요일부터 7일(오늘 글자에 가려 숫자를 뺀 월요일도 단추는 있다 — hidden).
 export type Zoom = 'day' | 'week' | 'month';
 export const ZOOMS: Zoom[] = ['day', 'week', 'month'];
 export const ZOOM_LABEL: Record<Zoom, string> = { day: '일', week: '주', month: '달' };
@@ -27,12 +29,16 @@ export function dayWidth(zoom: Zoom, phone: boolean, viewW: number, days: number
 }
 
 export interface AxisLabel { x: number; text: string }
+/** 달 이름 칸: x ~ x + w 가 그달(달이 바뀌는 선 ~ 다음 선). 글자는 칸 안에서 왼쪽에 붙는다 */
+export interface MonthSpan extends AxisLabel { w: number }
+/** 날짜 숫자 = 고르는 단추. iso = 그날(주 · 달 단위는 그 월요일) */
+export interface DayLabel extends AxisLabel { iso: string; today?: boolean; hidden?: boolean }
 export interface GridLine { x: number; kind: 'month' | 'week' | 'faint' }
 export interface Axis {
-  /** 달 이름(윗줄, 달이 바뀌는 선 자리) */
-  months: AxisLabel[];
-  /** 날짜 숫자(아랫줄). 일 단위 = 칸 가운데, 주 · 달 단위 = 월요일 칸 왼쪽. 일 단위의 오늘 숫자는 여기 없고 todayText 가 맡는다 */
-  days: AxisLabel[];
+  /** 달 이름 칸(윗줄, 달이 바뀌는 선부터 다음 선까지) */
+  months: MonthSpan[];
+  /** 날짜 숫자(아랫줄). 일 단위 = 칸 가운데(오늘 = today), 주 · 달 단위 = 월요일 칸 왼쪽(「오늘 27」 글자와 겹치면 hidden) */
+  days: DayLabel[];
   lines: GridLine[];
   /** 오늘 칸 가운데 x(오늘 선 자리, 축 밖이면 null) */
   todayX: number | null;
@@ -70,8 +76,8 @@ export function axisOf(first: string, last: string, dw: number, zoom: Zoom, toda
     labelX = Math.max(todayX, half + 2);
     todayText = long ? `오늘 ${td.getMonth() + 1}/${td.getDate()}` : `오늘 ${td.getDate()}`;
   } else if (todayX != null) labelX = todayX;
-  const months: AxisLabel[] = [];
-  const days: AxisLabel[] = [];
+  const months: MonthSpan[] = [];
+  const days: DayLabel[] = [];
   const lines: GridLine[] = [];
   const firstNext = monthXs[0] ?? Infinity;
   for (let i = 0; i < total; i++) {
@@ -81,18 +87,21 @@ export function axisOf(first: string, last: string, dw: number, zoom: Zoom, toda
     const dow = d.getDay();
     const x = i * dw;
     const ms = monthStart(d);
-    if ((ms && i > 0) || (i === 0 && firstNext - x > 40)) months.push({ x, text: `${d.getMonth() + 1}월` });
+    if ((ms && i > 0) || (i === 0 && firstNext - x > 40)) {
+      const next = monthXs.find((mx) => mx > x) ?? total * dw;
+      months.push({ x, w: next - x, text: `${d.getMonth() + 1}월` });
+    }
     if (ms && i > 0) lines.push({ x, kind: 'month' });
     if (zoom === 'day') {
       if (!ms && i > 0) lines.push({ x, kind: dow === 1 ? 'week' : 'faint' });
-      if (iso !== today) days.push({ x: x + dw / 2, text: String(date) });
+      days.push({ x: x + dw / 2, text: String(date), iso, ...(iso === today ? { today: true } : {}) });
     } else if (dow === 1) {
       if (!ms && i > 0) lines.push({ x, kind: zoom === 'month' ? 'faint' : 'week' });
       // 월요일 숫자(왼쪽 5px 안쪽)가 「오늘 27」 글자 상자와 실제로 겹칠 때만 뺀다(3px 띄움)
       const a = x + 5;
       const b = a + numW(String(date));
       const clear = labelX == null || b + 3 <= labelX - half || a >= labelX + half + 3;
-      if (clear) days.push({ x, text: String(date) });
+      days.push({ x, text: String(date), iso, ...(clear ? {} : { hidden: true }) });
     }
   }
   return { months, days, lines, todayX, labelX, todayText };
