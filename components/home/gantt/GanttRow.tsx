@@ -7,6 +7,7 @@ import { isLate, taskRange, type GTask, type Phase, type Row } from './gantt-mod
 import { daysFromPx } from './gantt-scale';
 import s from './gantt.module.css';
 import { Check, Chev, Plus } from './icons';
+import { TaskDetail } from './TaskDetail';
 
 // 간트 한 줄씩(단계 머리 · 할 일 · 세부 항목 · 할 일 추가 · 끝난 단계 접기 · 묶음 사이 · 편집 폼 자리).
 // 줄 = 이름 줄(nl, 보이는 폭만큼 왼쪽에 붙음) + 막대 줄(bl, 날짜 배율로 가로로 넘어감).
@@ -127,9 +128,12 @@ function dateText(t: GTask, today: string, phone: boolean): { text: string; tone
   return { text: '', tone: '' };
 }
 
-export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, onEdit, onToggleDone, onToggleKids, onDrag }: {
+/** 할 일 · 세부 항목 줄. 줄(이름)을 누르면 바로 밑에 내용만 펼친다(reading — TaskDetail: 메모 · 전화 · 사진 · 도움말 + 연필 · 휴지통),
+ *  다시 누르면 접힌다. 고치기는 펼친 칸의 연필(onEdit — 그 자리 편집 폼), 동그라미 = 끝냄 켜고 끄기 */
+export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, reading, onRead, onEdit, onDelete, onToggleDone, onToggleKids, onDrag }: {
   r: Extract<Row, { k: 'task' | 'sub' }>; geo: Geo; today: string; phone: boolean; kidsOpen: boolean; canDrag: boolean;
-  onEdit: () => void; onToggleDone: () => void; onToggleKids: () => void;
+  reading: boolean; onRead: () => void; onEdit: () => void; onDelete: () => void;
+  onToggleDone: () => void; onToggleKids: () => void;
   onDrag: (mode: DragMode, days: number) => void;
 }) {
   const t = r.t;
@@ -142,16 +146,17 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, onEdit, onTog
   const kd = kids.filter((k) => k.done).length;
   const dt = dateText(t, today, phone);
   return (
-    <div className={cls(s.r, sub ? s.rSub : s.rTask, t.done && s.done, kids.length > 0 && s.hasKids)} style={typeVars(r.p.type)} onClick={onEdit}>
+    <div className={cls(s.r, sub ? s.rSub : s.rTask, t.done && s.done, kids.length > 0 && s.hasKids, !reading && s.rShut)} style={typeVars(r.p.type)} onClick={onRead}>
       <div className={s.nl} style={px({ '--my': `${my}px` })}>
         <RailsName r={r} h={nh} mid={my} />
         <button type="button" className={s.nodeBtn} style={{ left: nx }} aria-pressed={t.done}
           aria-label={`${t.text} 끝냄`} onClick={(e) => { e.stopPropagation(); onToggleDone(); }} />
         <i className={cls(s.node, t.done && s.nDone)} style={{ left: nx }} aria-hidden>{t.done && !sub ? <Check /> : null}</i>
         <div className={s.tLine}>
-          <button type="button" className={s.tName} aria-label={`${t.text}${dt.text ? `, ${dt.text}` : ''}. 고치기`}>{t.text}</button>
+          <button type="button" className={s.tName} aria-expanded={reading} aria-label={`${t.text}${dt.text ? `, ${dt.text}` : ''}. 자세히 ${reading ? '접기' : '보기'}`}>{t.text}</button>
           <span className={s.tMeta} aria-hidden>
             {dt.text && <span className={cls(s.dt, dt.tone === 'late' && s.lw, dt.tone === 'today' && s.tw)}>{dt.text}</span>}
+            <span className={s.rchev}><Chev /></span>
           </span>
         </div>
         {kids.length > 0 && (
@@ -167,6 +172,13 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, onEdit, onTog
       <Bar key={`${range?.from}${range?.to}`} r={r} geo={geo} range={range}
         fill={kids.length && !t.done ? Math.round((kd / kids.length) * 100) : null}
         canDrag={canDrag && !!range && !range.derived} onDrag={onDrag} />
+      {reading && (
+        <TaskDetail id={t.id} left={sub ? 104 : 86} onEdit={onEdit} onDelete={onDelete}
+          rails={<>
+            {r.more1 && <i className={cls(s.rail, s.L1)} style={{ left: R1, top: 0, bottom: 0 }} aria-hidden />}
+            {r.more2 && <i className={cls(s.rail, s.L2)} style={{ left: R2, top: 0, bottom: 0 }} aria-hidden />}
+          </>} />
+      )}
     </div>
   );
 }

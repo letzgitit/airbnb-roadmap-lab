@@ -27,7 +27,8 @@ import { FoldAll, OpenAll } from './icons';
 // │ 그림 읽는 법(범례)
 // └───────────────────────────────────────────────
 // 시간 단위: 일 · 주 · 달(기본 = 로그인 주 · 로그인 전 달, 고른 단위는 이 브라우저에 기억). 처음 · 단위를 바꿀 때 · 「오늘」 = 오늘을 보이는 폭 30% 자리에.
-// 누르기: 단계 머리 = 단계 창(왼쪽 꺾쇠만 접기 · 펴기), 할 일 줄 = 그 자리 편집 폼, 동그라미 = 끝냄 켜고 끄기, 「세부 1/4」 = 세부 항목 접기 · 펴기.
+// 누르기: 단계 머리 = 단계 창(왼쪽 꺾쇠만 접기 · 펴기), 할 일 줄 = 바로 밑에 내용만 펼치기 · 접기(TaskDetail — 메모 · 전화 · 사진 · 도움말,
+//   연필 = 그 자리 편집 폼, 휴지통 = 바로 지우고 8초 되돌리기), 동그라미 = 끝냄 켜고 끄기, 「세부 1/4」 = 세부 항목 접기 · 펴기.
 // PC(마우스)에서만 막대를 끌어 날짜를 바꾼다(가운데 = 통째로, 양 끝 = 시작일 · 마감일만). 폰은 끌기 없음(가로 넘기기와 겹친다).
 // 로그인 전(guest): 단계 14줄만(할 일 · 목표일 없음), 기간 글자 「1~12일째」, 펼치기 · 편집 없음.
 const ZOOM_KEY = 'home:gantt-zoom';
@@ -55,6 +56,8 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   const [zoom, setZoom] = useState<Zoom>(() => recallZoom(guest ? 'month' : 'week'));
   const [showDone, setShowDone] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
+  // 내용을 펼친 할 일 · 세부 항목(누르면 먼저 보기 — TaskDetail)
+  const [reading, setReading] = useState<Set<string>>(() => new Set());
   const [viewW, setViewW] = useState(0);
   const gxRef = useRef<HTMLDivElement>(null);
   const axisRef = useRef<HTMLDivElement>(null);
@@ -132,7 +135,21 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
     if (editing && progress.hasDirty('page') && !(await progress.confirmDiscard())) return;
     setEditing(next);
   };
-  const sameEdit = (a: Editing | null, b: Editing) => !!a && a.kind === b.kind && JSON.stringify(a) === JSON.stringify(b);
+  // 줄 누르기: 그 줄의 편집 폼이 열려 있으면 닫고(쓰던 글 확인), 아니면 내용 펼치기 · 접기
+  const toggleRead = (id: string) => {
+    if (editing?.kind === 'edit' && editing.id === id) { void switchEdit(null); return; }
+    setReading((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  };
+  // 연필: 펼친 내용을 접고 그 자리 편집 폼
+  const startEdit = (id: string) => {
+    setReading((o) => { const n = new Set(o); n.delete(id); return n; });
+    void switchEdit({ kind: 'edit', id });
+  };
+  // 휴지통: 확인 없이 지우고 8초 「되돌리기」(세부 항목이 있으면 같이 지워지고 같이 돌아온다)
+  const quickDelete = async (id: string, kidCount: number) => {
+    const r = await progress.send({ op: 'task.delete', id });
+    if (r.ok) progress.toast(kidCount ? `할 일 1개와 세부 항목 ${kidCount}개를 삭제했어요.` : '할 일을 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void progress.send({ op: 'task.restore', id }) } });
+  };
   const toggleDone = (id: string) => {
     const t = progress.doc?.tasks[id];
     if (t) void progress.send({ op: 'task.update', id, patch: { done: !t.done } });
@@ -211,7 +228,8 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
                 );
                 case 'task': case 'sub': return (
                   <TaskRow key={r.t.id} r={r} geo={geo} today={today} phone={phone} kidsOpen={openTask.has(r.t.id)} canDrag={canDrag}
-                    onEdit={() => { const e: Editing = { kind: 'edit', id: r.t.id }; void switchEdit(sameEdit(editing, e) ? null : e); }}
+                    reading={reading.has(r.t.id)} onRead={() => toggleRead(r.t.id)} onEdit={() => startEdit(r.t.id)}
+                    onDelete={() => void quickDelete(r.t.id, r.k === 'task' ? r.kids.length : 0)}
                     onToggleDone={() => toggleDone(r.t.id)} onToggleKids={() => toggleKids(r.t.id)}
                     onDrag={(mode, d) => void commitDrag(r.t.id, mode, d)} />
                 );

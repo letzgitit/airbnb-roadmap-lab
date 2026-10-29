@@ -151,6 +151,18 @@
 .rSub .tb.narrow { border-radius: 2px; }
 .done.rSub .tName { color: var(--muted); }
 
+/* 누르면 먼저 보기(TaskDetail): 줄 바로 밑에 메모 · 전화 · 사진 · 도움말 + 연필 · 휴지통. 새 선 · 면 없이 줄과 같은 면.
+   이름 줄 오른쪽 끝 고정 자리의 꺾쇠 = 단계 머리 꺾쇠와 같은 모양 · 회전(접힘 = 오른쪽, 펼침 = 아래) */
+.rchev { flex: none; width: 16px; height: 16px; color: var(--muted); transition: transform .18s; }
+.rchev svg { width: 16px; height: 16px; }
+.rShut .rchev { transform: rotate(-90deg); }
+.detail { position: sticky; left: 0; z-index: 4; width: var(--vw); padding: 0 12px 8px 0; background: var(--rowbg); cursor: auto; user-select: text; -webkit-user-select: text; }
+.dActs { margin-left: auto; display: inline-flex; color: var(--ink-soft); }
+.dBtn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 8px; }
+.dBtn svg { width: 20px; height: 20px; }
+.dBtn:hover { background: var(--sunken); }
+.dDel:hover { color: var(--danger-ink); }
+
 /* PC 막대 끌기(가운데 = 통째로, 양 끝 = 시작일 · 마감일만) */
 .drag { cursor: grab; }
 .drag .hd { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 1; }
