@@ -81,8 +81,9 @@ export function PhaseRow({ r, geo, open, guest, onToggle, onStep }: {
 }) {
   const p = r.p;
   const left = geo.x(p.from);
-  const w = (diffDays(p.from, p.to) + 1) * geo.dw;
   const tx = p.target ? geo.cx(p.target) : null;
+  // 목표일이 기간 끝이면 막대를 ◆ 가운데에서 끝낸다(칸 끝까지 그리면 ◆ 뒤로 반원이 삐져나온다)
+  const w = tx != null && p.target === p.to ? Math.max(tx - left, 8) : (diffDays(p.from, p.to) + 1) * geo.dw;
   const period = guest ? dayRangeLabel(p.start, p.end) : `~${shortDate(p.target ?? p.to)}`;
   return (
     <div className={cls(s.r, s.rPhase, !open && !guest && s.shut, p.done && s.done, guest && s.guest)} style={typeVars(p.type)} onClick={onStep}>

@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { shortDate } from '@/lib/client/format';
 import { useProgress } from '@/components/progress/ProgressProvider';
+import { Segmented } from '@/components/ui/Segmented';
 import { ToggleChips } from '@/components/ui/ToggleChips';
 import { TYPE_DOT, TYPE_LABEL, TYPE_ORDER } from '@/components/TimelineChart';
 import { taskErrorMessage } from '@/components/tasks/task-errors';
@@ -181,14 +182,8 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
     <section className={`${s.gantt} overflow-clip rounded-panel border border-line bg-surface`} style={{ '--vw': `${vw}px` } as CSSProperties} aria-label="단계별 일정">
       <div className={s.tools}>
         <div className={s.zoom}>
-          <div role="group" aria-label="시간 단위" className="flex gap-1 rounded-control bg-sunken p-1">
-            {ZOOMS.map((z) => (
-              <button key={z} type="button" aria-pressed={zoom === z} onClick={() => pickZoom(z)}
-                className={`flex min-h-11 flex-1 items-center justify-center rounded-control text-base transition-colors ${zoom === z ? 'bg-raised font-bold text-ink shadow-sm dark:shadow-none' : 'font-semibold text-muted hover:text-ink'}`}>
-                {ZOOM_LABEL[z]}
-              </button>
-            ))}
-          </div>
+          {/* 고르개는 사이트 한 모양(Segmented — 굵은 글자 + 아래 2px 선, 바로 위 「요약 · 단계 · 달력」과 같음) */}
+          <Segmented label="시간 단위" value={zoom} onChange={pickZoom} options={ZOOMS.map((z) => ({ value: z, label: ZOOM_LABEL[z] }))} />
         </div>
         <span className={s.sp} />
         <button type="button" className={s.tbtn} onClick={goToday}>오늘</button>
@@ -207,14 +202,13 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
           {ax.months.map((m) => <span key={`m${m.x}`} className={s.axM} style={{ left: m.x }} aria-hidden>{m.text}</span>)}
           {ax.days.map((d) => <span key={`d${d.x}`} className={`${s.axD} ${zoom === 'day' ? '' : s.wk}`} style={{ left: d.x }} aria-hidden>{d.text}</span>)}
           {/* 「오늘 27」 글자는 축 첫머리에서 잘리지 않게(오늘이 첫 칸 근처면 글자만 조금 안쪽으로) */}
-          {ax.todayX != null && <span className={s.axToday} style={{ left: ax.labelX ?? ax.todayX }}>{ax.todayText}</span>}
+          {ax.todayX != null && <span className={`${s.axToday} ${zoom === 'day' ? s.axTodayD : ''}`} style={{ left: ax.labelX ?? ax.todayX }} aria-label={zoom === 'day' ? `오늘 ${ax.todayText}일` : undefined}>{ax.todayText}</span>}
         </div>
       </div>
 
       <div ref={gxRef} className={s.gx} onScroll={onScroll} {...dragScroll}>
         <div ref={canvasRef} className={s.canvas} style={{ width: W }}>
           <div className={s.grid} aria-hidden>
-            {ax.weekends.map((x) => <i key={`w${x}`} className={s.wkend} style={{ left: x, width: dw }} />)}
             {ax.lines.map((l) => <i key={`l${l.x}`} className={`${s.gl} ${l.kind === 'month' ? s.m : l.kind === 'faint' ? s.faint : ''}`} style={{ left: l.x }} />)}
           </div>
           {rows.some((r) => r.k === 'phase')

@@ -5,11 +5,14 @@ import { addDays, diffDays, toDate } from '../step-dates.ts';
 //
 // 하루 폭(px): 일 · 주 · 달 세 단위. 폰(768px 미만)과 PC 는 모양이 같고 폭만 다르다.
 //   일 = 폰 30 · PC 40, 주 = 폰 12 · PC 16, 달 = 폰 4 · PC 7. 보이는 폭보다 축이 짧으면 보이는 폭을 다 채우게 늘린다.
-// 날짜 머리(52px, 위에 붙음): 윗줄 = 달 이름(그달 1일 자리, 첫 칸은 다음 달까지 40px 넘게 남을 때만),
-//   아랫줄 = 일 단위는 날마다 숫자, 주 · 달 단위는 월요일 숫자. 「오늘 27」 글자와 겹치는 숫자는 뺀다.
-//   본문과 같은 칸 선을 머리 높이까지 이어 그어 숫자가 어느 칸인지 줄과 맞게 보인다(주말 면은 머리에 넣지 않는다).
+// 날짜 머리(52px, 위에 붙음): 윗줄 = 달 이름, 아랫줄 = 일 단위는 날마다 숫자, 주 · 달 단위는 월요일 숫자.
+//   본문과 같은 칸 선을 머리 높이까지 이어 그어 숫자가 어느 칸인지 줄과 맞게 보인다.
 //   고정 일정(집 정보 「고정 · 」)은 간트에 그리지 않는다(2026-10-29 「복잡해, 없애」 — 날짜 띠 · 그날 창 · 달력 · 요약에는 그대로).
-// 칸 선: 그달 1일 = 진한 선(line-strong), 월요일 = 선(달 단위는 흐리게), 일 단위의 나머지 날 = 흐린 선, 일 단위 주말 = 옅은 면.
+// 오늘: 일 단위 = 그날 칸의 숫자 하나를 오늘 색 700 으로(바탕 없이 — 옆 칸 숫자 · 선을 덮지 않는다),
+//   주 · 달 단위 = 「오늘 27」 글자(바탕 있음), 그 글자와 실제로 겹치는 월요일 숫자만 뺀다.
+// 칸 선: 달이 바뀌는 선 = 진한 선(line-strong) — 일 단위는 그달 1일, 주 · 달 단위는 그달 첫 월요일(월요일 선과 두 줄로 겹치지 않게).
+//   그 밖의 월요일 = 선(달 단위는 흐리게), 일 단위의 나머지 날 = 흐린 선. 주말 면은 없다(칸 선이 날짜를 맡는다).
+//   달 이름도 달이 바뀌는 선 자리에(첫 칸은 다음 달 선까지 40px 넘게 남을 때만).
 export type Zoom = 'day' | 'week' | 'month';
 export const ZOOMS: Zoom[] = ['day', 'week', 'month'];
 export const ZOOM_LABEL: Record<Zoom, string> = { day: '일', week: '주', month: '달' };
@@ -23,76 +26,76 @@ export function dayWidth(zoom: Zoom, phone: boolean, viewW: number, days: number
   return days > 0 && viewW > 0 ? Math.max(base, viewW / days) : base;
 }
 
-export interface AxisLabel { x: number; text: string; weekend?: boolean }
+export interface AxisLabel { x: number; text: string }
 export interface GridLine { x: number; kind: 'month' | 'week' | 'faint' }
 export interface Axis {
-  /** 달 이름(윗줄) */
+  /** 달 이름(윗줄, 달이 바뀌는 선 자리) */
   months: AxisLabel[];
-  /** 날짜 숫자(아랫줄). 일 단위 = 칸 가운데, 주 · 달 단위 = 월요일 칸 왼쪽 */
+  /** 날짜 숫자(아랫줄). 일 단위 = 칸 가운데, 주 · 달 단위 = 월요일 칸 왼쪽. 일 단위의 오늘 숫자는 여기 없고 todayText 가 맡는다 */
   days: AxisLabel[];
   lines: GridLine[];
-  /** 일 단위 주말 칸(왼쪽 x) */
-  weekends: number[];
   /** 오늘 칸 가운데 x(오늘 선 자리, 축 밖이면 null) */
   todayX: number | null;
-  /** 「오늘 27」 글자 가운데 x(첫머리에서 잘리지 않게 안쪽으로 민 값) */
+  /** 오늘 글자 가운데 x(주 · 달 단위는 첫머리에서 잘리지 않게 안쪽으로 민 값) */
   labelX: number | null;
-  /** 「오늘 27」, 글자가 달이 바뀌는 선을 넘거나 그달 이름이 머리에 없으면 「오늘 10/27」(다음 달 날로 잘못 읽지 않게) */
+  /** 일 단위 = 「29」, 주 · 달 단위 = 「오늘 27」 — 글자가 달이 바뀌는 선을 넘거나 그달 이름이 머리에 없으면 「오늘 10/27」 */
   todayText: string;
 }
 
-/** 오늘 글자 반폭(「오늘 27」 12px 굵게 ≈ 52px + 좌우 4px = 60px, 「오늘 10/27」 ≈ 76px) */
-const HALF_SHORT = 30;
-const HALF_LONG = 38;
+/** 「오늘 27」 글자 반폭(12px 굵게 ≈ 44px + 좌우 4px = 52px → 26, 「오늘 10/27」 ≈ 68px → 34). labelX 를 안쪽으로 밀 때는 2px 더 */
+const HALF_SHORT = 26;
+const HALF_LONG = 34;
+/** 날짜 숫자 폭(12px, 한 글자 ≈ 7.5px) */
+const numW = (t: string) => t.length * 7.5;
 
 export function axisOf(first: string, last: string, dw: number, zoom: Zoom, today: string): Axis {
   const total = diffDays(first, last) + 1;
   const inAxis = today >= first && today <= last;
   const todayX = inAxis ? diffDays(first, today) * dw + dw / 2 : null;
-  // 「오늘 27」 글자: 축 첫머리에서 잘리지 않게 반폭만큼 안쪽으로. 글자 상자 안으로 달이 바뀌는 선이 지나가거나
-  // 오늘이 든 달의 이름이 머리에 없으면(첫 칸이 좁아 뺐음) 「오늘 10/27」 — 바로 옆 「11월」 밑에서 11월 27일로 읽히지 않게
   const td = toDate(today);
-  const firstOfMonths = Array.from({ length: total }, (_, i) => i).filter((i) => i > 0 && toDate(addDays(first, i)).getDate() === 1).map((i) => i * dw);
-  const shortX = todayX == null ? null : Math.max(todayX, HALF_SHORT + 2);
-  const f0 = toDate(first);
-  const toNext0 = (new Date(f0.getFullYear(), f0.getMonth() + 1, 1).getTime() - f0.getTime()) / 86400000;
-  const todayInFirstMonth = f0.getFullYear() === td.getFullYear() && f0.getMonth() === td.getMonth();
-  // 오늘이 축 첫 달이면 첫 칸 달 이름이 그려졌어야 한다(다른 달 이름은 1일 자리에 늘 있다)
-  const monthShown = todayInFirstMonth ? toNext0 * dw > 40 : true;
-  const long = shortX != null && (firstOfMonths.some((mx) => Math.abs(mx - shortX) < HALF_SHORT) || !monthShown);
-  const half = long ? HALF_LONG : HALF_SHORT;
-  const labelX = todayX == null ? null : Math.max(todayX, half + 2);
-  const todayText = long ? `오늘 ${td.getMonth() + 1}/${td.getDate()}` : `오늘 ${td.getDate()}`;
-  const TODAY_HALF = half + 4;
+  // 달이 바뀌는 자리: 일 단위 = 1일, 주 · 달 단위 = 그달 첫 월요일(1~7일인 월요일)
+  const monthStart = (d: Date) => (zoom === 'day' ? d.getDate() === 1 : d.getDay() === 1 && d.getDate() <= 7);
+  const monthXs = Array.from({ length: total }, (_, i) => i).filter((i) => i > 0 && monthStart(toDate(addDays(first, i)))).map((i) => i * dw);
+  let labelX: number | null = null;
+  let todayText = `${td.getDate()}`;
+  let half = HALF_SHORT;
+  if (todayX != null && zoom !== 'day') {
+    // 「오늘 27」: 글자 상자 안으로 달이 바뀌는 선이 지나가거나 오늘이 든 달의 이름이 머리에 없으면(첫 칸이 좁아 뺐음) 「오늘 10/27」
+    const shortX = Math.max(todayX, HALF_SHORT + 2);
+    const nextMonth = monthXs.find((mx) => mx > todayX);
+    const prevMonth = [...monthXs].reverse().find((mx) => mx <= todayX);
+    const monthShown = prevMonth != null || ((nextMonth ?? Infinity) > 40);
+    const long = monthXs.some((mx) => Math.abs(mx - shortX) < HALF_SHORT) || !monthShown;
+    half = long ? HALF_LONG : HALF_SHORT;
+    labelX = Math.max(todayX, half + 2);
+    todayText = long ? `오늘 ${td.getMonth() + 1}/${td.getDate()}` : `오늘 ${td.getDate()}`;
+  } else if (todayX != null) labelX = todayX;
   const months: AxisLabel[] = [];
   const days: AxisLabel[] = [];
   const lines: GridLine[] = [];
-  const weekends: number[] = [];
+  const firstNext = monthXs[0] ?? Infinity;
   for (let i = 0; i < total; i++) {
     const iso = addDays(first, i);
     const d = toDate(iso);
     const date = d.getDate();
     const dow = d.getDay();
     const x = i * dw;
-    // 첫 칸: 다음 달 1일까지 40px 넘게 남을 때만 달 이름(바로 뒤 1일 이름과 겹치지 않게)
-    const toNext = (new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - d.getTime()) / 86400000;
-    if (date === 1 || (i === 0 && toNext * dw > 40)) months.push({ x, text: `${d.getMonth() + 1}월` });
-    if (date === 1 && i > 0) lines.push({ x, kind: 'month' });
-    const weekend = dow === 0 || dow === 6;
+    const ms = monthStart(d);
+    if ((ms && i > 0) || (i === 0 && firstNext - x > 40)) months.push({ x, text: `${d.getMonth() + 1}월` });
+    if (ms && i > 0) lines.push({ x, kind: 'month' });
     if (zoom === 'day') {
-      if (weekend) weekends.push(x);
-      if (date !== 1 && i > 0) lines.push({ x, kind: dow === 1 ? 'week' : 'faint' });
-      const cx = x + dw / 2;
-      if (labelX == null || Math.abs(cx - labelX) > TODAY_HALF) days.push({ x: cx, text: String(date), weekend });
+      if (!ms && i > 0) lines.push({ x, kind: dow === 1 ? 'week' : 'faint' });
+      if (iso !== today) days.push({ x: x + dw / 2, text: String(date) });
     } else if (dow === 1) {
-      if (date !== 1 && i > 0) lines.push({ x, kind: zoom === 'month' ? 'faint' : 'week' });
-      // 월요일 숫자(왼쪽 5px 안쪽, 두 자리 ≈ 16px)가 오늘 글자와 겹치거나(8px 띄움), 그 글자 자리 안으로 달이 바뀌는 선이 지나가면 뺀다
-      const firstIn = Array.from({ length: 7 }, (_, k) => k).some((k) => k > 0 && toDate(addDays(iso, k)).getDate() === 1 && k * dw < 26);
-      const clear = labelX == null || x + 5 + 16 < labelX - TODAY_HALF - 4 || x + 5 > labelX + TODAY_HALF + 4;
-      if (clear && !firstIn) days.push({ x, text: String(date) });
+      if (!ms && i > 0) lines.push({ x, kind: zoom === 'month' ? 'faint' : 'week' });
+      // 월요일 숫자(왼쪽 5px 안쪽)가 「오늘 27」 글자 상자와 실제로 겹칠 때만 뺀다(3px 띄움)
+      const a = x + 5;
+      const b = a + numW(String(date));
+      const clear = labelX == null || b + 3 <= labelX - half || a >= labelX + half + 3;
+      if (clear) days.push({ x, text: String(date) });
     }
   }
-  return { months, days, lines, weekends, todayX, labelX, todayText };
+  return { months, days, lines, todayX, labelX, todayText };
 }
 
 /** 날짜 → 칸 왼쪽 x · 칸 가운데 x */

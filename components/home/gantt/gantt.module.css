@@ -29,6 +29,8 @@
 .axD { position: absolute; top: 28px; font-size: 12px; line-height: 16px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
 .axD.wk { transform: none; padding-left: 5px; }
 .axToday { position: absolute; top: 26px; transform: translateX(-50%); height: 20px; padding: 0 4px; background: var(--surface); color: var(--today); font-size: 12px; line-height: 20px; font-weight: 700; white-space: nowrap; z-index: 2; }
+/* 일 단위: 그날 칸의 숫자 하나만 오늘 색 700(바탕 없이 — 옆 칸 숫자 · 칸 선을 덮지 않는다). 자리는 다른 날 숫자(.axD)와 같다 */
+.axToday.axTodayD { top: 28px; height: 16px; padding: 0; line-height: 16px; background: none; }
 
 /* ── 본문 ── */
 .gx { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; user-select: none; -webkit-user-select: none; }
@@ -37,8 +39,9 @@
 .gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
 .gl.m { background: var(--line-strong); }
 .gl.faint { opacity: .55; }
-.wkend { position: absolute; top: 0; bottom: 0; background: var(--sunken); opacity: .6; }
-.today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--today); z-index: 3; pointer-events: none; }
+/* 어두운 화면 날짜 머리: line(#2e3033)이 머리 면 위에서 거의 안 보여 칸 선을 한 단계 진하게(본문은 그대로) */
+:global(.dark) .axis .gl { background: var(--line-strong); }
+.today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--today); z-index: 1; pointer-events: none; } /* 막대(z 2) 아래 — 오늘 막대를 가르지 않게 */
 
 .r { position: relative; --rowbg: var(--surface); --cb: color-mix(in srgb, var(--c) 60%, var(--ci)); --rc1: color-mix(in srgb, var(--c) 55%, var(--surface)); --rc2: var(--line-strong); }
 .nl { position: sticky; left: 0; z-index: 4; width: var(--vw); display: flex; align-items: center; gap: 8px; padding-right: 12px; background: var(--rowbg); }
@@ -47,15 +50,14 @@
 .gutR { position: sticky; right: 0; margin-left: auto; width: 0; height: 100%; z-index: 2; flex: none; }
 .mask { border-radius: 8px; }
 
-/* 화면 밖 막대: 그쪽 가장자리에 24px 조각(화살표 없이). offL · offR 은 가로로 넘길 때 StepGantt 가 붙인다 */
-.stub { position: absolute; display: none; width: 24px; background: var(--c); }
-.gut .stub { left: 0; border-radius: 0 8px 8px 0; }
-.gutR .stub { right: 0; border-radius: 8px 0 0 8px; }
+/* 화면 밖 막대: 그쪽 가장자리에 6px 표시(모서리 없음 — 하루짜리 막대와 헷갈리지 않게). offL · offR 은 가로로 넘길 때 StepGantt 가 붙인다 */
+.stub { position: absolute; display: none; width: 6px; background: var(--c); }
+.gut .stub { left: 0; }
+.gutR .stub { right: 0; }
 .offL .gut .stub, .offR .gutR .stub { display: block; }
-.rPhase .stub { top: 4px; height: 14px; border-radius: 0 7px 7px 0; }
-.rPhase .gutR .stub { border-radius: 7px 0 0 7px; }
-.rTask .stub { top: 3px; height: 16px; }
-.rSub .stub { top: 3px; height: 10px; background: color-mix(in srgb, var(--c) 72%, var(--surface)); }
+.rPhase .stub { top: 6px; height: 10px; }
+.rTask .stub { top: 6px; height: 10px; }
+.rSub .stub { top: 5px; height: 6px; background: color-mix(in srgb, var(--c) 72%, var(--surface)); }
 .done .stub { background: var(--line-strong); }
 
 /* 트리 선 */
