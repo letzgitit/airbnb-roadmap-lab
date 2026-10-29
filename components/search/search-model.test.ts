@@ -149,14 +149,18 @@ test('갈 곳: 할 일 → 분야 탭(세부 항목은 부모를 따라감) · �
   assert.equal(jumpOf(search(orphan, '단계 없는').groups[0].hits[0]), null);
 });
 
-test('줄 모양: 기록은 쓴 사람을 싣지 않음 · 집 정보 조각 이름은 「내용」 · 답 개수', () => {
+test('줄 모양: 기록은 쓴 사람을 싣지 않음 · 집 정보 조각 이름은 「본문」 · 질문 상태 · 답 개수', () => {
   const index = buildIndex(doc());
   const log = search(index, '도장').groups[0].hits[0];
   assert.deepEqual(rowView(log, ['도장']).meta.map((m) => m.text), ['결정', '10월 21일']);
   const prop = search(index, '더블');
-  assert.equal(rowView(prop.groups[0].hits[0], prop.terms).snip?.name, '내용');
+  assert.equal(rowView(prop.groups[0].hits[0], prop.terms).snip?.name, '본문');
+  // 질문: 상태 꼬리표 하나 + (부딪히지 않을 때만) 답 개수 — 답 기다림인데 답이 달린 q_a 는 상태만
   const q = search(index, '침구');
-  assert.ok(rowView(q.groups[0].hits[0], q.terms).meta.some((m) => m.text === '답 1개'));
+  assert.deepEqual(rowView(q.groups[0].hits[0], q.terms).meta.map((m) => [m.text, !!m.badge]), [['친구', false], ['답 기다림', true]]);
+  const qs2 = buildIndex({ ...(doc() as object), questions: byId([Q('q9', '침구 둘', [{ text: '답' }], { status: 'answered' })]) } as never);
+  const r9 = search(qs2, '침구 둘');
+  assert.deepEqual(rowView(r9.groups[0].hits[0], r9.terms).meta.map((m) => m.text), ['친구', '답함', '답 1개']);
   // 많이 나온 말은 안 끝난 할 일 제목에서만(끝난 「계약서 원본 보관」은 세지 않아 계약서는 1번 — 빠짐)
   assert.deepEqual(hotOfDoc(doc()), []);
   const two = { tasks: byId([T('a', 4, '계약서 챙기기'), T('b', 4, '계약서를 복사'), T('c', 4, '계약서 보관', { done: true })]) } as never;

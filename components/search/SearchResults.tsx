@@ -1,21 +1,21 @@
 'use client';
 
 import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { useGuardedNav } from '@/components/shell/useGuardedNav';
 import { telOf } from '@/components/simple-home/home-model';
 import { guideIdsLoaded, useGuideIds } from '@/components/tasks/guides-client';
+import { Badge } from '@/components/ui/Badge';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { GroupHead } from '@/components/ui/GroupHead';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { Meta } from '@/components/ui/Meta';
-import { displayName } from '@/lib/client/format';
 import { useViewMode } from '@/lib/client/view-mode';
 import { isLoneJamo, markText } from '@/lib/shared/search-text';
 import { getGuideBodies, prefetchGuideBodies, subscribeGuideBodies, type GuideBodiesState } from './guide-bodies';
-import { dropJump, requestJump } from './jump';
+import { requestJump } from './jump';
 import {
   GROUP_MAX, GROUP_SHOWN, buildIndex, countText, dayOf, hasStep, hotOfDoc, jumpOf, rowView, search,
   type Entry, type Group, type Hit, type Jump, type Marked, type SearchResult,
@@ -29,7 +29,7 @@ const WHERE = '할 일, 도움말, 기록, 연락처, 집 정보, 자금, 질문
 const WHERE_NO_GUIDE = '할 일, 기록, 연락처, 집 정보, 자금, 질문';
 
 export function SearchResults({ query, onClose, onQuery }: { query: string; onClose: (then?: () => void) => void; onQuery: (q: string) => void }) {
-  const { doc } = useProgress();
+  const { doc, hasDirty, confirmDiscard } = useProgress();
   const guideNow = useSyncExternalStore(subscribeGuideBodies, getGuideBodies, getGuideBodies);
   const guide = useDeferredValue(guideNow);
   const ids = useGuideIds();
@@ -61,19 +61,24 @@ export function SearchResults({ query, onClose, onQuery }: { query: string; onCl
   const detail = useViewMode() === 'detail';
   const path = usePathname() ?? '/';
   const go = useGuardedNav();
-  // 누르면 먼저 창을 닫고(뒤로 한 번) 그다음 옮긴다. 이미 그 화면이면 갈 곳만 맡긴다
+  const router = useRouter();
+  // 누르면 먼저 창을 닫고(뒤로 한 번) 그다음 옮긴다. 이미 그 화면이면 갈 곳만 맡긴다.
+  // 다른 화면으로 옮길 땐 「저장 안 한 내용」 확인을 먼저 받고, 옮기기로 정한 뒤에 갈 곳을 맡긴다(확인 창에 오래 머물러도 맡긴 것이 시간이 지나 버려지지 않게)
   const onPick = useCallback((j: Jump) => onClose(() => {
-    const away = (href: string) => void go(href).then((ok) => { if (!ok) dropJump(); });
-    if (j.kind === 'money') { requestJump(j); if (path !== '/money') away('/money'); return; }
+    const away = async (href: string) => {
+      if (hasDirty() && !(await confirmDiscard())) return;
+      requestJump(j);
+      router.push(href);
+    };
+    if (j.kind === 'money') { if (path === '/money') requestJump(j); else void away('/money'); return; }
     if (j.kind === 'task' && (detail || !j.tab) && hasStep(j.stepId)) {
       // 「자세히 보기」를 골라 둔 기기 · 분야 탭을 못 찾은 할 일: 예전 화면의 그 단계 시트를 연다(갈 곳은 맡기지 않는다)
       if (path === '/classic') window.location.hash = `step-${j.stepId}`;
       else void go(`/classic#step-${j.stepId}`);
       return;
     }
-    requestJump(j);
-    if (path !== '/' && path !== '/home') away('/');
-  }), [onClose, go, path, detail]);
+    if (path === '/' || path === '/home') requestJump(j); else void away('/');
+  }), [onClose, go, router, hasDirty, confirmDiscard, path, detail]);
 
   return (
     <>
@@ -85,8 +90,8 @@ export function SearchResults({ query, onClose, onQuery }: { query: string; onCl
 
 /** 「도움말에서도 찾는 중…」 · 실패 한 줄(할 일 묶음 맨 아래, 할 일 결과가 없으면 맨 위) */
 const guideLine = (s: GuideBodiesState['status']) => (s === 'loading' || s === 'idle' ? '도움말에서도 찾는 중…' : s === 'error' ? '도움말은 지금 열리지 않아 빼고 찾았어요.' : null);
-/** 빈 검색어 · 결과 없음: 가운데 정렬, 같은 위아래 여백(데일리 .search-none) */
-const centerCls = 'px-5 py-12 text-center text-cta leading-relaxed text-muted';
+/** 결과 없음: 가운데 정렬(데일리 .search-none), 끝 낱말이 혼자 다음 줄로 떨어지지 않게 줄 나눔을 고르게 */
+const centerCls = 'px-5 py-12 text-center text-cta leading-relaxed text-muted text-balance';
 
 const Results = memo(function Results({ result, guide, hot, detail, onPick, onQuery }: {
   result: SearchResult; guide: GuideBodiesState['status']; hot: { word: string; n: number }[]; detail: boolean;
@@ -98,18 +103,20 @@ const Results = memo(function Results({ result, guide, hot, detail, onPick, onQu
     return () => window.cancelAnimationFrame(id);
   }, [result]);
   if (!result.terms.length) {
-    // 빈 검색어: 찾는 곳 한 줄 + 안 끝난 할 일 제목에 많이 나온 말(누르면 그 말로 찾는다 — 데일리 검색 화면)
+    // 빈 검색어(데일리 검색 화면 .search-h · .kws — 왼쪽 정렬): 찾는 곳 한 줄 + 안 끝난 할 일 제목에 많이 나온 말(누르면 그 말로 찾는다).
+    // 낱말 옆 횟수는 서로 다를 때만 흐리게 「n번」(모두 같으면 뜻이 없어 숨김)
+    const showN = new Set(hot.map((k) => k.n)).size > 1;
     return (
-      <div className={centerCls}>
-        <p>{WHERE}에서 찾아요.</p>
+      <div className="pb-6">
+        <p className="px-5 pt-5 text-sm text-muted">{WHERE}에서 찾아요.</p>
         {hot.length > 0 && (
           <>
-            <p className="mt-6 text-meta font-semibold text-muted">할 일 제목에 많이 나온 말</p>
-            <div className="mt-2.5 flex flex-wrap justify-center gap-2">
+            <p className="px-5 pb-2.5 pt-4.5 text-meta font-semibold text-muted">할 일 제목에 많이 나온 말</p>
+            <div className="flex flex-wrap gap-2 px-5">
               {hot.map((k) => (
                 <button key={k.word} type="button" onClick={() => onQuery(k.word)}
                   className="inline-flex min-h-11 items-center gap-1.5 rounded-control border border-line px-3.5 text-cta text-ink-soft transition-colors hover:bg-sunken active:opacity-60">
-                  {k.word}<small className="text-meta text-muted tabular-nums">{k.n}</small>
+                  {k.word}{showN && <small className="text-meta text-muted tabular-nums">{k.n}번</small>}
                 </button>
               ))}
             </div>
@@ -128,7 +135,9 @@ const Results = memo(function Results({ result, guide, hot, detail, onPick, onQu
         {status}
         <div className={centerCls}>
           <b className="mb-1 block break-words text-base font-bold text-ink">‘{result.q}’</b>
-          이 말이 들어간 것이 없어요.<br />{guide === 'ready' ? WHERE : WHERE_NO_GUIDE}을 다 찾아봤어요.
+          {/* 문장마다 따로 줄 나눔을 고르게(text-balance 는 블록 하나 단위) */}
+          <span className="block">이 말이 들어간 것이 없어요.</span>
+          <span className="block">{guide === 'ready' ? WHERE : WHERE_NO_GUIDE}을 다 찾아봤어요.</span>
         </div>
       </>
     );
@@ -142,7 +151,7 @@ const Results = memo(function Results({ result, guide, hot, detail, onPick, onQu
   );
 });
 
-/** 묶음 하나: 머리(이름 + n건) → 처음 5줄 → 「n건 더 보기」(50줄까지) → 넘으면 「찾을 말을 더 자세히 적어 보세요.」 */
+/** 묶음 하나: 머리(이름 + n건) → 처음 5줄 → 「n건 더 보기」(50줄까지) → 넘으면 「너무 많이 나왔어요. 찾을 말을 더 자세히 적어 보세요.」 */
 function GroupBlock({ group, q, terms, detail, onPick, foot }: { group: Group; q: string; terms: string[]; detail: boolean; onPick: (j: Jump) => void; foot: ReactNode }) {
   const uid = useId();
   const [all, setAll] = useState(false);
@@ -165,7 +174,7 @@ function GroupBlock({ group, q, terms, detail, onPick, foot }: { group: Group; q
           <FoldRow strongChevron label={all ? '접기' : `${rest}건 더 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={`${uid}-l`} />
         </span>
       )}
-      {all && group.hits.length > GROUP_MAX && <p className="border-t border-line px-5 py-3 text-sm text-muted">찾을 말을 더 자세히 적어 보세요.</p>}
+      {all && group.hits.length > GROUP_MAX && <p className="border-t border-line px-5 py-3 text-sm text-muted">너무 많이 나왔어요. 찾을 말을 더 자세히 적어 보세요.</p>}
       {foot}
     </section>
   );
@@ -208,7 +217,9 @@ function Row({ hit, terms, detail, onPick, open, onToggle, panelId }: {
       </span>
       {v.meta.length > 0 && (
         <Meta className="mt-0.5 text-meta text-muted">
-          {v.meta.map((p, i) => <span key={i} className={p.date ? 'tabular-nums text-ink-soft' : undefined}>{p.ranges ? <Mark m={{ text: p.text, ranges: p.ranges }} /> : p.text}</span>)}
+          {/* 날짜는 본문색(끝난 할 일은 흐리게), 상태는 질문 화면과 같은 꼬리표 */}
+          {v.meta.map((p, i) => p.badge ? <Badge key={i}>{p.text}</Badge>
+            : <span key={i} className={p.date ? `tabular-nums ${v.done ? 'text-muted' : 'text-ink-soft'}` : undefined}>{p.ranges ? <Mark m={{ text: p.text, ranges: p.ranges }} /> : p.text}</span>)}
         </Meta>
       )}
       {v.snip && !open && (
@@ -275,7 +286,8 @@ function Detail({ entry: e, terms }: { entry: Entry; terms: string[] }) {
             {answers.map((a) => (
               <li key={a.id}>
                 <p className={longText}><Mark m={markText(a.text, terms)} /></p>
-                <Meta className="mt-0.5 text-meta text-muted">{a.by && <span>{displayName(a.by)}</span>}<span className="tabular-nums text-ink-soft">{dayOf(a.at)}</span></Meta>
+                {/* 쓴 사람은 싣지 않는다(기록과 같은 기준 — 사이트에 남편 · 아내 표시를 하지 않는다) */}
+                <p className="mt-0.5 text-meta tabular-nums text-ink-soft">{dayOf(a.at)}</p>
               </li>
             ))}
           </ul>

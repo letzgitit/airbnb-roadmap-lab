@@ -176,14 +176,29 @@ export function markText(text: string | null | undefined, terms: string[]): { te
 
 // ── 많이 나온 말(빈 검색어 화면 — 데일리 「제목에 많이 나온 말」: src/lib/view/text.ts keywordPairs · related.ts hotWords) ──
 // 한글은 두 글자 이상 낱말에서 뒤 조사를 떼고(데일리와 같은 조사 목록), 동사 꼬리 · 흔한 말은 뺀다. 할 일 제목에 흔한 「○○하기」는 「○○」로.
+// 데일리와 다른 점(할 일 제목에 맞춤 — 2026-10-29 코드 재리뷰):
+//   - 조사는 앞 글자 받침에 맞을 때만 뗀다: 은 · 이 · 을 · 과 · 으로(받침 있음) / 는 · 가 · 를 · 와 · 로(받침 없음, 로는 ㄹ 받침도). 「와이파이」의 이는 조사가 아니다.
+//   - 끝 글자 하나로 동사로 보는 규칙은 「다 · 요 · 며 · 돼 · 해」만(고 · 지 · 면 · 서 · 게는 냉장고 · 영업신고 · 벽지 · 도면 · 계약서 같은 이름이 많다).
+//   - 할 일 제목에 흔한 동작 말(고르기 · 바꾸기 …)은 흔한 말로 뺀다.
 const PARTICLES = ['에서는', '으로는', '에게', '에서', '으로', '까지', '부터', '처럼', '보다', '이다', '은', '는', '이', '가', '을', '를', '에', '의', '도', '로', '와', '과', '만'];
-// 동사 꼬리(데일리 「다요게고며서지면돼해」에서 「서」만 뺌 — 여기는 계약서 · 신청서 · 세무서처럼 「서」로 끝나는 서류 · 기관 이름이 많다)
-const VERB_TAIL = '다요게고며지면돼해';
+const AFTER_BATCHIM = new Set(['은', '이', '을', '과', '으로', '으로는']);
+const AFTER_VOWEL = new Set(['는', '가', '를', '와']);
+const VERB_TAIL = '다요며돼해';
 const STOPWORDS = new Set((
   '이유 관련 경우 가능 이번 올해 내년 대한 위한 통해 가지 정도 이상 이하 지금 오늘 그리고 하지만 때문 사실 기준 ' +
   '최근 지난 가장 따라 추가 기간 예정 있는 없는 함께 모든 같은 하는 나온 ' +
-  '하기 받기 사기 보기 쓰기 달기 두기 찾기 넣기 알기 짓기 정하기 챙기기 알아보기 물어보기 확인 준비 다시 예시 시험'
+  '하기 받기 사기 보기 쓰기 달기 두기 찾기 넣기 알기 짓기 걸기 묻기 열기 닫기 정하기 챙기기 알아보기 물어보기 고르기 바꾸기 고치기 만들기 맞추기 ' +
+  '옮기기 붙이기 치우기 부르기 알리기 보내기 끝내기 올리기 내리기 나누기 채우기 비우기 하고 하면 하지 하게 해서 되고 되면 확인 준비 다시 예시 시험'
 ).split(' '));
+// 받침(0 = 없음, 8 = ㄹ). 한글 글자가 아니면 -1
+const batchim = (ch: string) => { const k = ch.charCodeAt(0); return k >= 0xac00 && k <= 0xd7a3 ? (k - 0xac00) % 28 : -1; };
+const particleFits = (p: string, prev: string) => {
+  const b = batchim(prev);
+  if (AFTER_BATCHIM.has(p)) return b > 0;
+  if (AFTER_VOWEL.has(p)) return b === 0;
+  if (p === '로' || p === '로는') return b === 0 || b === 8;
+  return true;
+};
 /** 글 하나의 [주제어, 글에 적힌 모양] 쌍(주제어 = 소문자 · 조사 뗀 꼴) */
 export function keywordPairs(text: string): [string, string][] {
   const out: [string, string][] = [];
@@ -193,7 +208,7 @@ export function keywordPairs(text: string): [string, string][] {
     const hangul = w[0] >= '가' && w[0] <= '힣';
     if (hangul) {
       for (const p of PARTICLES) {
-        if (w.endsWith(p) && w.length - p.length >= 2) { w = w.slice(0, -p.length); seen = seen.slice(0, -p.length); break; }
+        if (w.endsWith(p) && w.length - p.length >= 2 && particleFits(p, w[w.length - p.length - 1])) { w = w.slice(0, -p.length); seen = seen.slice(0, -p.length); break; }
       }
       if (w.length > 3 && w.endsWith('하기')) { w = w.slice(0, -2); seen = seen.slice(0, -2); }
     }
@@ -228,9 +243,15 @@ export function snippet(p: Prepared, ranges: Range[], o: { before?: number; max?
   const max = o.max ?? 140;
   const hit = ranges[0]?.[0] ?? 0;
   let start = Math.max(0, hit - before);
-  // 낱말 가운데서 시작하지 않게: 8자 안에 띄어쓰기가 있으면 그 뒤부터
-  const sp = start > 0 ? p.raw.indexOf(' ', start) : -1;
-  if (sp >= 0 && sp < hit && sp - start <= 8) start = sp + 1;
+  if (start > 0) {
+    // 끊긴 말처럼 읽히지 않게: before 범위 안에 문장 끝(「. 」 「? 」 「! 」)이 있으면 걸린 말에 가장 가까운 그 뒤부터(걸린 말이 든 문장 처음),
+    // 없으면 범위 안 첫 띄어쓰기 뒤부터(낱말 가운데서 시작하지 않게)
+    const win = p.raw.slice(start, hit);
+    const ends = [...win.matchAll(/[.!?。…] /g)];
+    const sp = win.indexOf(' ');
+    if (ends.length) start += ends[ends.length - 1].index + ends[ends.length - 1][0].length;
+    else if (sp >= 0) start += sp + 1;
+  }
   const k = p.raw.charCodeAt(start);
   if (k >= 0xdc00 && k <= 0xdfff) start -= 1; // 써로게이트 짝 가운데서 자르지 않게
   const lead = start > 0 ? '…' : '';
@@ -246,7 +267,15 @@ export function snippet(p: Prepared, ranges: Range[], o: { before?: number; max?
 }
 
 // ── 마크다운 기호 빼기(도움말 본문) ──
-/** 소제목 · 목록 · 인용 기호, 표의 칸 줄, 가로줄, **굵게**, [글](주소)의 주소, 맨 주소를 뺀 글(줄은 그대로) */
+// 소제목 · 목록 · 표 줄은 마침표 없이 끝나는 일이 많다 — 검색 조각은 줄을 한 칸으로 이어 붙이므로, 그런 줄 끝에 「.」를 붙여 문장 사이에 끼어 읽히지 않게 한다
+const SENTENCE_END = /[.!?。…:;)\]」』"'’”]$/;
+const inline = (l: string) => l
+  .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, '$1')
+  .replace(/https?:\/\/[^\s<>()[\]]+/g, '')
+  .replace(/\*\*(.+?)\*\*/g, '$1')
+  .replace(/[ \t]+/g, ' ')
+  .trim();
+/** 소제목 · 목록 · 인용 기호, 표의 칸 줄, 가로줄, **굵게**, [글](주소)의 주소, 맨 주소를 뺀 글(줄은 그대로, 소제목 · 목록 · 표 줄 끝엔 「.」) */
 export function stripMarkdown(md: string): string {
   return String(md ?? '')
     .replace(/\r\n?/g, '\n')
@@ -254,19 +283,18 @@ export function stripMarkdown(md: string): string {
     .map((l) => {
       if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(l)) return ''; // 가로줄
       if (/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l)) return ''; // 표 머리 밑 줄
-      return l
-        .replace(/^\s{0,3}(>\s?)+/, '')
+      const body = l.replace(/^\s{0,3}(>\s?)+/, '');
+      const head = /^\s{0,3}#{1,6}\s+/.test(body);
+      const item = /^\s*(?:[-*+•]|\d{1,3}[.)])\s+/.test(body);
+      const row = /\|/.test(body);
+      const t = inline(body
         .replace(/^\s{0,3}#{1,6}\s+/, '')
         .replace(/\s+#+\s*$/, '')
         .replace(/^\s*(?:[-*+•]|\d{1,3}[.)])\s+/, '')
-        .replace(/\|/g, ' ');
+        .replace(/\|/g, ' '));
+      return t && (head || item || row) && !SENTENCE_END.test(t) ? `${t}.` : t;
     })
+    .filter(Boolean)
     .join('\n')
-    .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, '$1')
-    .replace(/https?:\/\/[^\s<>()[\]]+/g, '')
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/ *\n */g, '\n')
-    .replace(/\n{2,}/g, '\n')
     .trim();
 }

@@ -82,11 +82,11 @@ test('밑줄 자리: 겹침 합치기 · 같은 낱말 여러 번 · 대소문�
 });
 
 test('조각: 첫 걸린 자리 앞 18자쯤부터 · 잘렸으면 「…」 · 밑줄 자리도 옮김', () => {
-  const long = `${'가나다라마바사아자차카타파하'.repeat(3)} 줄눈 다시 하기`;
+  const long = `${'가나다라마바사아자차카타파하'.repeat(3)}줄눈 다시 하기`;
   const p = prepText(long);
   const s = snippet(p, markRanges(p, ['줄눈']));
   assert.ok(s.text.startsWith('…'));
-  assert.equal(s.text.indexOf('줄눈'), 1 + 18);
+  assert.equal(s.text.indexOf('줄눈'), 1 + 18); // 띄어쓰기도 문장 끝도 없으면 18자 앞 그대로
   assert.deepEqual(s.ranges.map(([a, b]) => s.text.slice(a, b)), ['줄눈']);
   const short = prepText('줄눈 다시 하기');
   const t = snippet(short, markRanges(short, ['다시']));
@@ -100,6 +100,23 @@ test('많이 나온 말: 조사 떼기(데일리 규칙) · 「○○하기」 �
   const hot = hotWords(['계약서 사본 챙기기', '계약서를 다시 확인', '욕실 줄눈 계약서 계약서', '욕실 타일', '도배 견적']);
   assert.deepEqual(hot, [{ word: '계약서', n: 3 }, { word: '욕실', n: 2 }]);
   assert.equal(hotWords(['가 나 다']).length, 0);
+});
+
+test('많이 나온 말: 이름을 자르거나 빼지 않음(냉장고 · 영업신고 · 벽지 · 도면 · 와이파이), 받침에 맞는 조사만, 동작 말 빼기', () => {
+  const ws = (s: string) => keywordPairs(s).map((p) => p[0]);
+  assert.deepEqual(ws('냉장고 영업신고 벽지 도면 와이파이'), ['냉장고', '영업신고', '벽지', '도면', '와이파이']);
+  assert.deepEqual(ws('에어컨이 계약을 계약서를 사진으로 거실로 침대와 이불과'), ['에어컨', '계약', '계약서', '사진', '거실', '침대', '이불']);
+  assert.deepEqual(ws('커튼 고르기 문고리 바꾸기 하고 했다'), ['커튼', '문고리']);
+});
+
+test('조각: 소제목 · 목록 줄 끝에 「.」, 시작은 걸린 말이 든 문장 처음 · 없으면 띄어쓰기 뒤', () => {
+  const s = stripMarkdown('## 어떻게 하나요\n- 짧고 부르기 쉬운 이름\n- **계약서 주소**와 헷갈리지 않게\n이름이 있어야 써요.');
+  assert.equal(s, '어떻게 하나요.\n짧고 부르기 쉬운 이름.\n계약서 주소와 헷갈리지 않게.\n이름이 있어야 써요.');
+  const p = prepText(s);
+  const a = snippet(p, markRanges(p, ['계약서']));
+  assert.ok(a.text.startsWith('…계약서 주소와'), a.text);
+  const q = prepText('가나다라마바사아자차카타파하 가나다 계약서 사본');
+  assert.equal(snippet(q, markRanges(q, ['계약서'])).text, '…가나다 계약서 사본');
 });
 
 test('줄바꿈을 살린 긴 글의 밑줄(펼친 기록 · 답)', () => {

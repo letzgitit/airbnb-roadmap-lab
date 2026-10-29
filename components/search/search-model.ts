@@ -9,7 +9,7 @@ import {
 } from '../../lib/shared/search-text.ts';
 import { contacts, fieldLabel, taskTabs, type Contact, type WorkTabId } from '../simple-home/home-model.ts';
 import { manwon } from '../../lib/plan.ts';
-import { STEP_COUNT } from '../../lib/core/types.ts';
+import { QUESTION_STATUS_LABEL, STEP_COUNT } from '../../lib/core/types.ts';
 
 export type SearchKind = 'task' | 'log' | 'contact' | 'property' | 'money' | 'question';
 export const GROUPS: { kind: SearchKind; label: string }[] = [
@@ -82,8 +82,8 @@ export function buildIndex(doc: Pick<ProgressDoc, 'tasks' | 'log' | 'property' |
   });
   for (const p of Object.values(doc.property ?? {})) {
     if (p.deletedAt || p.label.startsWith('연락처 · ')) continue;
-    // 조각 이름은 「내용」(집 정보 줄에는 칸 이름이 보이지 않아 — 2026-10-29 말 검수)
-    out.push({ kind: 'property', id: p.id, item: p, ...head(p.label), fields: fields(field('내용', p.value, 'snippet')) });
+    // 조각 이름은 「본문」(집 정보 줄에는 칸 이름이 보이지 않아 — 2026-10-29 말 검수)
+    out.push({ kind: 'property', id: p.id, item: p, ...head(p.label), fields: fields(field('본문', p.value, 'snippet')) });
   }
   for (const m of Object.values(doc.money ?? {})) {
     if (m.deletedAt) continue;
@@ -164,7 +164,8 @@ export function countText(r: SearchResult): string {
 
 // ── 줄 하나의 보이는 모양 ──
 export interface Marked { text: string; ranges: Range[] }
-export interface MetaPart { text: string; ranges?: Range[]; date?: boolean }
+/** 메타 한 칸: date = 날짜(본문색), badge = 상태 꼬리표(질문 화면과 같은 Badge) */
+export interface MetaPart { text: string; ranges?: Range[]; date?: boolean; badge?: boolean }
 export interface RowView { title: Marked; meta: MetaPart[]; snip: (Marked & { name: string }) | null; done: boolean }
 
 const marked = (p: Prepared, terms: string[], cho?: Cho): Marked => ({ text: p.raw, ranges: markRanges(p, terms, { cho, composeLast: true }) });
@@ -200,9 +201,10 @@ export function rowView(hit: Hit, terms: string[]): RowView {
       if (e.item.estimate) meta.push({ text: '추정' });
       break;
     case 'question': {
-      meta.push(...metaField('받는 사람'), { text: e.item.status === 'open' ? '답 기다림' : e.item.status === 'answered' ? '답함' : '닫음' });
+      // 상태는 질문 화면처럼 꼬리표 하나. 답 개수는 상태와 부딪히지 않을 때만(「답 기다림」인데 답이 달려 있으면 상태 하나만)
+      meta.push(...metaField('받는 사람'), { text: QUESTION_STATUS_LABEL[e.item.status], badge: true });
       const n = e.item.answers.filter((a) => !a.deletedAt).length;
-      if (n) meta.push({ text: `답 ${n}개` });
+      if (n && e.item.status !== 'open') meta.push({ text: `답 ${n}개` });
       break;
     }
   }

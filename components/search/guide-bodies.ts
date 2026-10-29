@@ -8,6 +8,7 @@ import type { GuideBodies } from './search-model';
 export type GuideBodiesState = { status: 'idle' | 'loading' | 'ready' | 'error'; bodies: GuideBodies };
 let state: GuideBodiesState = { status: 'idle', bodies: {} };
 let inflight: Promise<void> | null = null;
+let ctrl: AbortController | null = null;
 const subs = new Set<() => void>();
 const set = (s: GuideBodiesState) => { state = s; subs.forEach((f) => f()); };
 
@@ -21,18 +22,26 @@ export function subscribeGuideBodies(f: () => void): () => void {
 export function prefetchGuideBodies(force = false): void {
   if (inflight || (!force && (state.status === 'ready' || state.status === 'loading'))) return;
   if (state.status !== 'ready') set({ ...state, status: 'loading' });
-  inflight = fetch('/api/guides?body=1', { cache: 'no-store' })
+  const mine = new AbortController();
+  ctrl = mine;
+  const p: Promise<void> = fetch('/api/guides?body=1', { cache: 'no-store', signal: mine.signal })
     .then((r) => {
-      // 로그인이 끊겼다(401 · 403): 받아 둔 본문을 메모리에서 지운다(현황 문서를 지우는 것과 같은 원칙)
-      if (r.status === 401 || r.status === 403) { set({ status: 'idle', bodies: {} }); return null; }
+      // 로그인이 끊겼다(401 · 403): 받아 둔 본문을 메모리에서 지우고(현황 문서를 지우는 것과 같은 원칙) 「찾는 중…」이 남지 않게 실패로 둔다
+      if (r.status === 401 || r.status === 403) { set({ status: 'error', bodies: {} }); return null; }
       return r.ok ? r.json() : Promise.reject(new Error(String(r.status)));
     })
-    .then((j: { bodies?: GuideBodies } | null) => { if (j) set({ status: 'ready', bodies: j.bodies ?? {} }); })
-    .catch(() => set({ ...state, status: state.status === 'ready' ? 'ready' : 'error' }))
-    .finally(() => { inflight = null; });
+    .then((j: { bodies?: GuideBodies } | null) => { if (j && !mine.signal.aborted) set({ status: 'ready', bodies: j.bodies ?? {} }); })
+    .catch(() => { if (!mine.signal.aborted) set({ ...state, status: state.status === 'ready' ? 'ready' : 'error' }); })
+    .finally(() => { if (inflight === p) { inflight = null; ctrl = null; } });
+  inflight = p;
 }
-/** 로그아웃 · 로그인 끊김: 받아 둔 본문을 비운다 */
-export function clearGuideBodies() { if (state.status !== 'idle' || Object.keys(state.bodies).length) set({ status: 'idle', bodies: {} }); }
+/** 로그아웃 · 로그인 끊김: 받는 중인 요청은 취소하고(늦게 온 응답이 다시 채우지 않게) 받아 둔 본문을 비운다 */
+export function clearGuideBodies() {
+  ctrl?.abort();
+  ctrl = null;
+  inflight = null;
+  if (state.status !== 'idle' || Object.keys(state.bodies).length) set({ status: 'idle', bodies: {} });
+}
 
 /** 도움말을 저장했다(빈 글 = 지움): 받아 둔 본문이 있으면 그 항목만 바꾼다. 기호는 찾을 때 뺀다(md) */
 export function noteGuideSaved(id: string, md: string | null, version: number) {
