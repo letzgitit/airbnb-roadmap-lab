@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ganttRows, initialOpen, phasesOf, spanOf, taskRange, tasksOf, type GTask, type PhaseIn, type Row } from './gantt-model.ts';
-import { axisOf, dayWidth, todayScroll } from './gantt-scale.ts';
+import { axisOf, dayWidth, pinSpots, todayScroll } from './gantt-scale.ts';
+import { pinName, pinsOf, PUBLIC_DOC } from '../step-dates.ts';
 
 const TODAY = '2026-10-27';
 const phase = (id: number, o: Partial<PhaseIn> = {}): PhaseIn => ({
@@ -161,4 +162,28 @@ test('「오늘 27」: 달이 바뀌는 선을 넘거나 그달 이름이 없으
 test('오늘 자리: 보이는 폭 30%, 0 보다 작지 않음', () => {
   assert.equal(todayScroll('2026-10-26', 12, TODAY, 360), 0);
   assert.equal(todayScroll('2026-09-28', 12, TODAY, 360), 29 * 12 + 6 - 108);
+});
+
+test('고정 일정 짧은 이름: 항목 이름에서 「고정 · 」을 뗀 첫 덩어리, marks 는 label 앞 토막', () => {
+  const prop = (label: string, value: string) => ({ id: label, label, value, version: 1, updatedAt: '', updatedBy: '' });
+  const doc = { ...PUBLIC_DOC, property: {
+    a: prop('고정 · 잔금 · 신청', '2026-11-10(화) 잔금 · 열쇠 / 2026-11-11(수) 전입'),
+    b: prop('고정 · 301호 승인', '2026-11-09 301호 등록 승인 예상 — 이 날 기준으로 짬'),
+  } } as unknown as Parameters<typeof pinsOf>[0];
+  const pins = pinsOf(doc, [{ date: '2027-01-23', label: '만기' }]);
+  assert.deepEqual(pins.map(pinName), ['301호 승인', '잔금', '만기']);
+  assert.equal(pins[1].label, '(화) 잔금 · 열쇠 / 2026-11-11(수) 전입'); // 긴 설명은 그대로(그날 창 · 달력이 쓴다)
+});
+
+test('고정 일정 이름 자리: 하루 차이 두 핀은 앞 핀 아이콘만 · 뒤 핀 이름, 넉넉하면 둘 다 이름', () => {
+  const near = pinSpots([{ x: 15, name: '301호 승인' }, { x: 45, name: '잔금' }], [], 600);
+  assert.equal(near[0].max, 0);
+  assert.ok(near[1].max >= 25);
+  const far = pinSpots([{ x: 15, name: '301호 승인' }, { x: 315, name: '잔금' }], [], 600);
+  assert.ok(far.every((p) => p.max > 0));
+  // 같은 날 두 핀: 뒤 것만 이름
+  assert.deepEqual(pinSpots([{ x: 15, name: '가' }, { x: 15, name: '나' }], [], 600).map((p) => p.max > 0), [false, true]);
+  // 달 이름에 막히면 말줄임(글자 24px 넘게 남을 때)
+  const m = pinSpots([{ x: 15, name: '아주 긴 고정 일정 이름' }], [{ x: 90, text: '12월' }], 600);
+  assert.ok(m[0].max >= 24 && m[0].max < 90);
 });

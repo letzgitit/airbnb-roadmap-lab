@@ -8,10 +8,10 @@ import { TYPE_DOT, TYPE_LABEL, TYPE_ORDER } from '@/components/TimelineChart';
 import { taskErrorMessage } from '@/components/tasks/task-errors';
 import { clipLabel } from '@/components/progress/bits';
 import type { TimelineType } from '@/lib/timeline';
-import { addDays, diffDays, pinsOf, stepRanges, type DocLike, type Pin, type TimelineStep } from '../step-dates';
+import { addDays, diffDays, pinName, pinsOf, stepRanges, type DocLike, type Pin, type TimelineStep } from '../step-dates';
 import { useDragScroll, useMedia } from '../use-drag-scroll';
 import { ganttRows, initialOpen, phasesOf, spanOf, tasksOf, type Editing, type Phase } from './gantt-model';
-import { axisOf, cxOf, dayWidth, isZoom, todayScroll, xOf, ZOOM_LABEL, ZOOMS, type Zoom } from './gantt-scale';
+import { axisOf, cxOf, dayWidth, isZoom, pinSpots, todayScroll, xOf, ZOOM_LABEL, ZOOMS, type Zoom } from './gantt-scale';
 import { GanttForm } from './GanttForm';
 import { AddRow, FoldRow, FormRow, PhaseRow, SepRow, TaskRow, type DragMode, type Geo } from './GanttRow';
 import s from './gantt.module.css';
@@ -21,7 +21,8 @@ import { FoldAll, OpenAll } from './icons';
 // ┌ 상자 ─────────────────────────────────────────────
 // │ [일 | 주 | 달]            「오늘」 「모두 접기」(펼친 단계가 없으면 「모두 펴기」)
 // │ 단계 종류 거르기 칩(준비 · 계약 …, 달력 탭과 같이 적용)
-// │ 날짜 머리(머리글 띠 바로 밑에 붙음): 달 이름 · 날짜 숫자 · 「오늘 27」 · 고정 일정 핀(누르면 그날 창, 달 단위는 점선만)
+// │ 날짜 머리(머리글 띠 바로 밑에 붙음): 달 이름 · 날짜 숫자 · 「오늘 27」 · 고정 일정 핀 + 짧은 이름(누르면 그날 창, 달 단위는 점선만)
+// │   본문과 같은 세로 칸 선을 머리까지 이어 그어 숫자가 어느 칸인지 보인다(주말 면은 머리에 넣지 않는다)
 // │ 「끝난 단계 n개」(접음) → 단계 머리 띠 → 할 일 → 세부 항목 → 「＋ 할 일 추가」 …(gantt-model.ts)
 // │ 그림 읽는 법(범례)
 // └───────────────────────────────────────────────
@@ -72,9 +73,11 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   const days = diffDays(first, last) + 1;
   const vw = viewW || 360;
   const dw = dayWidth(zoom, phone, vw, days);
-  const W = days * dw + 80; // 끝에 「목표 11/28」 글자 자리
+  const W = days * dw + 80; // 끝 여백: 마지막 칸의 ◆ · 고정 일정 이름 자리
   const ax = axisOf(first, last, dw, zoom, today);
   const geo: Geo = { x: xOf(first, dw), cx: cxOf(first, dw), dw };
+  const shownPins = pins.filter((p) => p.date >= first && p.date <= last);
+  const spots = zoom === 'month' ? [] : pinSpots(shownPins.map((p) => ({ x: geo.cx(p.date), name: pinName(p) })), ax.months, W);
   const rows = ganttRows(phases, { open, openTask, showDone, types, editing, guest });
   const anyOpen = phases.some((p) => !p.done && open.has(p.id));
 
@@ -184,14 +187,18 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
 
       <div className={s.axisWrap}>
         <div ref={axisRef} className={s.axis} style={{ width: W }}>
+          {ax.lines.map((l) => <i key={`l${l.x}`} className={`${s.gl} ${l.kind === 'month' ? s.m : l.kind === 'faint' ? s.faint : ''}`} style={{ left: l.x }} aria-hidden />)}
           {ax.months.map((m) => <span key={`m${m.x}`} className={s.axM} style={{ left: m.x }} aria-hidden>{m.text}</span>)}
           {ax.days.map((d) => <span key={`d${d.x}`} className={`${s.axD} ${zoom === 'day' ? '' : s.wk}`} style={{ left: d.x }} aria-hidden>{d.text}</span>)}
-          {zoom !== 'month' && pins.filter((p) => p.date >= first && p.date <= last).map((p) => {
-            const name = p.label.split(' · ')[0];
-            const label = `고정 일정 ${shortDate(p.date)} ${p.label}`;
+          {spots.map((sp, i) => {
+            const p = shownPins[i];
+            const name = pinName(p);
+            const label = `고정 일정 ${shortDate(p.date)} ${name}${p.label !== name ? ` — ${p.label}` : ''}`;
+            const inner = <><i className="fas fa-thumbtack" aria-hidden />{sp.max > 0 && <span style={{ maxWidth: sp.max }}>{name}</span>}</>;
+            const cn = `${s.axPin} ${sp.max > 0 ? '' : s.only}`;
             return onPick && !guest
-              ? <button key={`p${p.date}${p.label}`} type="button" className={s.axPin} style={{ left: geo.cx(p.date) }} title={label} aria-label={`${label}, 그날 할 일 보기`} onClick={() => onPick(p.date)}><i className="fas fa-thumbtack" aria-hidden />{name}</button>
-              : <span key={`p${p.date}${p.label}`} className={s.axPin} style={{ left: geo.cx(p.date) }} title={label}><i className="fas fa-thumbtack" aria-hidden />{name}</span>;
+              ? <button key={`p${p.date}${p.label}`} type="button" className={cn} style={{ left: sp.x }} title={label} aria-label={`${label}, 그날 할 일 보기`} onClick={() => onPick(p.date)}>{inner}</button>
+              : <span key={`p${p.date}${p.label}`} className={cn} style={{ left: sp.x }} title={label}>{inner}</span>;
           })}
           {/* 「오늘 27」 글자는 축 첫머리에서 잘리지 않게(오늘이 첫 칸 근처면 글자만 조금 안쪽으로) */}
           {ax.todayX != null && <span className={s.axToday} style={{ left: ax.labelX ?? ax.todayX }}>{ax.todayText}</span>}
@@ -203,7 +210,7 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
           <div className={s.grid} aria-hidden>
             {ax.weekends.map((x) => <i key={`w${x}`} className={s.wkend} style={{ left: x, width: dw }} />)}
             {ax.lines.map((l) => <i key={`l${l.x}`} className={`${s.gl} ${l.kind === 'month' ? s.m : l.kind === 'faint' ? s.faint : ''}`} style={{ left: l.x }} />)}
-            {pins.filter((p) => p.date >= first && p.date <= last).map((p) => <i key={`pl${p.date}${p.label}`} className={s.pinline} style={{ left: geo.cx(p.date) }} />)}
+            {shownPins.map((p) => <i key={`pl${p.date}${p.label}`} className={s.pinline} style={{ left: geo.cx(p.date) }} />)}
           </div>
           {rows.some((r) => r.k === 'phase')
             ? rows.map((r, i) => {
@@ -240,7 +247,6 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
         {!guest && <span><i className={s.lgTb} />할 일</span>}
         {!guest && <span><i className={s.lgSt} />세부 항목</span>}
         {!guest && <span><i className={s.lgDia} />단계 목표일</span>}
-        <span><i className={s.lgTd} />오늘</span>
         {pins.length > 0 && <span><i className={s.lgPin} />고정 일정</span>}
       </div>
     </section>

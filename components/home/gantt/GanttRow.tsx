@@ -106,10 +106,11 @@ export function PhaseRow({ r, geo, open, guest, onToggle, onStep }: {
           {!guest && <span>할 일 <b>{p.leafDone}</b>/{p.leafTotal}</span>}
         </div>
       </div>
-      <div className={s.bl} data-a={left} data-b={Math.max(left + w, tx != null ? tx + 76 : 0)} aria-hidden>
+      <div className={s.bl} data-a={left} data-b={Math.max(left + w, tx != null ? tx + 8 : 0)} aria-hidden>
         <Gut r={r} />
         <div className={s.sb} style={{ left, width: w }}><i style={{ width: `${p.pct}%` }} /></div>
-        {tx != null && <><i className={s.dia} style={{ left: tx }} /><span className={s.diaL} style={{ left: tx }}>목표 {shortDate(p.target!)}</span></>}
+        {/* ◆ 목표일. 날짜 글자는 이름 밑 「~11/9」가 늘 보여 막대 옆에는 쓰지 않는다(2026-10-29 덜어내기) */}
+        {tx != null && <i className={s.dia} style={{ left: tx }} />}
         <GutR />
       </div>
     </div>
@@ -163,15 +164,22 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, onEdit, onTog
           </div>
         )}
       </div>
-      <Bar key={`${range?.from}${range?.to}`} r={r} geo={geo} range={range} point={!!range && range.from === range.to && !kids.length}
+      <Bar key={`${range?.from}${range?.to}`} r={r} geo={geo} range={range}
         fill={kids.length && !t.done ? Math.round((kd / kids.length) * 100) : null}
         canDrag={canDrag && !!range && !range.derived} onDrag={onDrag} />
     </div>
   );
 }
 
-function Bar({ r, geo, range, point, fill, canDrag, onDrag }: {
-  r: Extract<Row, { k: 'task' | 'sub' }>; geo: Geo; range: { from: string; to: string } | null; point: boolean; fill: number | null;
+/** 막대 최소 폭(px): 주 · 달 단위처럼 하루 칸이 아주 좁아도 보이게. 하루짜리도 점이 아니라 그날 칸을 칠한 막대 */
+const MIN_W = { task: 8, sub: 6 };
+/** 양 끝 끌기 손잡이(8px 둘)는 막대가 이만큼 넓을 때만 — 좁으면 통째로 옮기기만 */
+const HANDLE_MIN = 28;
+/** 이보다 좁은 막대(주 · 달 단위의 하루짜리 등)는 모서리를 덜 둥글게 — 둥근 점이 아니라 칠한 칸으로 읽히게 */
+const NARROW = 24;
+
+function Bar({ r, geo, range, fill, canDrag, onDrag }: {
+  r: Extract<Row, { k: 'task' | 'sub' }>; geo: Geo; range: { from: string; to: string } | null; fill: number | null;
   canDrag: boolean; onDrag: (mode: DragMode, days: number) => void;
 }) {
   const [drag, setDrag] = useState<{ mode: DragMode; x0: number; d: number } | null>(null);
@@ -183,10 +191,14 @@ function Bar({ r, geo, range, point, fill, canDrag, onDrag }: {
     if (drag.mode === 'start') { const n = addDays(from, drag.d); from = n > to ? to : n; }
     if (drag.mode === 'end') { const n = addDays(to, drag.d); to = n < from ? from : n; }
   }
-  const pt = point && from === to;
-  const a = pt ? geo.cx(to) - 8 : geo.x(from);
-  const b = pt ? geo.cx(to) + 8 : geo.x(from) + (diffDays(from, to) + 1) * geo.dw;
-  const style = pt ? { left: geo.cx(to) } : { left: geo.x(from) + 1, width: (diffDays(from, to) + 1) * geo.dw - 2 };
+  // 칸 안쪽 1px 씩 띄워 칠한다. 최소 폭보다 좁으면 그 기간 가운데에 최소 폭으로
+  const span = (diffDays(from, to) + 1) * geo.dw;
+  const w = Math.max(span - 2, MIN_W[r.k]);
+  const left = geo.x(from) + span / 2 - w / 2;
+  const a = left;
+  const b = left + w;
+  const style = { left, width: w };
+  const handles = canDrag && w >= HANDLE_MIN;
   const t = r.t;
 
   const down = (e: PointerEvent<HTMLElement>) => {
@@ -216,12 +228,12 @@ function Bar({ r, geo, range, point, fill, canDrag, onDrag }: {
   return (
     <div className={s.bl} data-a={a} data-b={b}>
       <Gut r={r} />
-      <i className={cls(s.tb, pt && s.pt, t.done ? s.bDone : fill != null && s.part, canDrag && s.drag, drag && s.dragging)} style={style}
+      <i className={cls(s.tb, w < NARROW && s.narrow, t.done ? s.bDone : fill != null && s.part, canDrag && s.drag, drag && s.dragging)} style={style}
         onPointerDown={canDrag ? down : undefined} onPointerMove={canDrag ? move : undefined} onPointerUp={canDrag ? up : undefined} onPointerCancel={canDrag ? () => setDrag(null) : undefined}
         onClick={canDrag ? click : undefined}
-        title={canDrag ? '끌면 날짜가 옮겨져요. 왼쪽 끝을 끌면 시작일만, 오른쪽 끝을 끌면 마감일만 바뀌어요.' : undefined} aria-hidden>
+        title={handles ? '끌면 날짜가 옮겨져요. 왼쪽 끝을 끌면 시작일만, 오른쪽 끝을 끌면 마감일만 바뀌어요.' : canDrag ? '끌면 날짜가 옮겨져요.' : undefined} aria-hidden>
         {fill != null && !t.done && <i className={s.fill} style={{ width: `${fill}%` }} />}
-        {canDrag && !pt && <><i className={cls(s.hd, s.hs)} data-h="start" /><i className={cls(s.hd, s.he)} data-h="end" /></>}
+        {handles && <><i className={cls(s.hd, s.hs)} data-h="start" /><i className={cls(s.hd, s.he)} data-h="end" /></>}
       </i>
       {drag && drag.d !== 0 && (
         <span className={s.dragTip} style={{ left: (a + b) / 2 }}>{from === to ? shortDate(to) : `${shortDate(from)}~${shortDate(to)}`}</span>

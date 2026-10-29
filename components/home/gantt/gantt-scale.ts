@@ -5,8 +5,9 @@ import { addDays, diffDays, toDate } from '../step-dates.ts';
 //
 // 하루 폭(px): 일 · 주 · 달 세 단위. 폰(768px 미만)과 PC 는 모양이 같고 폭만 다르다.
 //   일 = 폰 30 · PC 40, 주 = 폰 12 · PC 16, 달 = 폰 4 · PC 7. 보이는 폭보다 축이 짧으면 보이는 폭을 다 채우게 늘린다.
-// 날짜 머리(52px, 위에 붙음): 윗줄 = 달 이름(그달 1일 자리, 첫 칸은 다음 달까지 40px 넘게 남을 때만) · 고정 일정 핀 이름,
-//   아랫줄 = 일 단위는 날마다 숫자, 주 · 달 단위는 월요일 숫자. 「오늘 27」 글자와 겹치는 숫자는 뺀다.
+// 날짜 머리(52px, 위에 붙음): 윗줄(24px) = 달 이름(그달 1일 자리, 첫 칸은 다음 달까지 40px 넘게 남을 때만) · 고정 일정 핀 이름(pinSpots),
+//   아랫줄(28px) = 일 단위는 날마다 숫자, 주 · 달 단위는 월요일 숫자. 「오늘 27」 글자와 겹치는 숫자는 뺀다.
+//   아랫줄에도 본문과 같은 칸 선 · 주말 면을 그어 숫자가 어느 칸인지 줄과 맞게 보인다.
 // 칸 선: 그달 1일 = 진한 선(line-strong), 월요일 = 선(달 단위는 흐리게), 일 단위의 나머지 날 = 흐린 선, 일 단위 주말 = 옅은 면.
 export type Zoom = 'day' | 'week' | 'month';
 export const ZOOMS: Zoom[] = ['day', 'week', 'month'];
@@ -100,6 +101,38 @@ export const cxOf = (first: string, dw: number) => (iso: string) => diffDays(fir
 /** 처음 · 「오늘」 단추의 가로 자리: 오늘을 보이는 폭의 30% 자리에(앞 며칠도 보이게). 0 보다 작아지지 않는다 */
 export function todayScroll(first: string, dw: number, today: string, viewW: number): number {
   return Math.max(0, diffDays(first, today) * dw + dw / 2 - viewW * 0.3);
+}
+
+// ── 날짜 머리 윗줄의 고정 일정 이름 ──
+// 이름(짧은 이름 — 「잔금」 「301호 승인」)은 핀 아이콘 오른쪽에 붙는다(아이콘은 점선 7px 왼쪽에서 시작).
+// 다음 핀 · 달 이름 글자 앞까지 이름이 다 들어가면 이름까지, 아니면 아이콘만(이름은 title · aria-label — 누르면 그날 창).
+//   하루 차이 두 핀(11/9 · 11/10)은 앞 핀이 아이콘만, 뒤 핀이 이름. 줄을 나누거나 엇갈리게 하지 않는다.
+//   마지막 핀이 달 이름 · 축 끝에 막히면 말줄임(글자 24px 도 안 남으면 아이콘만).
+// 글자 폭은 어림값(한글 12.5 · 그 밖 7.5 · 빈칸 3.5px)이고, 넘치면 CSS 말줄임이 받는다.
+export interface PinIn { x: number; name: string }
+/** max = 이름 글자 최대 폭(px), 0 = 아이콘만 */
+export interface PinSpot { x: number; max: number }
+const PIN_IN = 7; // 아이콘이 점선에서 왼쪽으로 나간 폭
+const PIN_BOX = 20; // 아이콘 12 + 사이 4 + 끝 여백 4
+const PIN_GAP = 4; // 다음 글자 상자와 띄움
+const PIN_MIN_TEXT = 24;
+export const textWidth = (t: string) => [...t].reduce((w, c) => w + (/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/.test(c) ? 12.5 : c === ' ' ? 3.5 : 7.5), 0);
+
+export function pinSpots(pins: PinIn[], months: AxisLabel[], width: number): PinSpot[] {
+  const xs = pins.map((p) => p.x);
+  const monthStarts = months.map((m) => m.x);
+  return pins.map((p, i) => {
+    const tw = Math.ceil(textWidth(p.name));
+    const nextPin = xs.filter((x, k) => x > p.x || (x === p.x && k > i)).sort((a, b) => a - b)[0]; // 같은 날 핀은 뒤 것이 이름
+    const nextMonth = monthStarts.filter((x) => x > p.x).sort((a, b) => a - b)[0];
+    const pinStop = nextPin != null ? nextPin - PIN_IN - PIN_GAP : Infinity;
+    const otherStop = Math.min(width, nextMonth != null ? nextMonth - 2 : Infinity);
+    const room = Math.min(pinStop, otherStop) - (p.x - PIN_IN) - PIN_BOX;
+    if (tw <= room) return { x: p.x, max: Math.floor(room) };
+    // 다음 핀에 막히면 아이콘만(이름은 뒤 핀에게), 달 이름 · 축 끝에 막히면 말줄임
+    const max = pinStop <= otherStop || room < PIN_MIN_TEXT ? 0 : Math.floor(room);
+    return { x: p.x, max };
+  });
 }
 
 /** 끌어 옮긴 픽셀 → 날수(반올림) */

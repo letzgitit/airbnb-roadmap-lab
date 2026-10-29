@@ -44,17 +44,26 @@ export function stepRanges(steps: TimelineStep[], doc: DocLike, today: string, f
 }
 
 // 고정 일정: 현황 집 정보 중 이름이 「고정 · 」으로 시작하고 값이 YYYY-MM-DD 로 시작하는 줄 + marks(예: 지산 만기). 날짜순.
-export interface Pin { date: string; label: string }
+//   label = 값의 날짜 뒤 글(없으면 항목 이름) — 그날 창 · 날짜 띠 · 달력이 쓰는 긴 설명.
+//   name  = 항목 이름에서 「고정 · 」을 뗀 첫 덩어리(「고정 · 잔금 · 신청」 → 「잔금」) — 간트 날짜 머리처럼 좁은 곳의 짧은 이름. pinName 으로 읽는다.
+export interface Pin { date: string; label: string; name?: string }
 const PIN_PREFIX = /^고정\s*·\s*/;
+const firstChunk = (s: string) => s.split(/\s*·\s*/)[0].trim();
 export function pinsOf(doc: DocLike | null, marks: Pin[] = []): Pin[] {
   return [
     ...marks,
     ...(doc ? Object.values(doc.property) : [])
       .filter((p) => !p.deletedAt && PIN_PREFIX.test(p.label))
-      .map((p) => { const m = p.value.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/); return m ? { date: m[1], label: m[2] || p.label.replace(PIN_PREFIX, '') } : null; })
-      .filter((p): p is Pin => !!p),
+      .map((p) => {
+        const m = p.value.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/);
+        const key = p.label.replace(PIN_PREFIX, '');
+        return m ? { date: m[1], label: m[2] || key, name: firstChunk(key) || firstChunk(m[2]) } : null;
+      })
+      .filter((p): p is Required<Pin> => !!p),
   ].sort((a, b) => a.date.localeCompare(b.date));
 }
+/** 고정 일정의 짧은 이름: name, 없으면(marks) label 의 「 · 」 앞 토막 */
+export const pinName = (p: Pin) => p.name || firstChunk(p.label);
 
 // 날짜 띠의 범위와 날마다의 표시(홈 타임라인과 그날 창이 같이 쓴다).
 //   끝 = 단계 목표일 중 가장 늦은 날과 오늘 중 늦은 날이 든 주의 일요일(목표일이 없으면 단계 기간 끝). 그 뒤의 할 일 · 고정 일정은 beyond 로만 센다.
