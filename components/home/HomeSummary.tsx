@@ -12,7 +12,8 @@ import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import { treeRows } from '@/components/tasks/task-view';
 import { toDate, type Pin, type TimelineStep } from './step-dates';
-import { dLabel, guestFinish, logWhen, summaryOf, type MoneyAccount, type StepStateRow, type Summary } from './summary-data';
+import { DueBadge } from '@/components/tasks/DueBadge';
+import { guestFinish, logWhen, summaryOf, type MoneyAccount, type StepStateRow, type Summary } from './summary-data';
 import { Chevron, GuestPlan, GuestWeeks, MoneyBar, Ring, StepRoad, TypeDot, TypeLegend, useWidth, WeekChart } from './SummaryViz';
 
 // 홈 「요약」 탭(보기 고르기 [요약 | 단계 | 달력]의 첫 칸). 그림으로 먼저 보고, 아래 줄을 눌러 원래 자리로 간다(DESIGN.md 8.1.1).
@@ -85,9 +86,9 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
   const s = summaryOf(steps, doc, today, { currentId, marks, fixedDay0, isDone, editing });
   const stepRefs: StepRef[] = steps.map((x) => ({ id: x.id, title: x.title }));
   // 세부 항목은 같은 묶음 안에 부모가 있으면 바로 밑에 들여 쓰고, 없으면 맨 위 층 + 「‘부모’의 세부」
-  const rows = (list: TaskItem[], late = false) => treeRows(list, doc.tasks).map(({ item: t, depth, parentTitle }) => (
+  const rows = (list: TaskItem[]) => treeRows(list, doc.tasks).map(({ item: t, depth, parentTitle }) => (
     <TaskRow key={t.id} t={t} steps={stepRefs} listStepId={null} showStep scope="page" inset depth={depth} parentTitle={parentTitle}
-      quietLate={late} onEditChange={reportEdit} onToggle={onToggle} onGone={focusTodo} />
+      onEditChange={reportEdit} onToggle={onToggle} onGone={focusTodo} />
   ));
   const nextOpen = moreNext || s.next7.some((t) => editing.has(t.id));
   const decideOpen = moreDecide || s.decide.slice(DECIDE_SHOWN).some((t) => editing.has(t.id));
@@ -160,8 +161,6 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
         {s.active.length === 0 && <p className="border-t border-line px-4 py-3 text-base text-muted">모든 단계를 끝냈어요.</p>}
         <ul>
           {s.active.map((a) => {
-            const d = dLabel(a.due, today);
-            const late = d.endsWith('지남');
             return (
               <li key={a.id} className="border-t border-line">
                 <button type="button" onClick={() => onStep(a.index)} aria-current={a.current ? 'step' : undefined}
@@ -179,8 +178,9 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
                       <span className="text-sm text-muted tabular-nums">{a.all > 0 ? `할 일 ${a.done}/${a.all} 끝` : '할 일 없음'}</span>
                     </span>
                   </span>
-                  <span className="text-right">
-                    <span className={`block text-lg font-bold tabular-nums ${late ? 'text-danger-ink' : 'text-ink'}`}>{d}</span>
+                  {/* 남은 날 = 할 일 줄과 같은 꼬리표(DueBadge) + 목표일 */}
+                  <span className="flex flex-col items-end gap-1">
+                    <DueBadge due={a.due} today={today} />
                     <span className="block text-sm text-muted tabular-nums">{shortDate(a.due)}</span>
                   </span>
                   <Chevron />
@@ -200,7 +200,7 @@ function MemberSummary({ steps, currentId, onStep, onDay, onShowSteps, marks = [
         {s.late.length > 0 && (
           <section aria-labelledby={`${uid}-late`}>
             <h4 id={`${uid}-late`} className={`${groupCls} text-danger-ink`}>기한 지남<span className="tabular-nums">{s.late.length}</span></h4>
-            <ul>{rows(s.late, true)}</ul>
+            <ul>{rows(s.late)}</ul>
           </section>
         )}
         {/* 「오늘」은 비어도 남긴다(다른 묶음이 하나라도 있을 때) — 오늘 마감이 없다는 것도 알릴 거리 */}

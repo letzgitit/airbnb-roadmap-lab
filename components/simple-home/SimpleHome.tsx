@@ -9,8 +9,7 @@ import { useSite } from '@/components/shell/SiteShell';
 import { ViewPicker } from '@/components/shell/ViewPicker';
 import { focusTask } from '@/components/tasks/TaskRow';
 import type { StepRef } from '@/components/tasks/TaskComposer';
-import { SOON_DAYS } from '@/components/tasks/task-view';
-import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { DueBadge } from '@/components/tasks/DueBadge';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { revealRow, useJump } from '@/components/search/jump';
@@ -21,7 +20,7 @@ import { BlockHead, blockCls, StepBlock } from './StepBlock';
 import { useTabSwipe } from './TabSwipe';
 import { OPEN_KEY, PHOTO_SUB_KEY, TAB_KEY, dropOldLocal, restoreScroll, savedOpen, savedSub, startTab, trackScroll, write } from './home-state';
 import {
-  CARD_TABS, TABS, askOnly, blockId, contacts, daysBetween, isAsk, isWorkTab, relDay, sortCards, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
+  CARD_TABS, TABS, askOnly, blockId, contacts, isAsk, isWorkTab, sortCards, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
   type CardDef, type TabId, type WorkTabId,
 } from './home-model';
 
@@ -349,14 +348,12 @@ function WeekBlock({ title, items, today, onPick, showTab = false, headRight, cl
       <BlockHead id={`${uid}-h`} title={title} count={items.length} right={headRight} sticky={stickyHead} />
       <ul id={`${uid}-l`} className="border-t border-line px-5">
         {shown.map(({ task, tab }) => {
-          const rel = relDay(task.due!, today);
-          const tone: BadgeTone = rel.tone === 'late' ? 'danger' : daysBetween(today, task.due!) <= SOON_DAYS ? 'warn' : 'neutral';
           return (
             <li key={task.id} className="border-b border-line last:border-b-0">
               <button type="button" onClick={() => onPick(task.id, tab)}
                 className="-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center gap-3 rounded-control px-2 py-2 text-left transition-colors hover:bg-sunken">
                 {/* 꼬리표는 내용 폭(고정 칸 없음) — PC 300px 곁 칸에서도 제목이 한 줄에 들게 */}
-                <Badge tone={tone} className="shrink-0">{rel.text}</Badge>
+                <DueBadge due={task.due} today={today} done={task.done} className="shrink-0" />
                 <span className="min-w-0 flex-1 text-base font-semibold text-ink">{task.text}</span>
                 {showTab && <span className="shrink-0 text-meta text-muted">{label(tab)}</span>}
               </button>

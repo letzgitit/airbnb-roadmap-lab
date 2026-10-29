@@ -1,7 +1,17 @@
 // 할 일 줄 · 폼 계산 확인(node --test, 새 의존성 없이). 값은 모두 가짜다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { longDate, placeOf, placePatch, placeStep, shiftLabel, shiftPatch, spanDate, taskPhase, treeRows } from './task-view.ts';
+import { dueTag, longDate, placeOf, placePatch, placeStep, shiftLabel, shiftPatch, spanDate, taskPhase, treeRows } from './task-view.ts';
+
+test('남은 날 꼬리표: 지남 = 위험 · 0~3일 = 주의 · 그 밖 = 회색, 끝낸 일 · 마감 없음 = 없음', () => {
+  const today = '2026-10-28';
+  assert.deepEqual(dueTag('2026-10-23', today), { text: '5일 지남', tone: 'danger' });
+  assert.deepEqual(dueTag('2026-10-28', today), { text: '오늘', tone: 'warn' });
+  assert.deepEqual(dueTag('2026-10-31', today), { text: 'D-3', tone: 'warn' });
+  assert.deepEqual(dueTag('2026-11-01', today), { text: 'D-4', tone: 'neutral' });
+  assert.equal(dueTag('2026-10-23', today, true), null);
+  assert.equal(dueTag(null, today), null);
+});
 
 test('할 일 줄의 때: 지남 › 곧 마감(3일 안) › 준비할 때(시작일 ~ 마감)', () => {
   const today = '2026-10-28';

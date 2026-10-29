@@ -1,7 +1,7 @@
 // 홈 「요약」 계산 확인(node --test, 새 의존성 없이). 값은 모두 가짜다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dLabel, firstGuest, guestFinish, logWhen, summaryOf, type SummaryDoc } from './summary-data.ts';
+import { firstGuest, guestFinish, logWhen, summaryOf, type SummaryDoc } from './summary-data.ts';
 import type { TimelineStep } from './step-dates.ts';
 
 const TODAY = '2026-10-27';
@@ -119,10 +119,7 @@ test('최근 기록: 지운 것 빼고 최신 3개', () => {
   assert.deepEqual(ids(s.recentLog), ['b', 'd', 'e']);
 });
 
-test('글자 도우미: 남은 날 · 기록 때 · 로그인 전 첫 손님까지', () => {
-  assert.equal(dLabel(TODAY, TODAY), '오늘');
-  assert.equal(dLabel('2026-10-30', TODAY), 'D-3');
-  assert.equal(dLabel('2026-10-25', TODAY), '2일 지남');
+test('글자 도우미: 기록 때 · 로그인 전 첫 손님까지', () => {
   const local = (y: number, mo: number, d: number, h: number, mi: number) => new Date(y, mo - 1, d, h, mi).toISOString();
   assert.equal(logWhen(local(2026, 10, 27, 14, 5), TODAY), '오늘 14:05');
   assert.equal(logWhen(local(2026, 10, 26, 9, 0), TODAY), '어제');

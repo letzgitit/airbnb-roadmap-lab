@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AIRBNB_CARDS, DOC_CARDS, DONE_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
-  progressText, relDay, sortCards, summarize, tasksByCard, workTab, isWorkTab,
+  progressText, sortCards, summarize, tasksByCard, workTab, isWorkTab,
   TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos,
   dayTasks, dayDots, taskTabs, upcomingTasks, blockId, blockTab, docKind, docKindGroups, galleryParts, photoMatches, sortPhotos,
 } from './home-model.ts';
@@ -307,13 +307,6 @@ test('카드 순서: 마감 이른 순(다 끝낸 카드도 제자리) → 날�
   // 기한 지난 일이 있는 안 끝난 카드가 마감이 늦어도 맨 앞, 다 끝낸 카드는 제 마감 자리 그대로
   const late = { ...sums, c: { ...sums.c, late: 1 }, b: { ...sums.b, late: 2 } };
   assert.deepEqual(sortCards(cards, late).map((c) => c.id), ['c', 'd', 'b', 'a', 'e']);
-});
-
-test('남은 날 말과 색', () => {
-  assert.deepEqual(relDay('2026-10-25', '2026-10-27'), { text: '2일 지남', tone: 'late' });
-  assert.deepEqual(relDay('2026-10-27', '2026-10-27'), { text: '오늘', tone: 'soon' });
-  assert.deepEqual(relDay('2026-11-02', '2026-10-27'), { text: 'D-6', tone: 'soon' });
-  assert.deepEqual(relDay('2026-11-03', '2026-10-27'), { text: 'D-7', tone: 'later' });
 });
 
 test('구청 질문: 받는 사람에 「구청」 + 답 기다림만', () => {

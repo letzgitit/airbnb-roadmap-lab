@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { TaskItem, TaskKind } from '@/lib/core/types';
 import { STEP_COUNT } from '@/lib/core/types';
-import { dueLabel, todayStr } from '@/lib/client/format';
+import { todayStr } from '@/lib/client/format';
 import { useProgress, type DirtyScope } from '@/components/progress/ProgressProvider';
 import { liveChildrenOf } from '@/lib/core/task-tree';
 import {
@@ -18,7 +18,8 @@ import { TaskPhotos } from './TaskPhotos';
 import { GuideButton, GuideField } from './TaskGuide';
 import { fetchGuide, saveGuide, useGuideIds } from './guides-client';
 import { usePhotos } from '@/components/progress/PhotosPanel';
-import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
+import { DueBadge } from './DueBadge';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { KeepText } from '@/components/ui/KeepText';
 
@@ -42,7 +43,6 @@ import { KeepText } from '@/components/ui/KeepText';
  * - listStepId: 단계 시트에서 그 단계 번호. 다른 단계로 옮기면 그 목록에서 줄이 빠진다(onGone). 홈(null)은 옮겨도 줄이 남는다.
  * - scope: 저장 안 한 입력의 범위(단계 시트 = 'modal', 홈 = 'page').
  * - inset: 테두리 상자(Card) 안 줄 — 줄 · 폼 좌우에 여백을 둔다.
- * - quietLate: 자세히 보기 「기한 지남」 묶음 안의 줄. 묶음 이름이 이미 빨강이라 남은 날 꼬리표는 회색으로.
  * - depth: 1 = 부모 바로 밑의 세부 항목 줄(24px 들여 쓰고 글자를 한 단계 가늘게).
  * - parentTitle: 부모가 이 목록에 없는 세부 항목이면 부모 제목(보조 줄에 「‘부모 제목’의 세부 항목」).
  * - lead · tag: 달력 「다가오는 일정」처럼 체크 칸 뒤 큰 날짜 칸(lead) · 보조 줄 맨 앞 분야 꼬리표(tag)를 끼울 때.
@@ -66,8 +66,8 @@ export function focusTask(id: string, opts: { guide?: boolean } = {}): boolean {
 type GuideForm = { text: string; orig: string; base: number; loading: boolean; error: string | null };
 const NO_GUIDE: GuideForm = { text: '', orig: '', base: 0, loading: false, error: null };
 
-export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, quietLate = false, depth = 0, parentTitle, simple = false, hideDate = false, hideDueOn = null, lead, tag, onEditChange, onToggle, onGone }: {
-  t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean; quietLate?: boolean;
+export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, inset = false, depth = 0, parentTitle, simple = false, hideDate = false, hideDueOn = null, lead, tag, onEditChange, onToggle, onGone }: {
+  t: TaskItem; steps: StepRef[]; listStepId: number | null; showStep?: boolean; scope: DirtyScope; inset?: boolean;
   depth?: 0 | 1; parentTitle?: string; simple?: boolean;
   /** 체크 칸 뒤에 끼우는 칸(달력 「다가오는 일정」 큰 날짜) · 보조 줄 맨 앞(분야 꼬리표) */
   lead?: ReactNode; tag?: ReactNode;
@@ -134,7 +134,6 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     window.addEventListener(FOCUS_TASK_EVENT, onFocus);
     return () => { window.removeEventListener(FOCUS_TASK_EVENT, onFocus); window.clearTimeout(timer); window.clearTimeout(guideTimer); };
   }, [simple, t.id, t.note]);
-  const dl = dueLabel(t.due, todayStr());
   const dirty = ed.open && (text !== orig.text || start !== orig.start || due !== orig.due || kind !== orig.kind || note !== orig.note || gf.text !== gf.orig || place !== orig.place);
   const fill = (o: Form) => { setText(o.text); setStart(o.start); setDue(o.due); setKind(o.kind); setNote(o.note); setPlace(o.place); setOrig(o); };
   // 폼을 열 때 설명서 본문 받기(없으면 빈 칸, base 0)
@@ -312,16 +311,14 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
     );
   }
 
-  const late = !!dl?.late && !t.done;
   const call = callNumber(t.note);
   const startEdit = () => { fill(formOf(t as unknown as Record<string, unknown>)); loadGuide(); setErr(null); setBase(t.version); ed.start(); };
-  // 남은 날 꼬리표(제목 줄 오른쪽): 기한 지남 = 위험(빨강 테두리) · 3일 안 = 주의(검정 테두리) · 그 밖 = 회색. 누르지 못하는 표시라 빨강 면 · 검정 면을 쓰지 않는다.
+  // 남은 날 꼬리표(제목 줄 오른쪽 — DueBadge, 어느 화면 · 어느 묶음이든 같은 규칙): 기한 지남 = 위험(빨강 테두리) · 3일 안 = 주의 · 그 밖 = 회색.
+  // 누르지 못하는 표시라 빨강 면 · 검정 면을 쓰지 않는다.
   // 둘째 줄: 「10월 27일(화)까지」(13 메타) · 「문의 필요」 안내 꼬리표 · 「지금 하면 돼요」.
   // 마감이 블록 머리 날짜와 같으면(hideDueOn) 「n월 n일까지」를 숨긴다(머리가 이미 말한다 — 남은 날 꼬리표는 그대로).
   // 둘째 줄에 보일 글이 없어도(날짜 없는 할 일 · 날짜를 숨긴 달력 그날 목록) 단추는 둘째 줄 오른쪽 — 어느 줄이든 같은 자리.
   const phase = taskPhase(t, todayStr());
-  // quietLate(자세히 보기 「기한 지남」 묶음 안): 묶음 이름이 이미 빨강이라 줄마다 빨강을 되풀이하지 않는다
-  const tone: BadgeTone = late ? (quietLate ? 'neutral' : 'danger') : phase === 'soon' ? 'warn' : 'neutral';
   const noteLines = (t.note ?? '').trim();
   const firstLine = noteLines.split('\n')[0];
   const photos = taskPhotos.filter((p) => p.taskId === t.id);
@@ -407,7 +404,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               </button>
             )}
           </div>
-          {dl && !t.done && <Badge tone={tone} className="mt-px shrink-0">{dl.rel}</Badge>}
+          <DueBadge due={t.due} today={todayStr()} done={t.done} className="mt-px shrink-0" />
         </div>
         {/* 둘째 줄: 날짜(13) + 오른쪽 단추(전화 · 고치기 · 지우기). 단추 칸은 44px 이고 위아래로 줄 밖까지 걸쳐 줄 높이를 늘리지 않는다.
             날짜 글이 없어도(달력 그날 목록 · 날짜 없는 할 일) 단추는 이 줄 — 어느 줄이든 단추 자리가 같고 제목이 단추에 밀려 꺾이지 않게 */}

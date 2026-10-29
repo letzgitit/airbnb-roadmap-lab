@@ -131,13 +131,7 @@ export function dateParts(iso: string): { md: string; wd: string } {
   const [, m, d] = iso.split('-');
   return { md: `${Number(m)}/${Number(d)}`, wd: WEEK[toDate(iso).getDay()] };
 }
-/** 남은 날 말: 지났으면 「n일 지남」, 오늘이면 「오늘」, 아니면 「D-n」. tone = late(빨강) · soon(다음 7일 안 — 강조색) · later */
-export function relDay(iso: string, today: string): { text: string; tone: 'late' | 'soon' | 'later' } {
-  const n = daysBetween(today, iso);
-  if (n < 0) return { text: `${-n}일 지남`, tone: 'late' };
-  if (n === 0) return { text: '오늘', tone: 'soon' };
-  return { text: `D-${n}`, tone: n <= 6 ? 'soon' : 'later' };
-}
+// 남은 날 꼬리표(「n일 지남」 · 「오늘」 · 「D-n」)는 어느 화면이든 components/tasks/DueBadge(계산 task-view 의 dueTag) 하나
 
 /** 고정 일정: 집 정보 중 이름이 「고정 · 」으로 시작하고 값이 「YYYY-MM-DD 설명」인 줄 */
 export function fixedDates(property: Record<string, PropertyItem>): { date: string; text: string }[] {

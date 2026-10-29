@@ -27,6 +27,18 @@ export function taskPhase(t: Pick<TaskItem, 'done' | 'due'> & { start?: string |
 }
 export const PHASE_WORD = { soon: '곧 마감', prep: '지금 하면 돼요' } as const;
 
+/**
+ * 남은 날 꼬리표(DueBadge — 할 일 줄 · 이번 주 · 단계 블록 머리 · 간트 · 자금, 어느 화면이든 이 한 규칙):
+ *  글 = 「n일 지남」 · 「오늘」 · 「D-n」, tone = 지남 danger(빨강 테두리) · 0~3일 warn(주의) · 그 밖 neutral(회색).
+ *  끝낸 일 · 마감 없음 = null(꼬리표 없음). 묶음 이름이 「기한 지남」이어도 줄의 꼬리표는 그대로 빨강.
+ */
+export function dueTag(due: string | null | undefined, today: string, done = false): { text: string; tone: 'danger' | 'warn' | 'neutral' } | null {
+  if (done || !due) return null;
+  const n = dayDiff(today, due);
+  if (n < 0) return { text: `${-n}일 지남`, tone: 'danger' };
+  return { text: n === 0 ? '오늘' : `D-${n}`, tone: n <= SOON_DAYS ? 'warn' : 'neutral' };
+}
+
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 /** 긴 날짜(새 홈 쉬운 모양 · 시안 B): 「10월 27일(화)」 */
 export function longDate(iso: string): string {

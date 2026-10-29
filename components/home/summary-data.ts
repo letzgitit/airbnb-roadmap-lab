@@ -180,11 +180,7 @@ export function firstGuest(steps: TimelineStep[], doc: Pick<ProgressDoc, 'tasks'
   return { finish, dday: finish ? diffDays(today, finish.date) : null };
 }
 
-/** 「오늘」 · 「D-3」 · 「2일 지남」 */
-export function dLabel(date: string, today: string): string {
-  const n = diffDays(today, date);
-  return n === 0 ? '오늘' : n > 0 ? `D-${n}` : `${-n}일 지남`;
-}
+// 남은 날 꼬리표(「오늘」 · 「D-3」 · 「2일 지남」)는 components/tasks/DueBadge 하나(요약 「지금 하는 단계」도 그것을 쓴다)
 
 /** 기록의 때: 「오늘 14:25」 · 「어제」 · 「10/24」(이 브라우저의 시각 기준) */
 export function logWhen(at: string, today: string): string {

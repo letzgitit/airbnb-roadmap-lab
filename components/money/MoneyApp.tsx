@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { todayStr } from '@/lib/client/format';
 import { longDate } from '@/components/tasks/task-view';
+import { DueBadge } from '@/components/tasks/DueBadge';
 import { PROJECT_LABEL, VIA_LABEL, manwon, moneyRows, splitMark, type PlanItem, type PlanPayload } from '@/lib/plan';
 import { revealRow, useJump } from '@/components/search/jump';
 
@@ -210,15 +211,16 @@ function Timeline({ id, className, items, today, noToday = false }: { id: string
       out.push(monthRow(m));
     }
     const t = splitMark(it.text);
-    const isLate = !it.done && it.due < today;
+    // 날짜는 늘 흐린 글자, 마감 상태는 할 일 줄과 같은 남은 날 꼬리표(DueBadge — 끝낸 일은 없음)를 날짜 바로 밑에
+    // (줄 오른쪽에 두면 날짜 칸 100px 와 겹쳐 320px 폰에서 제목이 네 글자씩 꺾인다 — 제목 폭은 전과 같게)
     out.push(
       <li key={`${it.src}-${it.id}`} className={`flex items-start gap-3 px-4 py-3 ${cardRowCls}`}>
-        <span className={`w-25 shrink-0 whitespace-nowrap pt-0.5 text-sm tabular-nums ${isLate ? 'font-semibold text-danger-ink' : 'text-muted'}`}>
+        <span className="flex w-25 shrink-0 flex-col items-start gap-1 whitespace-nowrap pt-0.5 text-sm tabular-nums text-muted">
           {longDate(it.due)}
+          <DueBadge due={it.due} today={today} done={it.done} />
         </span>
         <span className={`min-w-0 flex-1 break-keep text-base [overflow-wrap:anywhere] ${it.done ? 'text-muted line-through' : 'font-semibold text-ink'}`}>
           {it.done && <span className="sr-only">끝남 </span>}
-          {isLate && <span className="sr-only">기한 지남 </span>}
           <KeepText text={t.text} />
           {t.mark && <span className="ml-1.5 inline-block align-middle"><Badge>{t.mark}</Badge></span>}
         </span>

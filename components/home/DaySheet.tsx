@@ -114,7 +114,7 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
   // 세부 항목은 같은 묶음 안에 부모가 있으면 바로 밑에 들여 쓰고, 없으면 맨 위 층 + 「‘부모’의 세부」
   const rows = (list: TaskItem[], showStep: (t: TaskItem) => boolean = () => false) => treeRows(list, doc.tasks).map(({ item: t, depth, parentTitle }) => (
     <TaskRow key={t.id} t={t} steps={stepRefs} listStepId={null} showStep={showStep(t)} scope="modal" depth={depth} parentTitle={parentTitle}
-      quietLate={lateIds.has(t.id)} onEditChange={reportEdit} onToggle={onToggle} onGone={focusTop} />
+      onEditChange={reportEdit} onToggle={onToggle} onGone={focusTop} />
   ));
   const defaultStep = groupIds[0] ?? currentId ?? steps[0]?.id ?? 1;
 

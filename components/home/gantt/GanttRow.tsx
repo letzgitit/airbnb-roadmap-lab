@@ -3,7 +3,9 @@
 import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { dayRangeLabel, shortDate } from '@/lib/client/format';
 import { addDays, diffDays } from '../step-dates';
-import { isLate, taskRange, type GTask, type Phase, type Row } from './gantt-model';
+import { taskRange, type GTask, type Phase, type Row } from './gantt-model';
+import { dueTag } from '@/components/tasks/task-view';
+import { DueBadge } from '@/components/tasks/DueBadge';
 import { daysFromPx } from './gantt-scale';
 import s from './gantt.module.css';
 import { Check, Chev, Plus } from './icons';
@@ -121,14 +123,13 @@ export function PhaseRow({ r, geo, open, guest, onToggle, onStep }: {
   );
 }
 
-/** 날짜 글자: 늦음 「n일 지남」(빨강, 한 번만) · 오늘 마감 「오늘까지」 · 기간 「10/28~10/30」(폰은 「~10/30」) · 하루 「11/9」 */
-function dateText(t: GTask, today: string, phone: boolean): { text: string; tone: 'late' | 'today' | '' } {
-  if (isLate(t, today)) return { text: `${diffDays(t.due!, today)}일 지남`, tone: 'late' };
-  if (!t.done && t.due === today) return { text: '오늘까지', tone: 'today' };
-  if (t.start && t.due && t.start !== t.due) return { text: phone ? `~${shortDate(t.due)}` : `${shortDate(t.start)}~${shortDate(t.due)}`, tone: '' };
-  if (t.due) return { text: shortDate(t.due), tone: '' };
-  if (t.start) return { text: `${shortDate(t.start)}~`, tone: '' };
-  return { text: '', tone: '' };
+/** 날짜 칸: 안 끝난 할 일에 마감이 있으면 할 일 줄과 같은 남은 날 꼬리표(DueBadge — 「5일 지남」 · 「오늘」 · 「D-4」),
+ *  그 밖(끝낸 할 일 · 마감 없이 시작일만)은 흐린 날짜 글자: 기간 「10/28~10/30」(폰은 「~10/30」) · 하루 「11/9」 · 「10/28~」 */
+function dateText(t: GTask, phone: boolean): string {
+  if (t.start && t.due && t.start !== t.due) return phone ? `~${shortDate(t.due)}` : `${shortDate(t.start)}~${shortDate(t.due)}`;
+  if (t.due) return shortDate(t.due);
+  if (t.start) return `${shortDate(t.start)}~`;
+  return '';
 }
 
 /** 할 일 · 세부 항목 줄. 줄(이름)을 누르면 바로 밑에 내용만 펼친다(reading — TaskDetail: 메모 · 전화 · 사진 · 도움말 + 연필 · 휴지통),
@@ -146,7 +147,9 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, reading, onRe
   const nx = sub ? R3 : R2;
   const range = taskRange(t, kids);
   const kd = kids.filter((k) => k.done).length;
-  const dt = dateText(t, today, phone);
+  const tag = dueTag(t.due, today, t.done);
+  const dt = tag ? '' : dateText(t, phone);
+  const say = tag?.text ?? dt;
   return (
     <div className={cls(s.r, sub ? s.rSub : s.rTask, t.done && s.done, kids.length > 0 && s.hasKids, !reading && s.rShut)} style={typeVars(r.p.type)} onClick={onRead}>
       <div className={s.nl} style={px({ '--my': `${my}px` })}>
@@ -155,9 +158,9 @@ export function TaskRow({ r, geo, today, phone, kidsOpen, canDrag, reading, onRe
           aria-label={`${t.text} 끝냄`} onClick={(e) => { e.stopPropagation(); onToggleDone(); }} />
         <i className={cls(s.node, t.done && s.nDone)} style={{ left: nx }} aria-hidden>{t.done && !sub ? <Check /> : null}</i>
         <div className={s.tLine}>
-          <button type="button" className={s.tName} aria-expanded={reading} aria-label={`${t.text}${dt.text ? `, ${dt.text}` : ''}. 자세히 ${reading ? '접기' : '보기'}`}><KeepText text={t.text} /></button>
+          <button type="button" className={s.tName} aria-expanded={reading} aria-label={`${t.text}${say ? `, ${say}` : ''}. 자세히 ${reading ? '접기' : '보기'}`}><KeepText text={t.text} /></button>
           <span className={s.tMeta} aria-hidden>
-            {dt.text && <span className={cls(s.dt, dt.tone === 'late' && s.lw, dt.tone === 'today' && s.tw)}>{dt.text}</span>}
+            {tag ? <span className={s.dt}><DueBadge due={t.due} today={today} done={t.done} /></span> : dt && <span className={s.dt}>{dt}</span>}
             <span className={s.rchev}><Chev /></span>
           </span>
         </div>

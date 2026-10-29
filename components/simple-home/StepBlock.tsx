@@ -6,14 +6,15 @@ import { useProgress } from '@/components/progress/ProgressProvider';
 import { usePhotos } from '@/components/progress/PhotosPanel';
 import { TaskComposer, type StepRef } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
-import { longDate, treeRows, SOON_DAYS } from '@/components/tasks/task-view';
+import { longDate, treeRows } from '@/components/tasks/task-view';
+import { DueBadge } from '@/components/tasks/DueBadge';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
-import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { addBtnCls, btnGhost, btnPrimary, inputCls } from '@/components/ui/buttonCls';
 import { AddTextButton } from '@/components/ui/AddButton';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { LineIcon } from '@/components/ui/LineIcon';
-import { byDue, daysBetween, prepareAdd, progressSr, progressText, relDay, type CardDef, type CardSummary } from './home-model';
+import { byDue, prepareAdd, progressSr, progressText, type CardDef, type CardSummary } from './home-model';
 import { addCardNote, removeCardNote, restoreCardNote, useCardNotes, type CardNote } from './cardnotes-client';
 
 /** 블록 틀(데일리 .sec): 흰 면, 폰은 화면 끝까지 · 넓은 화면은 1px 선 테두리. 블록 사이는 바탕 회색 8px(부모의 gap-2) */
@@ -354,8 +355,5 @@ function AddPhotoButton({ blockId, stepId, title }: { blockId: string; stepId: n
 function StateBadge({ summary, today, date }: { summary: CardSummary; today: string; date: string | null }) {
   if (summary.finished) return <Badge tone="neutral">완료</Badge>;
   if (summary.late > 0) return <Badge tone="danger">기한 지남 {summary.late}</Badge>;
-  if (!date) return null;
-  const rel = relDay(date, today);
-  const tone: BadgeTone = rel.tone === 'late' ? 'danger' : daysBetween(today, date) <= SOON_DAYS ? 'warn' : 'neutral';
-  return <Badge tone={tone}>{rel.text}</Badge>;
+  return <DueBadge due={date} today={today} />;
 }
