@@ -21,17 +21,17 @@ export const blockCls = 'bg-surface md:border md:border-line';
 /**
  * 펼친 블록의 머리를 분야 탭 줄 바로 밑에 붙인다(연락처 앱 머리글처럼): 할 일을 내려 보는 동안 머리가 따라오고,
  * 블록이 끝나면 다음 블록 머리가 밀어 올린다(sticky 는 블록 section 안에서만 움직인다). top = 탭 줄 높이(--spacing-tabbar),
- * z 는 탭 줄(30)보다 아래, 면은 블록과 같은 bg-surface. 붙은 동안만 아래 1px 선(그림자 1px — 자리를 밀지 않게).
+ * z 는 탭 줄(30)보다 아래, 면은 블록과 같은 bg-surface. 붙은 머리에는 아래 선을 따로 긋지 않는다(2026-10-29 디자인 재검수) —
+ * 밑으로 지나가는 줄 사이 선(좌우 20px 들임)이 머리 바로 밑 1~3px에 오면 선 두 줄이 겹쳐 보여서. 머리와 밑 줄은 그 줄 사이 선이 가른다.
  * 접힌 블록은 머리 한 줄뿐이라 붙지 않고, 붙이는 클래스도 펼쳤을 때만 단다.
  */
 const stickyHeadCls = 'sticky top-tabbar z-20 bg-surface';
-const stuckLineCls = 'shadow-[0_1px_0_var(--color-line)]';
 /** 한 줄로 줄인 붙은 머리 높이(min-h-13) — 줄이는 시점을 잡는 데 쓴다 */
 const SLIM_H = 52;
 /**
- * 붙은 머리 상태: 0 = 안 붙음, 1 = 붙음(평소 모양 + 아래 선), 2 = 붙음 + 한 줄로 줄임(slim — 단계 블록만).
+ * 붙은 머리 상태: 0 = 안 붙음, 1 = 붙음(평소 모양), 2 = 붙음 + 한 줄로 줄임(slim — 단계 펼친 머리만 이 훅을 쓴다).
  * 블록 맨 위 1px 표시(sentinel)가 탭 줄 밑선(머리의 계산된 top) 위로 올라가면 붙은 것.
- * 한 줄로 줄이는 것은 붙고 나서 (평소 머리 높이 − 52)px 더 내린 뒤 — 그때 몸통 첫 줄이 줄인 머리 바로 밑에 와 있어 빈 띠 없이 선 하나로 이어진다.
+ * 한 줄로 줄이는 것은 붙고 나서 (평소 머리 높이 − 52)px 더 내린 뒤 — 그때 몸통 첫 줄 위 선(들임)이 줄인 머리 바로 밑에 와 있어 빈 띠 없이 이어진다.
  * 줄인 높이만큼은 몸통(body) 위 안쪽 여백으로 채운다 — 아래 줄이 튀지 않고, 머리 자신은 52px라 블록 끝에서 제때 밀려 올라간다. 위로 되돌릴 때도 같은 기준.
  */
 function useStuck(on: boolean, canSlim = false) {
@@ -72,7 +72,7 @@ function useStuck(on: boolean, canSlim = false) {
     b.style.paddingTop = '';
     if (cur === 2 && h) b.style.paddingTop = `${Math.max(0, fullH.current - h.offsetHeight)}px`;
   }, [cur]);
-  return { sentinel, head, body, stuck: cur > 0, slim: cur === 2 };
+  return { sentinel, head, body, slim: cur === 2 };
 }
 /** 머리 위치를 재는 기준(머리의 계산된 top = 탭 줄 높이) */
 const stickyTop = (head: HTMLElement | null) => (head ? parseFloat(getComputedStyle(head).top) || 0 : 0);
@@ -82,17 +82,15 @@ const stickyTop = (head: HTMLElement | null) => (head ? parseFloat(getComputedSt
  * 좁아서 한 줄에 안 들어가면 오른쪽 메타가 제목 밑 줄로 내려간다.
  * mark = 제목 표시: line = 글자 밑 짧은 형광 밑줄(밝게 · 어둡게 모두 — 이번 주 할 일 · 갤러리 묶음 · 연락처 바로 걸기),
  *   none = 일터 탭 「단계」 머리 — 형광 밑줄 없음(밑줄은 「이번 주 할 일」에만 — 두 머리를 색으로 가른다, DESIGN.md 8.1.2).
- * sticky = 탭 줄 밑에 붙는 머리(「이번 주 할 일」 본문 블록) — 펼친 단계 머리와 같은 규칙.
+ * sticky = 탭 줄 밑에 붙는 머리(「이번 주 할 일」 본문 블록) — 펼친 단계 머리와 같은 규칙(한 줄로 줄이지는 않아 붙은 상태를 잴 필요가 없다).
  */
 const markCls = { line: 'head-mark', none: '' } as const;
 export function BlockHead({ id, title, count, right, sticky = false, mark = 'line' }: {
   id?: string; title: ReactNode; count?: ReactNode; right?: ReactNode; sticky?: boolean; mark?: keyof typeof markCls;
 }) {
-  const { sentinel, head, stuck } = useStuck(sticky);
   return (
     <>
-      {sticky && <div ref={sentinel} aria-hidden className="h-px -mb-px" />}
-      <div ref={head} className={`flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-5 py-2.5 ${sticky ? stickyHeadCls : ''} ${stuck ? stuckLineCls : ''}`}>
+      <div className={`flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-5 py-2.5 ${sticky ? stickyHeadCls : ''}`}>
         <h2 id={id} className="flex min-w-0 items-baseline gap-2 text-head font-extrabold tracking-[-0.01875rem] text-ink">
           <span className={`${markCls[mark]} min-w-0`}>{title}</span>
           {count != null && <small className="shrink-0 text-meta font-normal tracking-normal text-muted tabular-nums">{count}</small>}
@@ -106,6 +104,8 @@ export function BlockHead({ id, title, count, right, sticky = false, mark = 'lin
 /**
  * 일터 탭(행정 · 설비 · 운영)의 단계 하나(기획 27의 3절 · 9절 — 예전 「카드」). 접고 펴는 줄 묶음(처음엔 접힘 — 펼친 단계는 부르는 쪽이 이 브라우저 탭에 기억, home-state.ts).
  * 일터 탭의 「단계 n」 블록(흰 면 하나) 안에 쌓인다: 블록 틀 없이 위 1px 선으로 단계끼리 나눈다(2026-10-29 — 「이번 주 할 일」 블록과 단계 블록들이 구별이 안 된다는 지적으로 합침).
+ * 단계와 단계 사이 선(화면 끝까지)은 `line-strong` — 몸통 안 들인 선(`line`)보다 한 단 진해 펼친 단계가 여럿이어도 어디서 끝나는지 보인다(2026-10-29 재검수).
+ * 맨 위 단계의 위 선(「단계」 블록 머리 밑)은 단계 사이가 아니라 `line` 그대로(first-of-type).
  * 머리 = 단계 이름(h3 16/800 — 블록 머리 「단계」 19/800 밑 급, 형광 밑줄 없음) + 오른쪽 「11월 9일(월)까지」 · 꼬리표(D-12 · 기한 지남 n) · 「2/7」 · 맨 끝 꺾쇠. 머리 줄 전체가 접기 · 펴기 단추.
  * 다 끝낸 단계 머리 = 이름(muted) + 「완료」 꼬리표 + 빈 개수 칸 + 꺾쇠.
  * 펼쳤을 때만 몸통 = 설명 한 줄 → 안 끝난 할 일 줄(마감 이른 순, 세부 항목은 부모 밑) → 「완료 n」(접음 — 펼치면 끝낸 줄)
@@ -154,7 +154,7 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
   );
   const progress = progressText(summary);
   const done = summary.finished;
-  const { sentinel, head, body, stuck, slim } = useStuck(open, true);
+  const { sentinel, head, body, slim } = useStuck(open, true);
   const section = useRef<HTMLElement>(null);
   // 붙은 머리에서 접으면 접은 뒤 그 머리가 탭 줄 바로 밑에 오게 스크롤을 되돌린다(접히면 블록이 짧아져 머리가 화면 위로 사라지므로)
   //   기준 선(탭 줄 높이)은 접기 전에 잰다 — 접힌 머리는 sticky 가 아니어서 top 을 읽을 수 없다
@@ -174,16 +174,16 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
   }, [open]);
 
   return (
-    <section ref={section} aria-labelledby={`${uid}-t`} className="border-t border-line bg-surface">
+    <section ref={section} aria-labelledby={`${uid}-t`} className="border-t border-line-strong bg-surface first-of-type:border-line">
       {open && <div ref={sentinel} aria-hidden className="h-px -mb-px" />}
       {/* 머리 줄: 제목 속 단추가 줄 전체를 덮어(::after) 어디를 눌러도 접고 편다.
           오른쪽 메타(날짜 · 꼬리표 · 개수 · 꺾쇠)는 쪼개지지 않는 한 덩어리로 오른쪽 세로 가운데. 제목 옆에 다 안 들어가면
           덩어리째 아래 줄로 내려 오른쪽 정렬(flex-wrap — 제목은 한 줄 폭을 다 쓰니 많아야 2줄).
           메타 덩어리는 누를 것이 없는 장식이라 pointer-events-none — 꺾쇠의 회전(transform)이 쌓임 맥락을 만들어
           ::after 위에 그려지므로, 이게 없으면 꺾쇠를 정확히 누를 때 단추가 안 눌린다(2026-10-29 폰 제보).
-          펼친 단계는 머리가 탭 줄 밑에 붙는다(useStuck — 붙은 동안만 아래 선, 한 줄로 줄임).
+          펼친 단계는 머리가 탭 줄 밑에 붙는다(useStuck — 붙은 머리에 아래 선은 없음, 더 내리면 한 줄로 줄임).
           이름은 h3(블록 머리 「단계」 h2 밑) 16/800 — 할 일 제목(16/600)보다 한 단 굵게. 다 끝낸 단계는 「완료」 꼬리표만 — 이름은 muted(훑어볼 때 뒤로 물러나게) */}
-      <div ref={head} className={`flex min-h-13 ${slim ? 'flex-nowrap' : 'flex-wrap'} items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h3>button:focus-visible]:outline-2 has-[>h3>button:focus-visible]:-outline-offset-2 has-[>h3>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'} ${stuck ? stuckLineCls : ''}`}>
+      <div ref={head} className={`flex min-h-13 ${slim ? 'flex-nowrap' : 'flex-wrap'} items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h3>button:focus-visible]:outline-2 has-[>h3>button:focus-visible]:-outline-offset-2 has-[>h3>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'}`}>
         <h3 id={`${uid}-t`} className={`min-w-0 flex-auto text-base font-extrabold ${done ? 'text-muted' : 'text-ink'}`}>
           <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={toggle}
             className={`text-left outline-none after:absolute after:inset-0 after:content-[''] ${slim ? 'block w-full truncate' : ''}`}>
@@ -201,7 +201,7 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
         </div>
       </div>
       {/* 몸통: 펼쳤을 때만 그린다(접힌 동안 할 일 줄이 없어 「이번 주 할 일」 건너가기는 먼저 펼친다).
-          몸통 안 나누는 선은 모두 좌우 20px 들인다(mx-5 — 할 일 줄 사이 선과 같은 폭). 화면 끝까지 닿는 1px 은 단계 경계(section 위 선) 하나뿐 */}
+          몸통 안 나누는 선은 모두 좌우 20px 들인다(mx-5 — 할 일 줄 사이 선과 같은 폭, `line`). 화면 끝까지 닿는 1px 은 단계 경계(section 위 선, `line-strong`) 하나뿐 */}
       <div ref={body} id={`${uid}-b`} hidden={!open}>
         {open && (
           <>

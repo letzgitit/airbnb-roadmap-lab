@@ -309,14 +309,15 @@ function AskRow({ className = '', children }: { className?: string; children: Re
 }
 
 /**
- * 「문의 필요만 보기 n」 거르기(문의 할 일이 있을 때만): 작은 글자 단추(14). 켜면 굵게 + 아래 2px 검정 선(데일리 고르개 꼴).
- * 선은 글자 폭만큼(안쪽 span 이 단추 높이를 채워 단추 아래 끝에 긋는다) — 단추 상자 폭이면 오른쪽 20px 여백까지 넘어가서
+ * 「문의 필요만 보기 n」 거르기(문의 할 일이 있을 때만): 작은 글자 단추(14, 높이 44). 켜면 굵게 + 아래 2px 검정 선(데일리 고르개 꼴).
+ * 선은 글자 폭만큼, 글자 바로 밑(안쪽 span 아래 끝 — 단추 아래 끝이 아니라. 2026-10-29 재검수: 단추 끝이면 글자에서 20px 떨어져 보였다)
+ *   — 단추 상자 폭이면 오른쪽 20px 여백까지 넘어가서
  */
 function AskToggle({ on, count, onToggle }: { on: boolean; count: number; onToggle: () => void }) {
   return (
     <button type="button" aria-pressed={on} onClick={onToggle}
-      className={`-mr-3 inline-flex min-h-11 items-stretch px-3 text-sm transition-colors ${on ? 'font-bold text-ink' : 'font-semibold text-ink-soft hover:text-ink'}`}>
-      <span className={`inline-flex items-center gap-1 ${on ? 'shadow-[inset_0_-2px_0_var(--color-ink)]' : ''}`}>
+      className={`-mr-3 inline-flex min-h-11 items-center px-3 text-sm transition-colors ${on ? 'font-bold text-ink' : 'font-semibold text-ink-soft hover:text-ink'}`}>
+      <span className={`inline-flex items-center gap-1 pb-1 ${on ? 'shadow-[inset_0_-2px_0_var(--color-ink)]' : ''}`}>
         문의 필요만 보기<span className="font-normal text-muted tabular-nums">{count}</span>
       </span>
     </button>
@@ -328,7 +329,7 @@ type WeekItem = { task: TaskItem; tab: WorkTabId };
 const WEEK_SHOWN = 5;
 
 /**
- * 「이번 주 할 일 n」 블록: 기한 지남 + 7일 안 마감만, 줄은 간단히 [남은 날 꼬리표] 제목(메모 · 단추 없음). 5개까지 보이고 넘으면 「n개 더 보기」.
+ * 「이번 주 할 일 n」 블록: 기한 지남 + 7일 안 마감만, 줄은 간단히 [남은 날 꼬리표] 제목(16/600 `ink` — 할 일 제목 규칙, 메모 · 단추 없음). 5개까지 보이고 넘으면 「n개 더 보기」.
  * 누르면 아래 블록의 그 할 일 줄로 내려가 메모를 펼치고 잠깐 형광으로 칠한다(다른 탭이면 그 탭으로). 없으면 블록째 숨긴다.
  * showTab = 여러 탭을 모았을 때 줄 끝에 「행정」 같은 탭 이름(13 메타). headRight = 머리 오른쪽 작은 단추(「문의 필요만 보기」).
  */
@@ -356,7 +357,7 @@ function WeekBlock({ title, items, today, onPick, showTab = false, headRight, cl
                 className="-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center gap-3 rounded-control px-2 py-2 text-left transition-colors hover:bg-sunken">
                 {/* 꼬리표는 내용 폭(고정 칸 없음) — PC 300px 곁 칸에서도 제목이 한 줄에 들게 */}
                 <Badge tone={tone} className="shrink-0">{rel.text}</Badge>
-                <span className="min-w-0 flex-1 text-base text-ink-soft">{task.text}</span>
+                <span className="min-w-0 flex-1 text-base font-semibold text-ink">{task.text}</span>
                 {showTab && <span className="shrink-0 text-meta text-muted">{label(tab)}</span>}
               </button>
             </li>
