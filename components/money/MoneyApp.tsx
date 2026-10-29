@@ -167,7 +167,7 @@ function JisanSection({ data, today, onReload }: { data: PlanPayload; today: str
             <>
               {pastDone.length > 0 && (
                 <div className={cardRowCls}>
-                  <FoldRow label="지난 끝낸 일" count={pastDone.length} open={showPast} onToggle={() => setShowPast((v) => !v)} controls="money-jisan-list" />
+                  <FoldRow label="완료" count={pastDone.length} unit="" open={showPast} onToggle={() => setShowPast((v) => !v)} controls="money-jisan-list" />
                 </div>
               )}
               <Timeline id="money-jisan-list" items={shown} today={today} />

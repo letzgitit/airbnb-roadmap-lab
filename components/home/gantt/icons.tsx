@@ -1,7 +1,8 @@
 // 간트 선 아이콘(시안과 같은 모양, 장식 없음). 글자색(currentColor)을 따른다.
 const P = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
 
-export const Chev = () => <svg {...P} strokeWidth={2.4}><path d="M6 9l6 6 6-6" /></svg>;
+// 꺾쇠: 사이트 선 아이콘(LineIcon chevron)과 같은 굵기 2 · 같은 모양. 기본 = 아래(접힘), 펼치면 CSS 로 180° 돌려 위
+export const Chev = () => <svg {...P} strokeWidth={2}><path d="M6 9l6 6 6-6" /></svg>;
 export const Check = () => <svg {...P} strokeWidth={3.2}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>;
 export const Plus = () => <svg {...P} strokeWidth={2.6}><path d="M12 5v14M5 12h14" /></svg>;
 export const Pen = () => <svg {...P} strokeWidth={2}><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" /><path d="M14.5 7.5l3 3" /></svg>;

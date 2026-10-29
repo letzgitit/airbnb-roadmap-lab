@@ -233,7 +233,7 @@ export function GuideField({ value, onChange, title, loading = false, error = nu
         <LineIcon name="help" className="size-5 text-ink-soft" />
         <span className="text-base font-semibold text-ink">도움말</span>
         <span className="text-sm font-normal text-muted">{loading ? '불러오는 중…' : n ? `${n.toLocaleString()}자` : '없음'}</span>
-        <LineIcon name="chevron" className={`ml-auto size-5 text-faint ${open ? '-rotate-90' : 'rotate-90'}`} />
+        <LineIcon name="chevron" stroke={2} className={`ml-auto size-5 text-ink-soft transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
       </button>
       {open && (
         <div id={`${uid}-g`} className="space-y-2 border-t border-line px-3 pb-3 pt-2">

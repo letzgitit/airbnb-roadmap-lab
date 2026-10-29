@@ -367,7 +367,7 @@ function WeekBlock({ title, items, today, onPick, showTab = false, headRight, cl
       {/* 5개를 넘으면 「n개 더 보기」(접는 줄 꼴 — 펼치면 「접기」) */}
       {rest > 0 && (
         <span className="block border-t border-line px-1">
-          <FoldRow strongChevron label={all ? '접기' : `${rest}개 더 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={`${uid}-l`} />
+          <FoldRow label={all ? '접기' : `${rest}개 더 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={`${uid}-l`} />
         </span>
       )}
     </section>

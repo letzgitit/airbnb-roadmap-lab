@@ -7,7 +7,7 @@ import { useProgress } from './ProgressProvider';
 import { busyFetch } from '@/lib/client/busy';
 import { byStepPosition, REF_LABEL, REF_STEP } from '@/lib/core/photo-order';
 import { btnGhost, btnPrimary, inputCls, textBtn, TrashButton, useBusy, useDirty } from './bits';
-import { AddButton } from '@/components/ui/AddButton';
+import { AddButton, AddTextButton } from '@/components/ui/AddButton';
 import { Card, cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { IconButton } from '@/components/ui/IconButton';
@@ -467,8 +467,8 @@ export function StepPhotos({ stepId }: { stepId: number }) {
       ) : (
         <p className="text-base text-muted">{state === 'error' ? '사진을 불러오지 못했어요.' : '아직 이 단계 사진이 없어요.'}</p>
       )}
-      {/* 마지막 줄 「＋ 사진 올리기」(이 단계를 골라 둔 채로 올리기 창이 열린다) */}
-      <AddButton label="사진 올리기" onClick={() => upload(stepId)} />
+      {/* 마지막 줄 「＋ 사진」(새 홈 단계 블록 「＋ 사진」과 같은 이름 · 모양 — AddTextButton. 이 단계를 골라 둔 채로 올리기 창이 열린다) */}
+      <div className="-mx-3 mt-1"><AddTextButton label="사진" srLabel=": 이 단계에 올리기" onClick={() => upload(stepId)} /></div>
     </section>
   );
 }

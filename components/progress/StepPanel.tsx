@@ -10,6 +10,7 @@ import { TaskRow } from '@/components/tasks/TaskRow';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import { treeRows } from '@/components/tasks/task-view';
 import { useProgress } from './ProgressProvider';
+import { LineIcon } from '@/components/ui/LineIcon';
 import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, EditBadge, inputCls, LastEdit, useBusy, useDirty, useEditing, useFormEsc,
 } from './bits';
@@ -73,7 +74,7 @@ export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] 
         )}
         {done.length > 0 && (
           <li className="border-b border-line [&>button]:px-0">
-            <FoldRow strongChevron label="완료" count={done.length} unit="" open={doneExpanded} onToggle={() => setShowDone((v) => !v)} controls={doneId} />
+            <FoldRow label="완료" count={done.length} unit="" open={doneExpanded} onToggle={() => setShowDone((v) => !v)} controls={doneId} />
           </li>
         )}
       </ul>
@@ -200,7 +201,7 @@ export function StepInfo({ stepId }: { stepId: number }) {
           {summary.map((s, k) => <span key={k} className={k === 0 && st?.targetDate ? 'text-ink-soft' : ''}>{s}</span>)}
           <EditBadge k={`step:${stepId}`} />
         </span>
-        <i className={`fas fa-chevron-down shrink-0 text-sm text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+        <LineIcon name="chevron" stroke={2} className={`size-5 shrink-0 text-ink-soft transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
       </button>
 
       {/* 접어도 지우지 않는다: 쓰던 메모와 저장 안 한 편집 보호가 끊기지 않게 */}

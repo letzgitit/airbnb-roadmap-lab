@@ -11,6 +11,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Segmented } from '@/components/ui/Segmented';
 import { displayName, relTime } from '@/lib/client/format';
 import { QUESTION_STATUS_LABEL, type GuestLink, type QuestionItem, type QuestionStatus } from '@/lib/core/types';
+import { LineIcon } from '@/components/ui/LineIcon';
 
 // 우리 집 › 질문(로그인한 사람만 — 로그인 확인은 「우리 집」 틀의 LoginGate 가 한다).
 // 질문을 올리고, 답 받는 링크(/q/<토큰>)로 들어온 답을 읽고, 답 받는 링크를 만들고 끊는다.
@@ -157,7 +158,7 @@ function QuestionCard({ q, showTo, names }: { q: QuestionItem; showTo: boolean; 
           {q.unread && <Badge tone="accent">새 답</Badge>}
           {showTo && <span className="text-sm text-muted">{q.to}에게</span>}
           <span className="ml-auto text-sm text-muted">{answers.length > 0 ? `답 ${answers.length}` : ''}</span>
-          <i className={`fas fa-chevron-down text-xs text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+          <LineIcon name="chevron" stroke={2} className={`size-5 shrink-0 text-ink-soft transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
         </span>
         <span className={`mt-1 block whitespace-pre-wrap break-words text-base font-semibold text-ink ${open ? '' : 'line-clamp-3'}`}>{q.text}</span>
         {!open && last && (

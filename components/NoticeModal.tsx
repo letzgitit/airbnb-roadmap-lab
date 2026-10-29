@@ -5,6 +5,7 @@ import type { Step, UpdateItem } from '@/lib/core/types';
 import { Sheet } from './Sheet';
 import { TabBar, panelDomId, tabDomId, type TabItem } from './TabBar';
 import { WarningList } from './WarningList';
+import { LineIcon } from './ui/LineIcon';
 
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
 type Tab = 'rules' | 'steps';
@@ -64,7 +65,7 @@ export function NoticeModal({ steps, updates, open, shown, initialIndex, onClose
                       <span className="block text-sm font-normal tabular-nums text-muted">{u.date}</span>
                       <span className="block text-base font-semibold text-ink">{u.title}</span>
                     </span>
-                    <i className={`fas fa-chevron-down shrink-0 text-xs text-muted transition-transform ${on ? 'rotate-180' : ''}`} aria-hidden />
+                    <LineIcon name="chevron" stroke={2} className={`size-5 shrink-0 text-ink-soft transition-transform ${on ? '-rotate-90' : 'rotate-90'}`} />
                   </button>
                   {on && (
                     <div id={`${uid}-body-${i}`} className="pb-4">

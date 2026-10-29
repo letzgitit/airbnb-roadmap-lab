@@ -13,7 +13,7 @@ import {
 
 const RECENT = 5;
 
-// 우리 집 › 기록. 카드 첫 줄 「＋ 기록 추가」 → 최근 5건(줄 = [종류 작은 글자] 글 + 줄 끝 휴지통) → 「전체 n건 보기」.
+// 우리 집 › 기록. 카드 첫 줄 「＋ 기록 추가」 → 최근 5건(줄 = [종류 작은 글자] 글 + 줄 끝 휴지통) → 「n개 더 보기」(펼치면 「접기」).
 // 글을 누르면 그 자리에서 고친다.
 export function LogCard() {
   const { doc } = useProgress();
@@ -42,7 +42,7 @@ export function LogCard() {
       </ul>
       {items.length > RECENT && (
         <div className="border-t border-line">
-          <FoldRow label={all ? '접기' : `전체 ${items.length}건 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={listId} />
+          <FoldRow label={all ? '접기' : `${items.length - RECENT}개 더 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={listId} />
         </div>
       )}
     </Card>

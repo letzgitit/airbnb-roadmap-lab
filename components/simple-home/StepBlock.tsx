@@ -210,7 +210,7 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
             {openRows.length > 0 && <ul className="mx-5 border-t border-line">{openRows.map(row)}</ul>}
             {doneRows.length > 0 && (
               <div className="mx-5 border-t border-line">
-                <span className="-mx-4 block"><FoldRow strongChevron label="완료" count={doneRows.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
+                <span className="-mx-4 block"><FoldRow label="완료" count={doneRows.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
                 {showDone && <ul id={`${uid}-done`} className="border-t border-line">{doneRows.map(row)}</ul>}
               </div>
             )}

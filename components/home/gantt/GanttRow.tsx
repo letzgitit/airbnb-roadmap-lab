@@ -9,7 +9,7 @@ import s from './gantt.module.css';
 import { Check, Chev, Plus } from './icons';
 import { TaskDetail } from './TaskDetail';
 
-// 간트 한 줄씩(단계 머리 · 할 일 · 세부 항목 · 할 일 추가 · 끝난 단계 접기 · 묶음 사이 · 편집 폼 자리).
+// 간트 한 줄씩(단계 머리 · 할 일 · 세부 항목 · 「＋ 할 일」 · 끝난 단계 접기 · 묶음 사이 · 편집 폼 자리).
 // 줄 = 이름 줄(nl, 보이는 폭만큼 왼쪽에 붙음) + 막대 줄(bl, 날짜 배율로 가로로 넘어감).
 // 트리 선 자리(px): 단계 번호 원 가운데 R1 · 할 일 동그라미 가운데 R2 · 세부 항목 동그라미 가운데 R3.
 const R1 = 43, R2 = 66, R3 = 92;
@@ -261,8 +261,8 @@ export function AddRow({ r, onNew }: { r: Extract<Row, { k: 'add' }>; onNew: () 
     <div className={cls(s.r, s.rAdd)} style={typeVars(r.p.type)}>
       <div className={s.nl} style={px({ '--my': '22px' })}>
         <RailsName r={r} h={44} mid={22} />
-        <i className={s.plus} style={{ left: R2 }} aria-hidden><Plus /></i>
-        <button type="button" className={s.addBtn} onClick={onNew}>할 일 추가</button>
+        {/* 「＋ 할 일」 — 다른 화면 AddTextButton 과 같은 이름 · 모양, ＋ 는 할 일 동그라미 자리(R2) */}
+        <button type="button" className={s.addBtn} onClick={onNew}><Plus />할 일<span className="sr-only">: {r.p.id}단계에 더하기</span></button>
       </div>
     </div>
   );

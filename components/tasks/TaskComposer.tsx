@@ -76,7 +76,7 @@ export function KindSelect({ value, onChange }: { value: TaskKind | ''; onChange
 }
 
 /**
- * 새 할 일 입력: 목록 첫 줄 「＋ 할 일 추가」를 누르면 그 자리에서 펼쳐진다. Enter = 추가, Esc = 취소(쓰던 글이 있으면 확인).
+ * 새 할 일 입력: 「＋ 할 일」을 누르면 그 자리에서 펼쳐진다. Enter = 추가, Esc = 취소(쓰던 글이 있으면 확인).
  * steps 를 주면(홈) 「단계」를 고르는 칸이 생기고 기본값은 stepId(지금 단계)다. 안 주면(단계 시트) stepId 로 고정.
  * initialDue: 마감일 칸의 처음 값(홈 타임라인에서 고른 날). 처음 값 그대로면 「쓰던 글」로 보지 않는다.
  * parentId: 주면 그 할 일의 세부 항목으로 더한다(단계는 서버가 부모를 따른다 — stepId 를 보내지 않고 단계 칸도 없다).

@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ScriptItem } from '@/lib/core/types';
 import { Sheet } from './Sheet';
+import { LineIcon } from './ui/LineIcon';
 
 // 대화 예시: 한 열 아코디언. 상대(who)별로 묶고, 상황을 누르면 그 자리에서 말할 문장이 펼쳐진다(한 번에 하나).
 // initialIndex = scripts 안의 순번: 검색에서 오면 그 항목을 펼친 채 열고, 시트 안에서만 그 자리로 스크롤한다.
@@ -46,7 +47,7 @@ export function ScriptsModal({ scripts, open, shown, initialIndex, onClose }: {
                   <button type="button" aria-expanded={on} aria-controls={`${uid}-${idx}`} onClick={() => setExpanded(on ? null : idx)}
                     className="flex min-h-11 w-full items-center gap-3 py-3 text-left">
                     <span className="min-w-0 flex-1 text-base font-semibold text-ink">{it.situation}</span>
-                    <i className={`fas fa-chevron-down shrink-0 text-xs text-muted transition-transform ${on ? 'rotate-180' : ''}`} aria-hidden />
+                    <LineIcon name="chevron" stroke={2} className={`size-5 shrink-0 text-ink-soft transition-transform ${on ? '-rotate-90' : 'rotate-90'}`} />
                   </button>
                   {on && (
                     <div id={`${uid}-${idx}`} className="pb-4">

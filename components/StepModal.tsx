@@ -12,8 +12,10 @@ import { WarningList } from './WarningList';
 import { StepInfo, StepStatusPill, StepTasks } from './progress/StepPanel';
 import { useProgress } from './progress/ProgressProvider';
 import { StepPhotos } from './progress/PhotosPanel';
-import { btnGhost, btnPrimary, leadCls, rowCls } from './progress/bits';
+import { btnGhost, btnPrimary, rowCls } from './progress/bits';
 import { Badge } from './ui/Badge';
+import { FoldRow } from './ui/FoldRow';
+import { LineIcon } from './ui/LineIcon';
 
 const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : null);
 const sectionTitle = 'mb-1 text-lg font-bold text-ink';
@@ -94,7 +96,7 @@ export function StepModal({ steps, index, section, open, shown, loggedIn, onClos
         {step.summary && <div className="rounded-control bg-sunken px-4 py-3 text-base leading-relaxed text-ink">{step.summary}</div>}
         {/* 위에서부터: 요약 → 우리 할 일 → 사진 → 추천 할 일 → 목표일 · 메모(접힘) */}
         {loggedIn && <StepTasks key={`t${step.id}`} stepId={step.id} steps={stepRefs} />}
-        {/* 이 단계 사진(로그인했을 때만): 작은 썸네일 줄 + 「사진 올리기」 */}
+        {/* 이 단계 사진(로그인했을 때만): 작은 썸네일 줄 + 「＋ 사진」 */}
         {loggedIn && <StepPhotos stepId={step.id} />}
         {step.checklist.length > 0 && (
           <section aria-label="추천 할 일">
@@ -184,21 +186,23 @@ function SectionList({ step, k }: { step: Step; k: StepSection }) {
 
 const REF_FIRST = 10;
 
-// 참고 자료: 최신순, 처음 10개만 보이고 나머지는 「더 보기」. 단계를 옮기면 접힌 상태로(key={step.id} 로 새로 시작).
+// 참고 자료: 최신순, 처음 10개만 보이고 나머지는 「n개 더 보기」(접는 줄 FoldRow — 새 홈 · 검색과 같은 이름 · 모양, 펼치면 「접기」).
+// 단계를 옮기면 접힌 상태로(key={step.id} 로 새로 시작).
 function RefList({ step }: { step: Step }) {
   return <RefListInner key={step.id} refs={step.refs} />;
 }
 function RefListInner({ refs }: { refs: RefItem[] }) {
+  const uid = useId();
   const [all, setAll] = useState(false);
   // date 내림차순 안정 정렬(같은 날짜는 들어온 순서 유지)
   const sorted = useMemo(() => refs.map((r, i) => ({ r, i })).sort((a, b) => (a.r.date === b.r.date ? a.i - b.i : a.r.date < b.r.date ? 1 : -1)).map((x) => x.r), [refs]);
   if (sorted.length === 0) return <p className="pt-3 text-base text-muted">아직 이 단계에 맞는 참고 자료가 없어요.</p>;
   const shown = all ? sorted : sorted.slice(0, REF_FIRST);
-  const rest = sorted.length - shown.length;
+  const rest = sorted.length - REF_FIRST;
   return (
     <>
       {sorted.some((r) => r.auto) && <p className="pt-3 text-sm font-normal text-muted">자동으로 모은 자료는 틀릴 수 있어요. 원문을 확인하세요.</p>}
-      <ul>
+      <ul id={`${uid}-refs`}>
         {shown.map((r, i) => {
           const url = safeUrl(r.url);
           return (
@@ -219,14 +223,17 @@ function RefListInner({ refs }: { refs: RefItem[] }) {
         })}
       </ul>
       {rest > 0 && (
-        <button type="button" onClick={() => setAll(true)} className={`${btnGhost} mt-3 w-full`}>더 보기 ({rest}개)</button>
+        <div className="border-t border-line [&>button]:px-0">
+          <FoldRow label={all ? '접기' : `${rest}개 더 보기`} open={all} onToggle={() => setAll((v) => !v)} controls={`${uid}-refs`} />
+        </div>
       )}
     </>
   );
 }
 
-// 추천 할 일 한 줄. 로그인 전: 누를 수 없는 목록(앞 조작 없음). 로그인 후: 앞 44px 「＋」 한 가지 동작,
-// 이미 우리 할 일에 있으면 흐린 체크 + 흐린 글자(누를 수 없음). 줄 끝 단추는 없다.
+// 추천 할 일 한 줄. 로그인 전: 누를 수 없는 목록(앞 조작 없음). 로그인 후: 「＋ 제목」 줄 전체가 한 단추(바로 위 「＋ 할 일」
+// AddTextButton 과 같은 자리 · 모양 — 18px ＋ 선 아이콘 검정, 글자 앞 6px, 누르면 옅은 면 · 모서리 10 — 2026-10-29 「모두 다 동일하게」),
+// 이미 우리 할 일에 있으면 같은 자리에 흐린 체크 + 흐린 글자(누를 수 없음). 줄 끝 단추는 없다.
 function ChecklistRow({ text, stepId, loggedIn }: { text: string; stepId: number; loggedIn: boolean }) {
   const { doc, send, toast } = useProgress();
   const [busy, setBusy] = useState(false);
@@ -238,18 +245,24 @@ function ChecklistRow({ text, stepId, loggedIn }: { text: string; stepId: number
   return (
     <li className={rowCls}>
       {added ? (
-        <span className={`${leadCls} text-muted`} role="img" aria-label="이미 우리 할 일에 있어요"><i className="fas fa-check text-sm" aria-hidden /></span>
+        <span className="flex min-w-0 flex-1 items-start gap-1.5 text-muted">
+          <span className="flex h-11 shrink-0 items-center" role="img" aria-label="이미 우리 할 일에 있어요"><LineIcon name="check" className="size-4.5" stroke={2.2} /></span>
+          <span className="min-w-0 flex-1 py-2.5 text-base font-semibold">{text}</span>
+        </span>
       ) : (
-        <button type="button" disabled={busy} aria-label={`${text} 할 일에 추가`} className={`${leadCls} rounded-full text-accent-ink transition-colors hover:bg-sunken disabled:text-faint`}
+        <button type="button" disabled={busy} aria-label={`${text} 할 일에 추가`}
+          className="-mx-3 flex min-h-11 min-w-0 flex-1 items-start gap-1.5 rounded-control px-3 text-left text-ink transition-colors hover:bg-sunken disabled:text-faint"
           onClick={async () => {
             setBusy(true);
             try {
               const r = await send({ op: 'task.add', stepId, text: taskText });
               if (r.ok) toast('우리 할 일에 넣었어요.');
             } finally { setBusy(false); }
-          }}><i className="fas fa-plus text-sm" aria-hidden /></button>
+          }}>
+          <span className="flex h-11 shrink-0 items-center"><LineIcon name="plus" className="size-4.5" stroke={2.2} /></span>
+          <span className="min-w-0 flex-1 py-2.5 text-base font-semibold">{text}</span>
+        </button>
       )}
-      <span className={`min-w-0 flex-1 py-3 text-base font-semibold ${added ? 'text-muted' : 'text-ink'}`}>{text}</span>
     </li>
   );
 }
