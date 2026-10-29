@@ -188,7 +188,9 @@ const STOPWORDS = new Set((
   '이유 관련 경우 가능 이번 올해 내년 대한 위한 통해 가지 정도 이상 이하 지금 오늘 그리고 하지만 때문 사실 기준 ' +
   '최근 지난 가장 따라 추가 기간 예정 있는 없는 함께 모든 같은 하는 나온 ' +
   '하기 받기 사기 보기 쓰기 달기 두기 찾기 넣기 알기 짓기 걸기 묻기 열기 닫기 정하기 챙기기 알아보기 물어보기 고르기 바꾸기 고치기 만들기 맞추기 ' +
-  '옮기기 붙이기 치우기 부르기 알리기 보내기 끝내기 올리기 내리기 나누기 채우기 비우기 하고 하면 하지 하게 해서 되고 되면 확인 준비 다시 예시 시험'
+  '옮기기 붙이기 치우기 부르기 알리기 보내기 끝내기 올리기 내리기 나누기 채우기 비우기 하고 하면 하지 하게 해서 되고 되면 확인 준비 다시 예시 시험 ' +
+  // 상태 말(할 일 제목 끝에 「(완료)」 「진행 중」처럼 붙는 말 — 찾을 거리가 아니다)
+  '완료 완료함 진행 진행중 대기 시작 끝남 끝냄'
 ).split(' '));
 // 받침(0 = 없음, 8 = ㄹ). 한글 글자가 아니면 -1
 const batchim = (ch: string) => { const k = ch.charCodeAt(0); return k >= 0xac00 && k <= 0xd7a3 ? (k - 0xac00) % 28 : -1; };
@@ -217,7 +219,10 @@ export function keywordPairs(text: string): [string, string][] {
   }
   return out;
 }
-/** 제목들에 많이 나온 말: 제목 하나에 한 번만 세고 min 번 이상 나온 말을 많은 순으로 max 개(보이는 꼴은 가장 많이 적힌 모양) */
+/**
+ * 제목들에 많이 나온 말: 제목 하나에 한 번만 세고 min 번 이상 나온 말을 많은 순으로 max 개(보이는 꼴은 가장 많이 적힌 모양).
+ * 한 말이 다른 말 안에 들어 있으면(「등기」 ⊂ 「등기부」) 하나만 남긴다: 더 많이 나온 쪽, 같으면 짧은 쪽(짧은 말로 찾으면 긴 말도 걸린다).
+ */
 export function hotWords(titles: string[], o: { min?: number; max?: number } = {}): { word: string; n: number }[] {
   const forms = new Map<string, Map<string, number>>();
   for (const t of titles) {
@@ -229,9 +234,19 @@ export function hotWords(titles: string[], o: { min?: number; max?: number } = {
       forms.set(w, f);
     }
   }
-  return [...forms]
+  const list = [...forms]
     .map(([w, f]) => ({ w, n: [...f.values()].reduce((a, b) => a + b, 0), word: [...f].sort((a, b) => b[1] - a[1])[0][0] }))
-    .filter((x) => x.n >= (o.min ?? 2))
+    .filter((x) => x.n >= (o.min ?? 2));
+  // 겹치는 말 짝마다 진 쪽을 뺀다(셋이 이어져 있어도 짝마다 따져 한 번에 뺀다)
+  const lose = new Set<string>();
+  for (const a of list) {
+    for (const b of list) {
+      if (a === b || !a.w.includes(b.w)) continue; // a 가 b 를 품은 긴 말
+      lose.add(a.n > b.n ? b.w : a.w);
+    }
+  }
+  return list
+    .filter((x) => !lose.has(x.w))
     .sort((a, b) => b.n - a.n || a.word.localeCompare(b.word))
     .slice(0, o.max ?? 12)
     .map((x) => ({ word: x.word, n: x.n }));

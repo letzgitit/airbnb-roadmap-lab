@@ -169,9 +169,15 @@ test('줄 모양: 기록은 쓴 사람을 싣지 않음 · 집 정보 조각 이
   // 질문: 상태 꼬리표 하나 + (부딪히지 않을 때만) 답 개수 — 답 기다림인데 답이 달린 q_a 는 상태만
   const q = search(index, '침구');
   assert.deepEqual(rowView(q.groups[0].hits[0], q.terms).meta.map((m) => [m.text, !!m.badge]), [['친구', false], ['답 기다림', true]]);
-  const qs2 = buildIndex({ ...(doc() as object), questions: byId([Q('q9', '침구 둘', [{ text: '답' }], { status: 'answered' })]) } as never);
+  // 답함: 답이 하나면 「답 1개」를 붙이지 않는다(「답함」과 같은 말), 둘 이상이면 개수
+  const qs2 = buildIndex({ ...(doc() as object), questions: byId([
+    Q('q9', '침구 둘', [{ text: '답' }], { status: 'answered' }),
+    Q('q8', '침구 셋', [{ text: '답' }, { text: '또 답' }], { status: 'answered' }),
+  ]) } as never);
   const r9 = search(qs2, '침구 둘');
-  assert.deepEqual(rowView(r9.groups[0].hits[0], r9.terms).meta.map((m) => m.text), ['친구', '답함', '답 1개']);
+  assert.deepEqual(rowView(r9.groups[0].hits[0], r9.terms).meta.map((m) => m.text), ['친구', '답함']);
+  const r8 = search(qs2, '침구 셋');
+  assert.deepEqual(rowView(r8.groups[0].hits[0], r8.terms).meta.map((m) => m.text), ['친구', '답함', '답 2개']);
   // 많이 나온 말은 안 끝난 할 일 제목에서만(끝난 「계약서 원본 보관」은 세지 않아 계약서는 1번 — 빠짐)
   assert.deepEqual(hotOfDoc(doc()), []);
   const two = { tasks: byId([T('a', 4, '계약서 챙기기'), T('b', 4, '계약서를 복사'), T('c', 4, '계약서 보관', { done: true })]) } as never;

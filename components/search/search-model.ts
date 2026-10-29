@@ -203,10 +203,10 @@ export function rowView(hit: Hit, terms: string[]): RowView {
       if (e.item.estimate) meta.push({ text: '추정' });
       break;
     case 'question': {
-      // 상태는 질문 화면처럼 꼬리표 하나. 답 개수는 상태와 부딪히지 않을 때만(「답 기다림」인데 답이 달려 있으면 상태 하나만)
+      // 상태는 질문 화면처럼 꼬리표 하나. 답 개수는 둘 이상이고 상태와 부딪히지 않을 때만(「답함」 옆 「답 1개」는 같은 말, 「답 기다림」인데 답이 달려 있으면 상태 하나만)
       meta.push(...metaField('받는 사람'), { text: QUESTION_STATUS_LABEL[e.item.status], badge: true });
       const n = e.item.answers.filter((a) => !a.deletedAt).length;
-      if (n && e.item.status !== 'open') meta.push({ text: `답 ${n}개` });
+      if (n >= 2 && e.item.status !== 'open') meta.push({ text: `답 ${n}개` });
       break;
     }
   }
