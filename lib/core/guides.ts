@@ -9,6 +9,7 @@ import path from 'node:path';
 import { Redis } from '@upstash/redis';
 import { redisEnv, sanitize } from './store.ts';
 import type { ProgressDoc } from './types.ts';
+import { stripMarkdown } from '../client/search-text.ts';
 
 export const GUIDES_KEY = 'oedomin:guides';
 export const GUIDE_MAX = 6000;
@@ -149,6 +150,19 @@ export function guideIndex(guides: Record<string, GuideRecord>, doc: Pick<Progre
   for (const [id, g] of Object.entries(guides)) {
     const t = Object.hasOwn(doc.tasks, id) ? doc.tasks[id] : undefined;
     if (t && !t.deletedAt && g.md) out[id] = { len: g.md.length, version: g.version };
+  }
+  return out;
+}
+
+/**
+ * 검색용 본문(GET /api/guides?body=1): 지우지 않은 할 일에 달린 설명서만 { text, version } — text 는 마크다운 기호 · 링크 주소를 뺀 글(검색 창이 찾고 조각으로 보인다).
+ * 화면은 검색 단추에 손이 닿을 때 한 번 받는다(components/search/guide-bodies.ts).
+ */
+export function guideBodies(guides: Record<string, GuideRecord>, doc: Pick<ProgressDoc, 'tasks'>): Record<string, { text: string; version: number }> {
+  const out: Record<string, { text: string; version: number }> = {};
+  for (const [id, g] of Object.entries(guides)) {
+    const t = Object.hasOwn(doc.tasks, id) ? doc.tasks[id] : undefined;
+    if (t && !t.deletedAt && g.md) out[id] = { text: stripMarkdown(g.md), version: g.version };
   }
   return out;
 }

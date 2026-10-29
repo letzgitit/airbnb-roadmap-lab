@@ -108,10 +108,12 @@ export function BlockHead({ id, title, count, right, sticky = false }: { id?: st
  * 할 일 줄은 TaskRow 쉬운 모양(simple) — 쓰기는 기존 /api/progress/mutate 그대로(Todoist 동기화도 같은 길).
  * 메모 · 사진은 더하기 · 지우기만(고치기 없음): 메모 = 별도 저장소(cardnotes-client), 사진 = 사진 저장소에 cardId(= blockId)를 달아서.
  */
-export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, today, open, onToggle }: {
+export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, today, open, onToggle, reveal = null }: {
   blockId: string; card: CardDef; cards: CardDef[]; title: string; tasks: TaskItem[]; summary: CardSummary; steps: StepRef[]; today: string;
   /** 펼쳤는가 · 머리 줄을 눌렀을 때 */
   open: boolean; onToggle: () => void;
+  /** 건너가려는 할 일(이번 주 할 일 · 검색 — n 은 누를 때마다 새 값). 끝난 할 일이면 「완료 n」 접힘을 편다 */
+  reveal?: { id: string; n: number } | null;
 }) {
   const { doc } = useProgress();
   const uid = useId();
@@ -132,6 +134,12 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
   const openRows = useMemo(() => treeRows(tasks.filter((t) => !isDone(t) || editing.has(t.id)).sort(byDue), all), [tasks, isDone, editing, all]);
   const doneRows = useMemo(() => treeRows(tasks.filter((t) => isDone(t) && !editing.has(t.id)).sort(byDue), all), [tasks, isDone, editing, all]);
   const prepare = useMemo(() => (card.match ? (text: string, kind: Parameters<typeof prepareAdd>[3]) => prepareAdd(cards, card, text, kind) : undefined), [card, cards]);
+  // 가려는 할 일이 끝난 줄이면 「완료 n」을 펴서 줄이 보이게(그래야 focusTask 가 찾는다)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 건너가기를 누를 때마다 한 번
+    if (reveal && doneRows.some((r) => r.item.id === reveal.id)) setShowDone(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reveal(누를 때마다 새 값)에만 반응한다
+  }, [reveal]);
 
   const row = (r: (typeof openRows)[number]) => (
     // 마감이 블록 머리 날짜와 같은 줄은 「n월 n일까지」를 숨긴다(머리가 이미 말한다 — 남은 날 꼬리표만)

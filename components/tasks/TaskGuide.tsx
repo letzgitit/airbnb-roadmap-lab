@@ -186,7 +186,8 @@ function GuideSheet({ s, title, guide, error = null, preview = false }: { s: Ret
 
 /** 제목 글 바로 뒤에 붙는 물음표(inline). 누르는 칸 44 는 음수 여백으로 — 줄 높이 · 글 흐름을 늘리지 않는다 */
 // 본문은 누를 때 받는다(설명서는 현황 문서 밖 — guides-client). version 이 그대로면 한 번 받은 글을 다시 쓴다
-export function GuideButton({ taskId, title, version }: { taskId: string; title: string; version: number }) {
+// openKey = 바깥에서 열어 달라는 신호(0 보다 크게 바뀔 때마다 한 번 연다 — 검색에서 도움말에서만 걸린 할 일로 왔을 때)
+export function GuideButton({ taskId, title, version, openKey = 0 }: { taskId: string; title: string; version: number; openKey?: number }) {
   const s = useGuideSheet(true);
   const [body, setBody] = useState<{ v: number; md: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -199,6 +200,11 @@ export function GuideButton({ taskId, title, version }: { taskId: string; title:
       .then((g) => setBody({ v: version, md: g?.md ?? '' }))
       .catch(() => setError('도움말을 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.'));
   };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 바깥 신호가 바뀔 때마다 한 번 연다
+    if (openKey > 0) open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openKey(신호)에만 반응한다
+  }, [openKey]);
   const guide = body?.v === version ? body.md : null;
   return (
     <>

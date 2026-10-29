@@ -66,6 +66,18 @@ test('목록: 지운 할 일 · 현황에 없는 할 일은 빼고 { len, versio
   assert.equal(Object.keys(G.guideIndex(await G.listGuides(), await readDoc())).length, 2);
 });
 
+test('검색용 본문(guideBodies): 지운 할 일 뺌 · 마크다운 기호와 링크 주소를 뺀 글 · version', async () => {
+  reset();
+  const doc = { tasks: { t_a1: { id: 't_a1', deletedAt: null }, t_b2: { id: 't_b2', deletedAt: '2026-10-29T00:00:00.000Z' } } };
+  await G.putGuide('t_a1', '## 왜\n- **서류** 두 부\n[안내](https://example.test/x)', 0, ME);
+  await G.putGuide('t_b2', '지운 할 일 글', 0, ME);
+  await G.putGuide('t_c3', '없는 할 일 글', 0, ME);
+  const out = G.guideBodies(await G.listGuides(), doc);
+  assert.deepEqual(Object.keys(out), ['t_a1']);
+  assert.equal(out.t_a1.version, 1);
+  assert.equal(out.t_a1.text, '왜\n서류 두 부\n안내');
+});
+
 test('import: 미리 보기 · 새로/바꿈/지움/그대로 · 틀린 것이 하나라도 있으면 아무것도 안 씀', async () => {
   reset();
   await G.putGuide('t_keep', '그대로', 0, ME);

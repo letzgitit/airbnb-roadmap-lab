@@ -9,6 +9,7 @@ import { useProgress } from '@/components/progress/ProgressProvider';
 import { firstGuest } from '@/components/home/summary-data';
 import { FIXED_DAY0, toTimelineSteps } from '@/components/home/timeline-config';
 import { LineIcon } from '@/components/ui/LineIcon';
+import { SearchButton } from '@/components/search/SearchButton';
 import { AccountMenu } from './AccountMenu';
 import { useGuardedLinkClick } from './useGuardedNav';
 import { isHomePath, NAV_ITEMS, navItemsFor, type NavItem } from './nav';
@@ -27,7 +28,7 @@ function useToday(): string | null {
 /**
  * 머리 띠(데일리 형광펜 .hd — 형광 면 통째 + 검정 글자, 다크에서도 같은 형광). 모든 페이지 공통, 위에 붙지 않고 함께 넘어간다.
  * 한 줄: 왼쪽 제호 「외도민 준비」(22/800 — 곧 홈 링크. 시안 · 자금에서는 앞에 「‹」) · 날짜 「10월 28일(수)」 · 「첫 손님까지 D-40」(13 — 로그인했을 때)
- *        / 오른쪽 문 「시안」 「자금」(분야 탭과 같은 모양 — 선 아이콘 24px + 글자 14/800, 지금 화면이면 선 굵게 + 아래 3px 검정 선) · 로그인 · 설정(톱니).
+ *        / 오른쪽 문 「시안」 「자금」(분야 탭과 같은 모양 — 선 아이콘 24px + 글자 14/800, 지금 화면이면 선 굵게 + 아래 3px 검정 선) · 검색(돋보기, 로그인했을 때) · 로그인 · 설정(톱니).
  * 새 홈 뼈대 화면(불러오는 중, data-home-skeleton)이 떠 있는 동안에도 문 둘과 「첫 손님까지」 자리를 그려 둔다 — 다 불러온 뒤 모양이 바뀌지 않게.
  * 폰(768px 미만)은 띠가 제호 · 문 · 톱니 한 줄이고, 날짜 · 첫 손님 줄은 그 밑 흰 면 줄(데일리 좁은 화면의 날짜 줄과 같다). 문은 아이콘 위 · 글자 아래.
  * wide = 홈 PC 화면(본문 + 곁 칸 1080px)과 왼쪽 선을 맞춘다.
@@ -79,6 +80,8 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
                 {NAV_ITEMS.map((it) => <Door key={it.href} item={it} on={false} onClick={guard(it.href)} />)}
               </nav>
             )}
+            {/* 검색(돋보기): 로그인한 두 사람만. 뼈대 화면이 떠 있는 동안은 같은 자리를 비워 둔다(다 불러온 뒤 머리가 밀리지 않게) */}
+            {loggedIn ? <SearchButton /> : pending && <span aria-hidden className="hidden size-11 shrink-0 [body:has([data-home-skeleton])_&]:block" />}
             {status === 'anon' && (loginReady ? (
               <button type="button" onClick={() => void signIn('google', { callbackUrl: window.location.href })}
                 className="inline-flex min-h-11 items-center rounded-control px-2.5 text-cta font-bold underline underline-offset-4 hover:bg-black/10">로그인</button>

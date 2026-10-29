@@ -337,3 +337,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--color-accent);
 @media (prefers-reduced-motion: reduce) {
   .task-flash { animation: none; outline: 2px solid var(--color-ink); outline-offset: -2px; }
 }
+
+/* 검색 창의 찾은 말(데일리 .search mark): 바탕 없이 2px 밑줄, 색은 글자 링크색(accent-ink — 형광 아님) */
+.search mark {
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--color-accent-ink);
+}

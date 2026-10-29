@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useSyncExternalStore } from 'react';
+import { noteGuideSaved } from '@/components/search/guide-bodies';
 
 // 할 일 설명서(화면 쪽). 설명서는 현황 문서 밖에 따로 있다(lib/core/guides.ts):
 // - 목록 GET /api/guides → { ids: { [taskId]: { len, version } } } 를 한 번 받아 두고(물음표를 보일지만), 저장하면 다시 받는다.
@@ -50,6 +51,8 @@ export async function saveGuide(id: string, md: string, baseVersion: number): Pr
     const next = { ...(ids ?? {}) };
     if (j.guide) next[id] = { len: j.guide.md.length, version: j.guide.version }; else delete next[id];
     ids = next; emit();
+    // 검색용으로 받아 둔 본문도 그 항목만 바로 맞춘다
+    noteGuideSaved(id, j.guide?.md ?? null, j.guide?.version ?? 0);
     return { ok: true, guide: j.guide ?? null };
   } catch {
     return { ok: false, status: 0, message: '인터넷 연결을 확인해 주세요. 도움말을 저장하지 못했어요.' };

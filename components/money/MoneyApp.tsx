@@ -12,6 +12,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { todayStr } from '@/lib/client/format';
 import { longDate } from '@/components/tasks/task-view';
 import { PROJECT_LABEL, VIA_LABEL, manwon, moneyRows, splitMark, type PlanItem, type PlanPayload } from '@/lib/plan';
+import { revealRow, useJump } from '@/components/search/jump';
 
 // 「자금 계획」(메뉴 「자금」, 2026-10-28 전 이름 「돈 · 다른 집」): 돈 흐름 · 지산 · 원주 할 일 · 원주 갈림길. 로그인 확인은 LoginGate(페이지)가 하고,
 // 여기선 로그인이 끝난 뒤에만 /api/plan 을 부른다. 외도민 할 일은 홈 「할 일」에 있다.
@@ -50,6 +51,16 @@ export function MoneyApp() {
       .catch(() => alive && setState((s) => (s.kind === 'ready' ? s : { kind: 'error' })));
     return () => { alive = false; };
   }, [status, docVersion, reload]);
+  // 검색 결과에서 고른 자금 줄: 「돈 흐름」을 받아 그린 뒤 그 줄로 내려가 잠깐 칠한다(받기 전이면 그린 뒤에)
+  const [target, setTarget] = useState<string | null>(null);
+  useJump('money', (j) => setTarget(j.id));
+  const ready = state.kind === 'ready';
+  useEffect(() => {
+    if (!target || !ready) return;
+    revealRow(`money-${target}`);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 한 번 갔으면 잊는다
+    setTarget(null);
+  }, [target, ready]);
 
   return (
     <>
@@ -91,7 +102,7 @@ function MoneySection({ data }: { data: PlanPayload }) {
               const after = balanceParts(cash, credit !== prevCredit ? credit : null).map((p, k) => (k === 0 ? `그 뒤 ${p}` : p));
               const sub = [item.project === 'jisan' ? PROJECT_LABEL.jisan : '', ...after].filter(Boolean);
               return (
-                <li key={item.id} className={`px-5 py-4 ${cardRowCls}`}>
+                <li key={item.id} id={`money-${item.id}`} className={`px-5 py-4 ${cardRowCls}`}>
                   {/* 날짜는 「10월 29일(목)」 꼴로 제목 위에, 「추정」 배지는 늘 금액 옆 */}
                   <p className="text-sm text-muted">{item.date ? longDate(item.date) : '날짜 미정'}</p>
                   <div className="mt-0.5 flex items-start gap-3">

@@ -13,6 +13,7 @@ import { SOON_DAYS } from '@/components/tasks/task-view';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { LineIcon } from '@/components/ui/LineIcon';
+import { revealRow, useJump } from '@/components/search/jump';
 import { CalendarTab } from './CalendarTab';
 import { ContactsTab } from './ContactsTab';
 import { PhotosTab, type PhotoSub } from './PhotosTab';
@@ -27,6 +28,8 @@ import {
 // 고른 탭 · 펼친 블록 · 갤러리 보조 탭 · 스크롤 위치는 이 브라우저 탭에만(sessionStorage — home-state.ts):
 // 새로 들어오면 달력 + 다 접힘 + 맨 위, 새로고침 · 시안이나 자금에 갔다 돌아오면 그대로
 const TAB_IDS = TABS.map((t) => t.id);
+/** 건너가기(이번 주 할 일 · 검색): n = 누를 때마다 새 값, guide = 칠한 뒤 도움말 창도 연다 */
+type Reveal = { id: string; tab: WorkTabId; n: number; guide?: boolean };
 
 /**
  * 분야 탭 줄(대메뉴, 기획 27의 9절): 흰 면 줄 + 아래 1px 선, **같은 너비 여섯 칸**이 줄 폭을 꽉 채운다(grid 6열 — 칸 너비가 글자에 따라 늘지 않아 320px 폰에서도 한 줄).
@@ -97,8 +100,9 @@ export function SimpleHome() {
   const [tab, setTab] = useState<TabId>(startTab);
   const [photoSub, setPhotoSub] = useState<PhotoSub>(savedSub);
   const pickSub = (s: PhotoSub) => { setPhotoSub(s); write(PHOTO_SUB_KEY, s); };
-  // 「이번 주 할 일」에서 고른 할 일: 그 탭으로 가서(그 할 일이 든 블록이 접혀 있으면 펼쳐) 그 줄로 내려간다. 탭을 손으로 바꾸면 잊는다
-  const [reveal, setReveal] = useState<{ id: string; tab: WorkTabId; n: number } | null>(null);
+  // 「이번 주 할 일」 · 검색 결과에서 고른 할 일: 그 탭으로 가서(그 할 일이 든 블록이 접혀 있으면 펼쳐) 그 줄로 내려간다. 탭을 손으로 바꾸면 잊는다
+  //   guide = 검색에서 도움말에서만 걸린 할 일 — 그 줄을 칠한 뒤 도움말 창까지 연다
+  const [reveal, setReveal] = useState<Reveal | null>(null);
   // 「문의 필요만 보기」(일터 탭): 단추는 늘 「이번 주 할 일」 머리 오른쪽(폰은 본문, PC는 곁 칸). 탭을 바꾸면 끈다
   const [askOn, setAskOn] = useState(false);
   // 탭을 고르면(누르기 · 좌우 쓸기, 이미 고른 탭을 다시 눌러도) 그 탭을 처음 상태로 열고 맨 위로 올린다(2026-10-29 사이트 주인):
@@ -120,10 +124,20 @@ export function SimpleHome() {
   // 쓰다 만 폼이 있으면 쓸기는 받지 않는다(탭을 누르면 확인을 거쳐 넘어간다)
   useTabSwipe({ keys: TAB_IDS, current: tab, onPick: openTab, enabled: () => !hasDirty() });
   const today = todayStr();
-  const goTask = (id: string, t: WorkTabId) => {
+  const goTask = (id: string, t: WorkTabId, guide = false) => {
     if (t !== tab) { setTab(t); write(TAB_KEY, t); setAskOn(false); }
-    setReveal((r) => ({ id, tab: t, n: (r?.n ?? 0) + 1 }));
+    setReveal((r) => ({ id, tab: t, n: (r?.n ?? 0) + 1, guide }));
   };
+  // 검색 결과에서 고른 할 일 · 연락처(components/search/jump.ts): 다른 탭으로 옮겨야 하고 쓰다 만 폼이 있으면 탭 바꾸기와 같이 먼저 확인
+  //   처음 그릴 때 꺼냈으면(다른 화면에서 옮겨 옴) 스크롤 위치 되돌리기는 하지 않는다 — 그 줄로 가는 것과 부딪치지 않게
+  const jumped = useRef(false);
+  const guarded = (to: TabId, go: () => void) => {
+    jumped.current = true;
+    if (to === tab || !hasDirty()) { go(); return; }
+    void confirmDiscard().then((ok) => { if (ok) go(); });
+  };
+  useJump('task', (j) => { if (j.tab) guarded(j.tab, () => goTask(j.id, j.tab!, j.guide)); });
+  useJump('contact', (j) => guarded('contacts', () => { if (tab !== 'contacts') openTab('contacts'); revealRow(`contact-${j.id}`); }));
 
   // 탭마다 블록 묶음 · 이번 주 할 일(곁 칸은 지금 탭, 일터가 아닌 탭에서는 셋 다 모아서)
   const work = useMemo(() => {
@@ -141,7 +155,7 @@ export function SimpleHome() {
   useEffect(() => { dropOldLocal(); }, []);
   useEffect(() => {
     if (!shownOnce) return;
-    const undo = restoreScroll();
+    const undo = jumped.current ? () => undefined : restoreScroll();
     const untrack = trackScroll();
     return () => { undo(); untrack(); };
   }, [shownOnce]);
@@ -203,7 +217,7 @@ export function SimpleHome() {
 function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickWeek, reveal, ask, askOn, onAskOff }: {
   tab: WorkTabId; groups: Record<string, TaskItem[]>; doc: ProgressDoc; steps: StepRef[]; today: string;
   weekItems: WeekItem[]; weekTitle: string; onPickWeek: (id: string, tab: WorkTabId) => void;
-  reveal: { id: string; n: number } | null;
+  reveal: Omit<Reveal, 'tab'> | null;
   ask: React.ReactNode; askOn: boolean; onAskOff: () => void;
 }) {
   const def = workTab(tab);
@@ -234,7 +248,7 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
       : () => setOpen(id, !on);
     return (
       <StepBlock key={c.id} blockId={id} card={c} cards={cards} title={titleOf(c)} tasks={tasks} summary={sums[c.id]} steps={steps} today={today}
-        open={on} onToggle={toggle} />
+        open={on} onToggle={toggle} reveal={reveal && c.id === revealCard?.id ? reveal : null} />
     );
   };
 
@@ -254,7 +268,7 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
     let tries = 0;
     let raf = 0;
     const tryGo = () => {
-      if (focusTask(reveal.id) || tries++ > 30) return;
+      if (focusTask(reveal.id, { guide: reveal.guide }) || tries++ > 30) return;
       onAskOff();
       raf = window.requestAnimationFrame(tryGo);
     };

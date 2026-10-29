@@ -96,9 +96,10 @@ function ContactRow({ c }: { c: Contact }) {
       if (r.ok) toast('연락처를 지웠어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'property.restore', id: c.item.id }) } });
     });
   };
-  if (ed.open) return <li className={`${cardRowCls} px-3`}><ContactForm c={c} onClose={ed.stop} /></li>;
+  // id = 검색 결과에서 이 줄로 올 때 찾는 이름(components/search/jump.ts revealRow)
+  if (ed.open) return <li id={`contact-${c.item.id}`} className={`${cardRowCls} px-3`}><ContactForm c={c} onClose={ed.stop} /></li>;
   return (
-    <li className={`flex items-center border-b border-line pl-5 pr-1 last:border-b-0 ${cols} md:gap-x-4`}>
+    <li id={`contact-${c.item.id}`} className={`flex items-center border-b border-line pl-5 pr-1 last:border-b-0 ${cols} md:gap-x-4`}>
       {/* 폰: [이름 / 무슨 일] [전화] [휴지통] · 넓은 화면: 이름 | 무슨 일 | 전화 | 휴지통 */}
       <button type="button" aria-label={`${c.name} 고치기`} onClick={ed.start}
         className="min-w-0 flex-1 py-4 text-left md:col-span-2 md:grid md:grid-cols-subgrid md:items-center md:gap-x-4">

@@ -13,6 +13,7 @@ import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import type { StepRef } from '@/components/tasks/TaskComposer';
 import { Badge } from '@/components/ui/Badge';
 import { textBtn } from '@/components/ui/buttonCls';
+import { GroupHead } from '@/components/ui/GroupHead';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { blockCls } from './StepBlock';
 import { useMonthSwipe } from './TabSwipe';
@@ -130,16 +131,6 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
       </div>
       <Upcoming doc={doc} today={today} picked={picked} steps={rowSteps} tabOf={tabOf} />
     </section>
-  );
-}
-
-/** 묶음 머리(데일리 .grp-h): 이름 14/700 `sub` + 오른쪽 「n건」 13 `muted` */
-function GroupHead({ id, name, count }: { id: string; name: string; count: number }) {
-  return (
-    <h3 id={id} className="mx-5 flex items-baseline justify-between gap-3 border-b border-line pb-2 pt-6 text-meta font-normal text-muted">
-      <b className="min-w-0 truncate text-sm font-bold text-sub">{name}</b>
-      {count > 0 && <span className="tabular-nums">{count}건</span>}
-    </h3>
   );
 }
 

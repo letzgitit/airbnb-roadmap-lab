@@ -43,13 +43,18 @@ import { LineIcon } from '@/components/ui/LineIcon';
  *   보조 줄: 「10월 27일(화)까지」 · 「문의 필요」 안내 배지 · 「지금 할 때」. 남은 날 배지: 지남 = 경고(빨강 글자 옅은 면) · 3일 안 = 주의(노랑) · 그 밖 = 회색.
  */
 type Form = { text: string; start: string; due: string; kind: TaskKind | ''; note: string; place: string };
-/** 새 홈 「이번 주 할 일」 → 아래 블록의 그 할 일 줄로(detail = 할 일 id). 그 줄(쉬운 모양 TaskRow)이 받아 내려오고 펼치고 잠깐 칠한다 */
+/**
+ * 새 홈 「이번 주 할 일」 · 검색 결과 → 아래 블록의 그 할 일 줄로. 그 줄(쉬운 모양 TaskRow)이 받아 내려오고 펼치고 잠깐 칠한다.
+ * detail = 할 일 id(옛 꼴) 또는 { id, guide: true }(검색에서 도움말에서만 걸린 할 일 — 칠한 뒤 도움말 창까지 연다)
+ */
 export const FOCUS_TASK_EVENT = 'home:focus-task';
+type FocusDetail = string | { id: string; guide?: boolean };
 /** 그 할 일 줄이 지금 화면에 있으면 보내고 true, 없으면(접힌 묶음 안 등) false */
-export function focusTask(id: string): boolean {
+export function focusTask(id: string, opts: { guide?: boolean } = {}): boolean {
   if (!document.getElementById(`task-${id}`)) return false;
+  const detail: FocusDetail = opts.guide ? { id, guide: true } : id;
   // 방금 펼친 묶음 안 줄이면 받는 쪽(useEffect)이 아직 안 붙었을 수 있어 한 박자 늦게 보낸다
-  window.setTimeout(() => window.dispatchEvent(new CustomEvent(FOCUS_TASK_EVENT, { detail: id })), 60);
+  window.setTimeout(() => window.dispatchEvent(new CustomEvent(FOCUS_TASK_EVENT, { detail })), 60);
   return true;
 }
 // 설명서(현황 문서 밖 — guides-client): 폼을 열 때 본문을 받아 두고, 저장할 때 바뀌었으면 할 일보다 먼저 따로 저장한다
@@ -90,11 +95,17 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   // 「이번 주 할 일」에서 이 할 일을 누르면(FOCUS_TASK_EVENT): 이 줄로 내려와 메모를 펼치고 잠깐 형광으로 칠한다(쉬운 모양만)
   const rowRef = useRef<HTMLLIElement>(null);
   const [flash, setFlash] = useState(false);
+  // 검색에서 도움말에서만 걸린 할 일로 왔으면 칠한 뒤 도움말 창을 연다(물음표 단추가 이 값이 바뀔 때 연다)
+  const [guideAsk, setGuideAsk] = useState(0);
   useEffect(() => {
     if (!simple) return;
     let timer = 0;
+    let guideTimer = 0;
     const onFocus = (e: Event) => {
-      if ((e as CustomEvent<string>).detail !== t.id || !rowRef.current) return;
+      const d = (e as CustomEvent<FocusDetail>).detail;
+      const id = typeof d === 'string' ? d : d?.id;
+      if (id !== t.id || !rowRef.current) return;
+      if (typeof d === 'object' && d?.guide) { window.clearTimeout(guideTimer); guideTimer = window.setTimeout(() => setGuideAsk((n) => n + 1), 700); }
       if ((t.note ?? '').trim()) setNoteOpen(true);
       // 줄의 scroll-margin-top = 탭 줄(--spacing-tabbar) + 붙은 블록 머리(두 줄까지 88px) — 그 밑에 가려지지 않게
       rowRef.current.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -105,7 +116,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
       timer = window.setTimeout(() => setFlash(false), 1900);
     };
     window.addEventListener(FOCUS_TASK_EVENT, onFocus);
-    return () => { window.removeEventListener(FOCUS_TASK_EVENT, onFocus); window.clearTimeout(timer); };
+    return () => { window.removeEventListener(FOCUS_TASK_EVENT, onFocus); window.clearTimeout(timer); window.clearTimeout(guideTimer); };
   }, [simple, t.id, t.note]);
   const dl = dueLabel(t.due, todayStr());
   const dateText = spanDate(t.start, t.due) ?? dl?.date;
@@ -366,7 +377,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
                   {t.text}<span className="sr-only">{noteOpen ? ' 메모 접기' : ' 메모 펼치기'}</span>
                 </span>
               ) : <span>{t.text}</span>}
-              {guideMeta && <GuideButton taskId={t.id} title={t.text} version={guideMeta.version} />}
+              {guideMeta && <GuideButton taskId={t.id} title={t.text} version={guideMeta.version} openKey={guideAsk} />}
               {photoN > 0 && (
                 <button type="button" onClick={() => view(photos[0].id, undefined, photos.map((p) => p.id))} aria-label={`${t.text} 사진 ${photoN}장 크게 보기`}
                   className="relative -my-3 ml-1 inline-flex min-h-11 items-center gap-0.5 align-middle">
