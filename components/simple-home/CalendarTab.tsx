@@ -3,12 +3,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ProgressDoc, TaskItem } from '@/lib/core/types';
 import { useProgress } from '@/components/progress/ProgressProvider';
-import { GuideButton } from '@/components/tasks/TaskGuide';
-import { TaskPhotos } from '@/components/tasks/TaskPhotos';
 import { TaskRow } from '@/components/tasks/TaskRow';
-import { useGuideIds } from '@/components/tasks/guides-client';
-import { phonesIn, telHref } from '@/components/tasks/phone';
-import { treeRows, SOON_DAYS } from '@/components/tasks/task-view';
+import { treeRows } from '@/components/tasks/task-view';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import type { StepRef } from '@/components/tasks/TaskComposer';
 import { Badge } from '@/components/ui/Badge';
@@ -19,7 +15,7 @@ import { blockCls } from './StepBlock';
 import { useMonthSwipe } from './TabSwipe';
 import { CAL_FOLD_KEY, savedCalFolded, write, type CalGroup } from './home-state';
 import {
-  addMonths, dateParts, daysBetween, dayDots, dayTasks, fieldLabel, monthOf, monthWeeks, relDay, taskTabs, upcomingTasks, UPCOMING_DAYS,
+  addMonths, dateParts, dayDots, dayTasks, fieldLabel, monthOf, monthWeeks, taskTabs, upcomingTasks, UPCOMING_DAYS,
   type DayDot, type WorkTabId,
 } from './home-model';
 
@@ -183,6 +179,7 @@ function Upcoming({ doc, today, picked, steps, tabOf, open, onToggle }: {
 }) {
   const uid = useId();
   const { isDone, onToggle: onToggleDone } = useStickyDone();
+  const { reportEdit } = useEditingSet();
   const list = useMemo(() => upcomingTasks(doc, today, UPCOMING_DAYS, isDone).filter((t) => t.due !== picked && t.start !== picked), [doc, today, picked, isDone]);
   return (
     <section aria-labelledby={`${uid}-h`}>
@@ -192,7 +189,7 @@ function Upcoming({ doc, today, picked, steps, tabOf, open, onToggle }: {
           <p className="px-5 pb-3 pt-2 text-cta text-muted">앞으로 2주 안에 마감인 할 일이 없어요.</p>
         ) : (
           <ul className="px-5">
-            {list.map((t) => <UpcomingRow key={t.id} t={t} today={today} steps={steps} tab={tabOf.get(t.id) ?? null} onToggle={onToggleDone} />)}
+            {list.map((t) => <UpcomingRow key={t.id} t={t} steps={steps} tab={tabOf.get(t.id) ?? null} onToggle={onToggleDone} onEditChange={reportEdit} />)}
           </ul>
         )}
       </div>
@@ -201,86 +198,26 @@ function Upcoming({ doc, today, picked, steps, tabOf, open, onToggle }: {
 }
 
 /**
- * 다가오는 일정 한 줄(데일리 .evr): [체크 칸] [큰 날짜 「29」 + 「10월 목」] [제목 16 (두 줄까지) / 분야 점 + 「행정」 꼬리표 ……… 남은 날] [꺾쇠].
- * 누르면 그 자리에서 펼친다: 메모 전체 · 메모 사진(「＋ 사진」) · 도움말 · 고치기(그 자리에서 고치는 폼) · 지우기(바로 지우고 8초 「되돌리기」).
+ * 다가오는 일정 한 줄: 할 일 줄(TaskRow 쉬운 모양)과 같은 규칙 — 체크 · 제목 · 남은 날 꼬리표 / 보조 줄 + 전화 · 연필 · 휴지통 / 메모 첫 줄 + 고정 꺾쇠,
+ * 제목 · 메모 줄을 누르면 그 자리에서 메모만 펼친다(2026-10-29 사이트 주인 「모두 다 동일하게」).
+ * 이 목록만의 것: 체크 칸 뒤 큰 날짜 칸(데일리 .evr — 「29」 22/600 + 「10월 목」 13, 44px 칸)과 보조 줄 맨 앞 분야 점 + 「행정」 꼬리표. 날짜 글(「n월 n일까지」)은 큰 날짜가 말하므로 숨긴다.
  */
-function UpcomingRow({ t, today, steps, tab, onToggle }: { t: TaskItem; today: string; steps: StepRef[]; tab: WorkTabId | null; onToggle: (t: TaskItem) => void }) {
-  const uid = useId();
-  const { send, toast } = useProgress();
-  const guideIds = useGuideIds();
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const seenOpen = useRef(false);
+function UpcomingRow({ t, steps, tab, onToggle, onEditChange }: {
+  t: TaskItem; steps: StepRef[]; tab: WorkTabId | null; onToggle: (t: TaskItem) => void; onEditChange: (id: string, open: boolean) => void;
+}) {
   const due = t.due!;
   const { wd } = dateParts(due);
-  const rel = relDay(due, today);
-  // 남은 날: 3일 안이면 주의 꼬리표, 그 밖은 13 보조 글자(데일리 .evr-n)
-  const soon = daysBetween(today, due) <= SOON_DAYS;
-  const note = (t.note ?? '').trim();
-  const guide = guideIds[t.id];
-
-  if (editing) {
-    // 고치는 폼은 할 일 줄(TaskRow)의 것을 그대로 — 폼을 닫으면(저장 · 취소) 펼친 줄로 돌아온다
-    return (
-      <TaskRow t={t} steps={steps} listStepId={null} scope="page" simple autoEdit onToggle={onToggle} onGone={() => setEditing(false)}
-        onEditChange={(_id, on) => { if (on) seenOpen.current = true; else if (seenOpen.current) { seenOpen.current = false; setEditing(false); } }} />
-    );
-  }
-  const quickDel = () => {
-    void send({ op: 'task.delete', id: t.id }).then((r) => {
-      if (r.ok) toast('할 일을 삭제했어요.', { ms: 8000, action: { label: '되돌리기', run: () => void send({ op: 'task.restore', id: t.id }) } });
-    });
-  };
-  const iconBtn = 'flex size-11 shrink-0 items-center justify-center rounded-control text-ink-soft transition-colors hover:bg-sunken';
+  const m = Number(due.slice(5, 7)), d = Number(due.slice(8));
+  const lead = (
+    <span className="-my-1 flex w-11 shrink-0 flex-col items-center gap-0.5 leading-none">
+      <b aria-hidden className="text-2xl font-semibold tracking-[-0.02em] text-ink tabular-nums">{d}</b>
+      <small aria-hidden className="whitespace-nowrap text-meta text-muted">{m}월 {wd}</small>
+      <span className="sr-only">{m}월 {d}일 {wd}요일</span>
+    </span>
+  );
+  const tag = tab && <><i className={`block size-[7px] shrink-0 rounded-full ${FIELD_DOT[tab]}`} aria-hidden /><Badge>{fieldLabel(tab)}</Badge></>;
   return (
-    <li className="border-t border-line first:border-t-0">
-      <div className="flex items-center">
-      {/* 줄 왼쪽 체크 칸 하나(할 일 줄과 같은 꼴 — 22px 네모, 누르는 칸 44px) */}
-      <label className="relative -ml-2.5 flex size-11 shrink-0 cursor-pointer items-center justify-center">
-        <input type="checkbox" checked={t.done} aria-label={`${t.text} 완료`}
-          className="peer size-5.5 cursor-pointer appearance-none rounded-chip border-[1.5px] border-faint bg-surface transition-colors checked:border-ink checked:bg-ink"
-          onChange={(e) => { onToggle(t); void send({ op: 'task.update', id: t.id, patch: { done: e.target.checked } }); }} />
-        <LineIcon name="check" stroke={2.6} className="pointer-events-none absolute size-4 text-surface opacity-0 peer-checked:opacity-100" />
-      </label>
-      <button type="button" aria-expanded={open} aria-controls={`${uid}-d`} onClick={() => setOpen((v) => !v)}
-        className="flex min-h-15 min-w-0 flex-1 items-center gap-3 py-2 text-left active:opacity-60">
-        <span className="flex w-11 shrink-0 flex-col items-center gap-0.5 leading-none" aria-hidden>
-          <b className="text-2xl font-semibold tracking-[-0.02em] text-ink tabular-nums">{Number(due.slice(8))}</b>
-          <small className="whitespace-nowrap text-meta text-muted">{Number(due.slice(5, 7))}월 {wd}</small>
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-          <span className={`text-base leading-[1.3] text-ink-soft ${open ? '' : 'line-clamp-2'}`}>
-            <span className="sr-only">{Number(due.slice(5, 7))}월 {Number(due.slice(8))}일 {wd}요일, </span>{t.text}
-          </span>
-          <span className="flex min-w-0 items-center gap-1.5 text-meta text-muted">
-            {tab && <><i className={`block size-[7px] shrink-0 rounded-full ${FIELD_DOT[tab]}`} aria-hidden /><Badge>{fieldLabel(tab)}</Badge></>}
-            {t.kind === '문의' && <Badge tone="info">문의 필요</Badge>}
-            {soon ? <Badge tone="warn" className="ml-auto">{rel.text}</Badge> : <span className="ml-auto whitespace-nowrap tabular-nums">{rel.text}</span>}
-          </span>
-        </span>
-        <LineIcon name="chevron" className={`size-4 shrink-0 text-muted transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} stroke={2} />
-      </button>
-      </div>
-      {open && (
-        // 펼친 내용은 제목 글 줄에 맞춘다(체크 칸 34 + 날짜 칸 44 + 사이 12)
-        <div id={`${uid}-d`} className="pb-3 pl-[90px]">
-          {note && (
-            <div className="max-w-[36em] space-y-2 break-keep pb-1 text-base leading-[1.7] text-ink-soft [overflow-wrap:anywhere]">
-              {note.split(/\n+/).map((para, i) => <p key={i} className="whitespace-pre-wrap">{para}</p>)}
-            </div>
-          )}
-          {[...new Set(phonesIn(note))].map((p) => <a key={p} href={telHref(p)} className={`${textBtn} mx-0 mr-4 tabular-nums`}><i className="fas fa-phone mr-1.5" aria-hidden />{p}</a>)}
-          <TaskPhotos taskId={t.id} stepId={t.stepId} />
-          {/* 단추 줄: [도움말] ……… [고치기] [지우기] — 완료 체크는 줄 왼쪽 칸 하나 */}
-          <div className="flex items-center gap-1">
-            {guide && <span className="inline-flex items-center gap-0.5 text-cta font-semibold text-ink-soft">도움말<GuideButton taskId={t.id} title={t.text} version={guide.version} /></span>}
-            <span className="ml-auto flex items-center">
-              <button type="button" aria-label={`${t.text} 고치기`} onClick={() => setEditing(true)} className={iconBtn}><LineIcon name="pen" className="size-5" /></button>
-              <button type="button" aria-label={`${t.text} 삭제`} onClick={quickDel} className={`${iconBtn} -mr-2.5 hover:text-danger-ink active:text-danger-ink`}><LineIcon name="trash" className="size-5" /></button>
-            </span>
-          </div>
-        </div>
-      )}
-    </li>
+    <TaskRow t={t} steps={steps} listStepId={null} scope="page" simple hideDate lead={lead} tag={tag}
+      onEditChange={onEditChange} onToggle={onToggle} onGone={() => undefined} />
   );
 }
