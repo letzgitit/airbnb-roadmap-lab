@@ -30,7 +30,7 @@
   --color-on-marker: #000000;
   /* 형광 면 위 빨강(위에 붙은 분야 탭 줄의 기한 지남 점) — 테마와 상관없이 이 값(형광 위 4.84:1). 어두운 화면 danger-ink #ff5a5f 는 형광 위 2.71:1이라 못 쓴다 */
   --color-danger-on-marker: #c92a2a;
-  --color-head-mark: #edfc47;     /* 블록 머리 글자 밑 짧은 밑줄(다크는 없음 — 데일리 bd-yellow) */
+  --color-head-mark: #edfc47;     /* 블록 머리 글자 밑 짧은 밑줄(다크도 같음 — 아래 .dark) */
 
   /* 「누르는 것」 색 = 검정(ink). 주 단추 · 체크 · 고른 날 · 포커스 고리 — 데일리 --cta-bg · --seg-bg */
   --color-accent: #000000;
@@ -110,7 +110,7 @@
   padding-right: max(20px, env(safe-area-inset-right));
 }
 
-/* 블록 머리 글자 밑 짧은 형광 밑줄(데일리 .sec-h h2 > span — 글자 폭만큼, 글자 아랫부분에 겹치게). 다크는 밑줄 대신 크게(text-2xl) */
+/* 블록 머리 글자 밑 짧은 형광 밑줄(데일리 .sec-h h2 > span — 글자 폭만큼, 글자 아랫부분에 겹치게). 밝게 · 어둡게 모두 */
 @utility head-mark {
   box-shadow: inset 0 -0.3125rem 0 var(--color-head-mark);
 }
@@ -167,7 +167,7 @@
   --color-sub: #b4b4b4;
   --color-muted: #949494;         /* 면 6.1:1 · 꼬리표 바탕 5.0:1 — 데일리 bd-yellow --meta */
   --color-faint: #6e7176;
-  --color-head-mark: transparent;
+  --color-head-mark: #edfc47;     /* 어두운 화면도 같은 형광 밑줄(2026-10-29 — 데일리 bd-yellow 는 밑줄 없음. 「이번 주 할 일」 머리를 「단계」 머리와 가르려고) */
   --color-accent: #ffffff;
   --color-accent-hover: #e9e9e9;
   --color-accent-ink: #ffffff;

@@ -214,9 +214,10 @@ export function SimpleHome() {
 }
 
 /**
- * 일터 탭 하나(행정 · 설비 · 운영): 이번 주 할 일(폰 · 태블릿 — 머리 오른쪽에 「문의 필요만 보기」) → 단계 블록들(한 목록, sortCards 순서).
- * 블록 사이는 바탕 회색 8px(데일리 --gap). 블록은 처음에 모두 접혀 있고(머리 줄만), 펼친 블록 id 는 이 브라우저 탭에 기억한다(OPEN_KEY — sessionStorage, 새로 들어오면 다 접힘).
- * 다 끝낸 블록 · 행정의 1~3단계도 따로 묶지 않고 마감 순서 제자리에 접힌 채 둔다.
+ * 일터 탭 하나(행정 · 설비 · 운영): 이번 주 할 일(폰 · 태블릿 — 머리 오른쪽에 「문의 필요만 보기」) → 「단계 n」 블록 하나(단계들을 흰 면 하나에, sortCards 순서).
+ * 두 블록 사이는 바탕 회색 8px(데일리 --gap), 「단계」 블록 안의 단계끼리는 1px 선. 머리로도 가른다: 형광 밑줄은 「이번 주 할 일」에만, 「단계」 머리는 밑줄 없음(BlockHead mark="none").
+ * 단계는 처음에 모두 접혀 있고(머리 줄만), 펼친 단계 id 는 이 브라우저 탭에 기억한다(OPEN_KEY — sessionStorage, 새로 들어오면 다 접힘).
+ * 다 끝낸 단계 · 행정의 1~3단계도 따로 묶지 않고 마감 순서 제자리에 접힌 채 둔다.
  * 「문의 필요만 보기」(ask — 상태는 SimpleHome)는 늘 「이번 주 할 일」 머리 오른쪽(폰 · 태블릿은 여기, PC는 곁 칸). 켜도 자리를 옮기지 않는다.
  * 이번 주가 비어 그 블록이 없으면 같은 자리(본문 맨 위 오른쪽)에 단추만 둔다.
  */
@@ -226,6 +227,7 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
   reveal: Omit<Reveal, 'tab'> | null;
   ask: React.ReactNode; askOn: boolean; onAskOff: () => void;
 }) {
+  const uid = useId();
   const def = workTab(tab);
   const cards = def.cards;
   const sums = Object.fromEntries(cards.map((c) => [c.id, summarize(c, groups[c.id], doc, today)]));
@@ -290,7 +292,13 @@ function WorkTab({ tab, groups, doc, steps, today, weekItems, weekTitle, onPickW
         ? <WeekBlock title={weekTitle} items={weekItems} today={today} onPick={onPickWeek} headRight={ask} className="lg:hidden" stickyHead />
         : ask && <AskRow className="lg:hidden">{ask}</AskRow>}
       {askOn && shown.length === 0 && <p className={`${blockCls} px-5 py-4 text-base text-muted`}>문의할 일이 없어요.</p>}
-      {shown.map((c) => block(c, askOn ? askOnly(groups[c.id]) : groups[c.id]))}
+      {/* 「단계 n」 블록: 단계들을 흰 면 하나에 — 블록 머리(형광 밑줄 없음) 밑에 단계 머리 줄끼리 1px 선 */}
+      {shown.length > 0 && (
+        <section aria-labelledby={`${uid}-steps`} className={blockCls}>
+          <BlockHead id={`${uid}-steps`} title="단계" count={shown.length} mark="none" />
+          {shown.map((c) => block(c, askOn ? askOnly(groups[c.id]) : groups[c.id]))}
+        </section>
+      )}
     </div>
   );
 }
@@ -300,12 +308,17 @@ function AskRow({ className = '', children }: { className?: string; children: Re
   return <div className={`-mb-1 flex justify-end px-2 md:px-0 ${className}`}>{children}</div>;
 }
 
-/** 「문의 필요만 보기 n」 거르기(문의 할 일이 있을 때만): 작은 글자 단추(14). 켜면 굵게 + 아래 2px 검정 선(데일리 고르개 꼴) */
+/**
+ * 「문의 필요만 보기 n」 거르기(문의 할 일이 있을 때만): 작은 글자 단추(14). 켜면 굵게 + 아래 2px 검정 선(데일리 고르개 꼴).
+ * 선은 글자 폭만큼(안쪽 span 이 단추 높이를 채워 단추 아래 끝에 긋는다) — 단추 상자 폭이면 오른쪽 20px 여백까지 넘어가서
+ */
 function AskToggle({ on, count, onToggle }: { on: boolean; count: number; onToggle: () => void }) {
   return (
     <button type="button" aria-pressed={on} onClick={onToggle}
-      className={`-mr-3 inline-flex min-h-11 items-center gap-1 px-3 text-sm transition-colors ${on ? 'font-bold text-ink shadow-[inset_0_-2px_0_var(--color-ink)]' : 'font-semibold text-ink-soft hover:text-ink'}`}>
-      문의 필요만 보기<span className="font-normal text-muted tabular-nums">{count}</span>
+      className={`-mr-3 inline-flex min-h-11 items-stretch px-3 text-sm transition-colors ${on ? 'font-bold text-ink' : 'font-semibold text-ink-soft hover:text-ink'}`}>
+      <span className={`inline-flex items-center gap-1 ${on ? 'shadow-[inset_0_-2px_0_var(--color-ink)]' : ''}`}>
+        문의 필요만 보기<span className="font-normal text-muted tabular-nums">{count}</span>
+      </span>
     </button>
   );
 }
@@ -321,7 +334,7 @@ const WEEK_SHOWN = 5;
  */
 function WeekBlock({ title, items, today, onPick, showTab = false, headRight, className = '', stickyHead = false }: {
   title: string; items: WeekItem[]; today: string; onPick: (id: string, tab: WorkTabId) => void; showTab?: boolean; headRight?: React.ReactNode; className?: string;
-  /** 본문(폰 · 태블릿)의 이번 주 블록: 머리를 탭 줄 밑에 붙인다(단계 블록과 같은 규칙). 곁 칸(PC)은 곁 칸째 따라오므로 붙이지 않는다 */
+  /** 본문(폰 · 태블릿)의 이번 주 블록: 머리를 탭 줄 밑에 붙인다(펼친 단계 머리와 같은 규칙). 곁 칸(PC)은 곁 칸째 따라오므로 붙이지 않는다 */
   stickyHead?: boolean;
 }) {
   const uid = useId();

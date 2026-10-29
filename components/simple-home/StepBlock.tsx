@@ -78,18 +78,23 @@ function useStuck(on: boolean, canSlim = false) {
 const stickyTop = (head: HTMLElement | null) => (head ? parseFloat(getComputedStyle(head).top) || 0 : 0);
 
 /**
- * 블록 머리(데일리 .sec-h): 52px 줄, 제목 19/800 + 글자 밑 짧은 형광 밑줄(다크도 19/800 — 밑줄만 없음). 오른쪽에 메타(13) · 꼬리표 · 작은 글자 단추.
+ * 블록 머리(데일리 .sec-h): 52px 줄, 제목 19/800 + 오른쪽에 메타(13) · 꼬리표 · 작은 글자 단추.
  * 좁아서 한 줄에 안 들어가면 오른쪽 메타가 제목 밑 줄로 내려간다.
- * sticky = 탭 줄 밑에 붙는 머리(「이번 주 할 일」 본문 블록) — 펼친 단계 블록과 같은 규칙.
+ * mark = 제목 표시: line = 글자 밑 짧은 형광 밑줄(밝게 · 어둡게 모두 — 이번 주 할 일 · 갤러리 묶음 · 연락처 바로 걸기),
+ *   none = 일터 탭 「단계」 머리 — 형광 밑줄 없음(밑줄은 「이번 주 할 일」에만 — 두 머리를 색으로 가른다, DESIGN.md 8.1.2).
+ * sticky = 탭 줄 밑에 붙는 머리(「이번 주 할 일」 본문 블록) — 펼친 단계 머리와 같은 규칙.
  */
-export function BlockHead({ id, title, count, right, sticky = false }: { id?: string; title: ReactNode; count?: ReactNode; right?: ReactNode; sticky?: boolean }) {
+const markCls = { line: 'head-mark', none: '' } as const;
+export function BlockHead({ id, title, count, right, sticky = false, mark = 'line' }: {
+  id?: string; title: ReactNode; count?: ReactNode; right?: ReactNode; sticky?: boolean; mark?: keyof typeof markCls;
+}) {
   const { sentinel, head, stuck } = useStuck(sticky);
   return (
     <>
       {sticky && <div ref={sentinel} aria-hidden className="h-px -mb-px" />}
       <div ref={head} className={`flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-5 py-2.5 ${sticky ? stickyHeadCls : ''} ${stuck ? stuckLineCls : ''}`}>
         <h2 id={id} className="flex min-w-0 items-baseline gap-2 text-head font-extrabold tracking-[-0.01875rem] text-ink">
-          <span className="head-mark min-w-0">{title}</span>
+          <span className={`${markCls[mark]} min-w-0`}>{title}</span>
           {count != null && <small className="shrink-0 text-meta font-normal tracking-normal text-muted tabular-nums">{count}</small>}
         </h2>
         {right && <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">{right}</div>}
@@ -99,9 +104,10 @@ export function BlockHead({ id, title, count, right, sticky = false }: { id?: st
 }
 
 /**
- * 일터 탭(행정 · 설비 · 운영)의 단계 블록 하나(기획 27의 3절 · 9절 — 예전 「카드」). 접고 펴는 블록(처음엔 접힘 — 펼친 블록은 부르는 쪽이 이 브라우저 탭에 기억, home-state.ts).
- * 머리 = 제목(형광 밑줄) + 오른쪽 「11월 9일(월)까지」 · 꼬리표(D-12 · 기한 지남 n) · 「2/7」 · 맨 끝 꺾쇠. 머리 줄 전체가 접기 · 펴기 단추.
- * 다 끝낸 블록 머리 = 제목(muted, 밑줄 없음) + 「완료」 꼬리표 + 빈 개수 칸 + 꺾쇠.
+ * 일터 탭(행정 · 설비 · 운영)의 단계 하나(기획 27의 3절 · 9절 — 예전 「카드」). 접고 펴는 줄 묶음(처음엔 접힘 — 펼친 단계는 부르는 쪽이 이 브라우저 탭에 기억, home-state.ts).
+ * 일터 탭의 「단계 n」 블록(흰 면 하나) 안에 쌓인다: 블록 틀 없이 위 1px 선으로 단계끼리 나눈다(2026-10-29 — 「이번 주 할 일」 블록과 단계 블록들이 구별이 안 된다는 지적으로 합침).
+ * 머리 = 단계 이름(h3 16/800 — 블록 머리 「단계」 19/800 밑 급, 형광 밑줄 없음) + 오른쪽 「11월 9일(월)까지」 · 꼬리표(D-12 · 기한 지남 n) · 「2/7」 · 맨 끝 꺾쇠. 머리 줄 전체가 접기 · 펴기 단추.
+ * 다 끝낸 단계 머리 = 이름(muted) + 「완료」 꼬리표 + 빈 개수 칸 + 꺾쇠.
  * 펼쳤을 때만 몸통 = 설명 한 줄 → 안 끝난 할 일 줄(마감 이른 순, 세부 항목은 부모 밑) → 「완료 n」(접음 — 펼치면 끝낸 줄)
  *   → 블록 메모(한 줄씩) → 블록 사진(64px 썸네일) → 맨 아래 단추 줄 「＋ 할 일 · ＋ 메모 · ＋ 사진」.
  * 빈 블록에 「할 일 없음」 같은 글은 쓰지 않는다 — 단추 줄만 보인다.
@@ -168,22 +174,22 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
   }, [open]);
 
   return (
-    <section ref={section} aria-labelledby={`${uid}-t`} className={blockCls}>
+    <section ref={section} aria-labelledby={`${uid}-t`} className="border-t border-line bg-surface">
       {open && <div ref={sentinel} aria-hidden className="h-px -mb-px" />}
       {/* 머리 줄: 제목 속 단추가 줄 전체를 덮어(::after) 어디를 눌러도 접고 편다.
           오른쪽 메타(날짜 · 꼬리표 · 개수 · 꺾쇠)는 쪼개지지 않는 한 덩어리로 오른쪽 세로 가운데. 제목 옆에 다 안 들어가면
           덩어리째 아래 줄로 내려 오른쪽 정렬(flex-wrap — 제목은 한 줄 폭을 다 쓰니 많아야 2줄).
           메타 덩어리는 누를 것이 없는 장식이라 pointer-events-none — 꺾쇠의 회전(transform)이 쌓임 맥락을 만들어
           ::after 위에 그려지므로, 이게 없으면 꺾쇠를 정확히 누를 때 단추가 안 눌린다(2026-10-29 폰 제보).
-          펼친 블록은 머리가 탭 줄 밑에 붙는다(useStuck — 붙은 동안만 아래 선, 한 줄로 줄임).
-          다 끝낸 블록은 「완료」 꼬리표만 — 제목은 muted · 형광 밑줄 없음(훑어볼 때 뒤로 물러나게) */}
-      <div ref={head} className={`flex min-h-13 ${slim ? 'flex-nowrap' : 'flex-wrap'} items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h2>button:focus-visible]:outline-2 has-[>h2>button:focus-visible]:-outline-offset-2 has-[>h2>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'} ${stuck ? stuckLineCls : ''}`}>
-        <h2 id={`${uid}-t`} className={`min-w-0 flex-auto text-head font-extrabold tracking-[-0.01875rem] ${done ? 'text-muted' : 'text-ink'}`}>
+          펼친 단계는 머리가 탭 줄 밑에 붙는다(useStuck — 붙은 동안만 아래 선, 한 줄로 줄임).
+          이름은 h3(블록 머리 「단계」 h2 밑) 16/800 — 할 일 제목(16/600)보다 한 단 굵게. 다 끝낸 단계는 「완료」 꼬리표만 — 이름은 muted(훑어볼 때 뒤로 물러나게) */}
+      <div ref={head} className={`flex min-h-13 ${slim ? 'flex-nowrap' : 'flex-wrap'} items-center gap-x-3 gap-y-1 px-5 py-2.5 transition-colors hover:bg-sunken has-[>h3>button:focus-visible]:outline-2 has-[>h3>button:focus-visible]:-outline-offset-2 has-[>h3>button:focus-visible]:outline-accent-ink ${open ? stickyHeadCls : 'relative'} ${stuck ? stuckLineCls : ''}`}>
+        <h3 id={`${uid}-t`} className={`min-w-0 flex-auto text-base font-extrabold ${done ? 'text-muted' : 'text-ink'}`}>
           <button type="button" aria-expanded={open} aria-controls={`${uid}-b`} onClick={toggle}
             className={`text-left outline-none after:absolute after:inset-0 after:content-[''] ${slim ? 'block w-full truncate' : ''}`}>
-            {done ? title : <span className="head-mark">{title}</span>}
+            {title}
           </button>
-        </h2>
+        </h3>
         <div className="pointer-events-none ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-meta text-muted">
           {/* 붙고 조금 더 내리면 한 줄로: 이름 말줄임 + 날짜 숨김(꼬리표 · 개수 · 꺾쇠는 남김 — 탭 줄 밑을 많이 먹지 않게) */}
           {!done && summary.deadline && !slim && <span className="tabular-nums">{longDate(summary.deadline)}까지</span>}
@@ -194,30 +200,31 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
           <LineIcon name="chevron" stroke={2} className={`size-5 text-ink-soft transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
         </div>
       </div>
-      {/* 몸통: 펼쳤을 때만 그린다(접힌 동안 할 일 줄이 없어 「이번 주 할 일」 건너가기는 먼저 펼친다) */}
+      {/* 몸통: 펼쳤을 때만 그린다(접힌 동안 할 일 줄이 없어 「이번 주 할 일」 건너가기는 먼저 펼친다).
+          몸통 안 나누는 선은 모두 좌우 20px 들인다(mx-5 — 할 일 줄 사이 선과 같은 폭). 화면 끝까지 닿는 1px 은 단계 경계(section 위 선) 하나뿐 */}
       <div ref={body} id={`${uid}-b`} hidden={!open}>
         {open && (
           <>
             {card.sub && <p className="truncate px-5 pb-2.5 text-sm text-sub">{card.sub}</p>}
-            {openRows.length > 0 && <ul className="border-t border-line px-5">{openRows.map(row)}</ul>}
+            {openRows.length > 0 && <ul className="mx-5 border-t border-line">{openRows.map(row)}</ul>}
             {doneRows.length > 0 && (
-              <div className="border-t border-line">
-                <span className="block px-1"><FoldRow strongChevron label="완료" count={doneRows.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
-                {showDone && <ul id={`${uid}-done`} className="border-t border-line px-5">{doneRows.map(row)}</ul>}
+              <div className="mx-5 border-t border-line">
+                <span className="-mx-4 block"><FoldRow strongChevron label="완료" count={doneRows.length} unit="" open={showDone} onToggle={() => setShowDone((v) => !v)} controls={`${uid}-done`} /></span>
+                {showDone && <ul id={`${uid}-done`} className="border-t border-line">{doneRows.map(row)}</ul>}
               </div>
             )}
             <BlockNotes blockId={blockId} title={title} />
             <BlockPhotos blockId={blockId} title={title} />
             {/* 맨 아래 단추 줄: 「＋ 할 일 · ＋ 메모 · ＋ 사진」. 할 일 · 메모는 누르면 그 자리에 폼, 사진은 바로 고르기 */}
-            <div className="border-t border-line">
+            <div className="mx-5 border-t border-line">
               {composing === 'task' ? (
-                <div className="px-3 pb-1">
+                <div className="-mx-2 pb-1">
                   <TaskComposer stepId={card.addStep} scope="page" simple prepare={prepare} dirtyKey={`form:add-task:card:${card.id}:${card.addStep}`} onClose={closeComposer} />
                 </div>
               ) : composing === 'note' ? (
                 <NoteComposer blockId={blockId} title={title} onClose={closeComposer} />
               ) : (
-                <div className="flex flex-wrap items-center px-2">
+                <div className="-mx-3 flex flex-wrap items-center">
                   <button ref={addRef} type="button" onClick={() => setComposing('task')} className={addBtnCls}>
                     <LineIcon name="plus" className="size-4.5" stroke={2.2} />할 일
                     <span className="sr-only">: {title}에 더하기</span>
@@ -257,7 +264,7 @@ function BlockNotes({ blockId, title }: { blockId: string; title: string }) {
     });
   };
   return (
-    <ul aria-label={`${title} 메모`} className="border-t border-line px-5">
+    <ul aria-label={`${title} 메모`} className="mx-5 border-t border-line">
       {notes.map((n) => (
         <li key={n.id} className="flex items-start gap-2 border-b border-line py-3 last:border-b-0">
           <div className="min-w-0 flex-1">
@@ -289,7 +296,7 @@ function NoteComposer({ blockId, title, onClose }: { blockId: string; title: str
     onClose();
   };
   return (
-    <form className="space-y-2 px-5 py-3" onSubmit={(e) => { e.preventDefault(); void save(); }}
+    <form className="space-y-2 py-3" onSubmit={(e) => { e.preventDefault(); void save(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } }}>
       <label htmlFor={`${uid}-n`} className="sr-only">{title} 메모</label>
       <input id={`${uid}-n`} className={inputCls} value={text} maxLength={500} autoFocus autoComplete="off" placeholder="예: 신분증 원본 챙기기"
@@ -310,7 +317,7 @@ function BlockPhotos({ blockId, title }: { blockId: string; title: string }) {
   if (list.length === 0) return null;
   const ids = list.map((p) => p.id);
   return (
-    <ul aria-label={`${title} 사진 ${list.length}장`} className="flex flex-wrap gap-2 border-t border-line px-5 py-3">
+    <ul aria-label={`${title} 사진 ${list.length}장`} className="mx-5 flex flex-wrap gap-2 border-t border-line py-3">
       {list.map((p, i) => (
         <li key={p.id}>
           <button type="button" onClick={() => view(p.id, undefined, ids)} aria-label={`${title} 사진 ${i + 1} 크게 보기`}
