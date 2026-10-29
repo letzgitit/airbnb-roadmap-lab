@@ -18,7 +18,7 @@ import { ContactsTab } from './ContactsTab';
 import { PhotosTab, type PhotoSub } from './PhotosTab';
 import { BlockHead, blockCls, StepBlock } from './StepBlock';
 import { useTabSwipe } from './TabSwipe';
-import { OPEN_KEY, PHOTO_SUB_KEY, TAB_KEY, dropOldLocal, restoreScroll, savedOpen, savedSub, startTab, trackScroll, write } from './home-state';
+import { CAL_FOLD_KEY, CAL_FOLD_START, OPEN_KEY, PHOTO_SUB_KEY, TAB_KEY, dropOldLocal, restoreScroll, savedOpen, savedSub, startTab, trackScroll, write } from './home-state';
 import {
   CARD_TABS, TABS, askOnly, blockId, contacts, isAsk, isWorkTab, sortCards, summarize, tabCounts, tasksByCard, telOf, weekTasks, workTab,
   type CardDef, type TabId, type WorkTabId,
@@ -105,13 +105,15 @@ export function SimpleHome() {
   // 「문의 필요만 보기」(일터 탭): 단추는 늘 「이번 주 할 일」 머리 오른쪽(폰은 본문, PC는 곁 칸). 탭을 바꾸면 끈다
   const [askOn, setAskOn] = useState(false);
   // 탭을 고르면(누르기 · 좌우 쓸기, 이미 고른 탭을 다시 눌러도) 그 탭을 처음 상태로 열고 맨 위로 올린다(2026-10-29 사이트 주인):
-  //   행정 · 설비 · 운영 = 그 탭 단계 블록 모두 접기, 갤러리 = 보조 탭 「사진」 + 검색 비우기 + 정렬 기본, 달력 = 이번 달 · 오늘(다시 그려서).
+  //   행정 · 설비 · 운영 = 그 탭 단계 블록 모두 접기, 갤러리 = 보조 탭 「사진」 + 검색 비우기 + 정렬 기본,
+  //   달력 = 이번 달 · 오늘(다시 그려서) + 「오늘」 펼침 · 「다가오는 일정」 접힘(CAL_FOLD_START, 2026-10-30).
   //   탭 본문은 fresh 가 바뀔 때마다 새로 그린다(key) — 쓰다 만 폼이 있으면 먼저 「저장 안 한 내용」 확인을 받는다.
   //   예외: 「이번 주 할 일」에서 건너가기(goTask)는 그 탭의 다른 블록을 접고 대상 블록 하나만 편다(WorkTab 의 reveal).
   const [fresh, setFresh] = useState(0);
   const openTab = (t: TabId) => {
     if (isWorkTab(t)) write(OPEN_KEY, JSON.stringify([...savedOpen()].filter((id) => !id.startsWith(`${t}.`))));
     if (t === 'gallery') { pickSub('photos'); setQuery(''); setSort('default'); }
+    if (t === 'calendar') write(CAL_FOLD_KEY, JSON.stringify(CAL_FOLD_START));
     setTab(t); write(TAB_KEY, t); setReveal(null); setAskOn(false); setFresh((n) => n + 1);
     window.scrollTo({ top: 0 });
   };

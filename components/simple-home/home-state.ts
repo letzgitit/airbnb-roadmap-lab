@@ -11,9 +11,11 @@ export const PHOTO_SUB_KEY = 'home:photos-sub';
 /** 펼친 단계 블록 id 목록(행정 · 설비 · 운영 모두 한 목록 — 블록 id 가 「분야.블록」이라 겹치지 않는다) */
 export const OPEN_KEY = 'home:open-blocks';
 const SCROLL_KEY = 'home:scroll';
-/** 달력 탭에서 접은 묶음 — 'day'(「오늘」 · 고른 날, 날을 바꿔도 하나) · 'upcoming'(「다가오는 일정」). 새로 들어오면 비어 있어 둘 다 펼침 */
+/** 달력 탭에서 접은 묶음 — 'day'(「오늘」 · 고른 날, 날을 바꿔도 하나) · 'upcoming'(「다가오는 일정」) */
 export const CAL_FOLD_KEY = 'home:cal-folded';
 export type CalGroup = 'day' | 'upcoming';
+/** 달력 탭을 열 때(새로 들어옴 · 탭 고르기)의 접힘: 「오늘」은 펼치고 「다가오는 일정」은 접는다(2026-10-30 사이트 주인) */
+export const CAL_FOLD_START: CalGroup[] = ['upcoming'];
 /** 새로 들어왔을 때 여는 탭 */
 export const START_TAB: TabId = 'calendar';
 
@@ -38,9 +40,9 @@ export const savedOpen = (): Set<string> => {
 };
 export const savedCalFolded = (): Set<CalGroup> => {
   try {
-    const v: unknown = JSON.parse(read(CAL_FOLD_KEY) ?? '[]');
-    return new Set(Array.isArray(v) ? v.filter((x): x is CalGroup => x === 'day' || x === 'upcoming') : []);
-  } catch { return new Set(); }
+    const v: unknown = JSON.parse(read(CAL_FOLD_KEY) ?? JSON.stringify(CAL_FOLD_START));
+    return new Set(Array.isArray(v) ? v.filter((x): x is CalGroup => x === 'day' || x === 'upcoming') : CAL_FOLD_START);
+  } catch { return new Set(CAL_FOLD_START); }
 };
 export const savedSub =(): PhotoSub => { const v = read(PHOTO_SUB_KEY); return v === 'docs' || v === 'etc' ? v : 'photos'; };
 
