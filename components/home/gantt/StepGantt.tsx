@@ -185,7 +185,7 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
         )}
       </div>
       <div className={s.chips}>
-        <ToggleChips label="단계 종류로 걸러 보기" values={types} onChange={onTypes}
+        <ToggleChips fill label="단계 종류로 걸러 보기" values={types} onChange={onTypes}
           options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABEL[t], dot: TYPE_DOT[t] }))} />
       </div>
 

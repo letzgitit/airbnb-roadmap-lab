@@ -99,7 +99,7 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
       ) : (
         <Card>
           <div className="border-b border-line px-2">
-            <ToggleChips label="단계 종류로 걸러 보기" values={types} onChange={pickTypes}
+            <ToggleChips fill label="단계 종류로 걸러 보기" values={types} onChange={pickTypes}
               options={TYPE_ORDER.map((t) => ({ value: t, label: TYPE_LABEL[t], dot: TYPE_DOT[t] }))} />
           </div>
           {pins.length > 0 && (
