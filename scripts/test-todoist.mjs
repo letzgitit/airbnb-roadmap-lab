@@ -206,31 +206,74 @@ test('사이트 → Todoist: 토큰 없으면 건너뜀', async () => {
   assert.equal(r.skipped, 'no_token');
 });
 
-test('사이트 → Todoist: 만들기 · 고치기 · 날짜 지우기 · 완료 · 삭제 · 되살리기 호출 내용', async () => {
+// Todoist 에서 먼저 만들어 웹훅으로 짝이 생긴 할 일(실제 흐름)
+async function pairedFromTodoist(id, data = {}) {
+  const r = await send(event('item:added', { id, ...data }));
+  assert.equal(r.body.action, 'created');
+  return (await live()).find((t) => t.todoistId === id);
+}
+
+test('사이트 → Todoist: 사이트에서 새로 만든 할 일(짝 없음)은 Todoist 에 만들지 않는다 · 고치기 · 완료 · 지우기 · 되살리기도 안 보냄', async () => {
   reset();
   const fk = fakeTodoist();
-  const cfg = { token: 'tok', base: 'http://fake.test', fetch: fk.fetch };
-  const add = { op: 'task.add', stepId: 6, text: '냉장고 주문', due: '2026-11-05', note: '모델 비교 후' };
+  const add = opSchema.parse({ op: 'task.add', stepId: 6, text: '아내가 만든 할 일', due: '2026-11-05', note: '메모' });
   const { result: t } = await mutate(add, ME);
-  let r = await pushToTodoist([{ op: add, result: t }], cfg);
-  assert.deepEqual(fk.calls[0], { method: 'POST', path: '/api/v1/tasks', body: { content: '냉장고 주문', labels: ['외도민'], due_date: '2026-11-05', description: '모델 비교 후' }, auth: 'Bearer tok' });
-  assert.deepEqual(r.linked, [{ id: t.id, todoistId: 'NEW1' }]);
+  let r = await pushToTodoist([{ op: add, result: t }], FAKE(fk));
+  assert.equal(fk.calls.length, 0);
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.linked, []);
   let cur = (await readDoc()).tasks[t.id];
-  assert.equal(cur.todoistId, 'NEW1');
+  assert.equal('todoistError' in cur, false);
+  assert.equal(cur.todoistId ?? null, null);
+  // 직접 intent 'create' 로 불러도 · 고치기 · 완료 · 지우기 · 되살리기 · todoist-sync 맞추기도 Todoist 를 부르지 않는다
+  await pushTasks([{ id: t.id, intent: 'create' }], FAKE(fk));
+  const u = opSchema.parse({ op: 'task.update', id: t.id, baseVersion: cur.version, patch: { text: '고침', done: true } });
+  const { result: t1 } = await mutate(u, ME);
+  await pushToTodoist([{ op: add, result: t }, { op: u, result: t1 }], FAKE(fk));
+  const d = { op: 'task.delete', id: t.id };
+  await pushToTodoist([{ op: d, result: (await mutate(d, ME)).result }], FAKE(fk));
+  const rs = { op: 'task.restore', id: t.id };
+  r = await pushToTodoist([{ op: rs, result: (await mutate(rs, ME)).result }], FAKE(fk));
+  await applySync(planSync(await readDoc(), []), FAKE(fk));
+  assert.equal(fk.calls.length, 0);
+  assert.deepEqual(r.errors, []);
+  cur = (await readDoc()).tasks[t.id];
+  assert.equal('todoistError' in cur, false);
+  assert.equal(cur.todoistId ?? null, null);
+});
 
-  fk.calls.length = 0;
+test('사이트 → Todoist: 짝 있는 할 일을 완료하면 close 를 보낸다', async () => {
+  reset();
+  const fk = fakeTodoist();
+  const t = await pairedFromTodoist('PD1', { content: '잔금 보내기' });
+  const u = opSchema.parse({ op: 'task.update', id: t.id, patch: { done: true } });
+  const { result } = await mutate(u, ME);
+  const r = await pushToTodoist([{ op: u, result }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['POST /api/v1/tasks/PD1/close']);
+  assert.deepEqual(r.errors, []);
+  assert.equal((await readDoc()).tasks[t.id].todoistSent.done, true);
+});
+
+test('사이트 → Todoist: 짝 있는 할 일의 고치기 · 날짜 지우기 · 완료 · 삭제 · 되살리기 호출 내용', async () => {
+  reset();
+  const fk = fakeTodoist();
+  const cfg = FAKE(fk);
+  const t = await pairedFromTodoist('TF1', { content: '냉장고 주문', due: { date: '2026-11-05' }, description: '모델 비교 후' });
+  let cur = (await readDoc()).tasks[t.id];
+  let r;
+
   const u1 = { op: 'task.update', id: t.id, baseVersion: cur.version, patch: { text: '냉장고 주문하기', due: null, note: null } };
   const { result: t1 } = await mutate(u1, ME);
   await pushToTodoist([{ op: u1, result: t1 }], cfg);
-  assert.deepEqual(fk.calls[0], { method: 'POST', path: '/api/v1/tasks/NEW1', body: { content: '냉장고 주문하기', description: '' }, auth: 'Bearer tok' });
+  assert.deepEqual(fk.calls[0], { method: 'POST', path: '/api/v1/tasks/TF1', body: { content: '냉장고 주문하기', description: '' }, auth: 'Bearer tok' });
   assert.equal(fk.calls[1].path, '/api/v1/sync');
-  assert.deepEqual(JSON.parse(fk.calls[1].body.commands)[0].args, { id: 'NEW1', due: null });
+  assert.deepEqual(JSON.parse(fk.calls[1].body.commands)[0].args, { id: 'TF1', due: null });
 
   fk.calls.length = 0;
   const u2 = { op: 'task.update', id: t.id, patch: { done: true } };
   const { result: t2 } = await mutate(u2, ME);
   await pushToTodoist([{ op: u2, result: t2 }], cfg);
-  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['POST /api/v1/tasks/NEW1/close']);
+  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['POST /api/v1/tasks/TF1/close']);
 
   fk.calls.length = 0;
   const u3 = { op: 'task.update', id: t.id, baseVersion: t2.version, patch: { stepId: 7, kind: '구매' } };
@@ -241,14 +284,17 @@ test('사이트 → Todoist: 만들기 · 고치기 · 날짜 지우기 · 완�
   const d = { op: 'task.delete', id: t.id };
   const { result: t4 } = await mutate(d, ME);
   await pushToTodoist([{ op: d, result: t4 }], cfg);
-  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['DELETE /api/v1/tasks/NEW1']);
+  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['DELETE /api/v1/tasks/TF1']);
 
+  // 짝 있던 할 일을 되살리면 Todoist 쪽은 지워졌으므로 새로 만들고 새 id 를 적는다
   fk.calls.length = 0;
   const rs = { op: 'task.restore', id: t.id };
   const { result: t5 } = await mutate(rs, ME);
   r = await pushToTodoist([{ op: rs, result: t5 }], cfg);
-  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['POST /api/v1/tasks', 'POST /api/v1/tasks/NEW2/close']);
-  assert.equal((await readDoc()).tasks[t.id].todoistId, 'NEW2');
+  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['POST /api/v1/tasks', 'POST /api/v1/tasks/NEW1/close']);
+  assert.deepEqual(fk.calls[0].body, { content: '냉장고 주문하기', labels: ['외도민'] });
+  assert.deepEqual(r.linked, [{ id: t.id, todoistId: 'NEW1' }]);
+  assert.equal((await readDoc()).tasks[t.id].todoistId, 'NEW1');
 
   // 짝이 없던 옛 할 일은 고쳐도 Todoist 를 부르지 않는다
   fk.calls.length = 0;
@@ -261,10 +307,13 @@ test('사이트 → Todoist: 만들기 · 고치기 · 날짜 지우기 · 완�
 
 test('사이트 → Todoist: Todoist 오류는 보고만 하고 던지지 않는다', async () => {
   reset();
-  const { result: t } = await mutate({ op: 'task.add', stepId: 1, text: 'x' }, ME);
-  const r = await pushToTodoist([{ op: { op: 'task.add' }, result: t }], { token: 'tok', base: 'http://fake.test', fetch: async () => new Response('no', { status: 500 }) });
+  const p = await pairedFromTodoist('ERR1', { content: 'x' });
+  const u = opSchema.parse({ op: 'task.update', id: p.id, baseVersion: p.version, patch: { text: 'y' } });
+  const { result: t } = await mutate(u, ME);
+  const r = await pushToTodoist([{ op: u, result: t }], { token: 'tok', base: 'http://fake.test', fetch: async () => new Response('no', { status: 500 }) });
   assert.equal(r.errors.length, 1);
   assert.equal(r.linked.length, 0);
+  assert.match((await readDoc()).tasks[p.id].todoistError, /500/);
 });
 
 // ── 짝 적기 연산 · 자동 표시 ──
@@ -312,8 +361,12 @@ test('설명서는 현황 문서 밖: 할 일 patch 의 guide 는 거절 · task
   assert.equal(JSON.parse(fs.readFileSync(DATA, 'utf8')).tasks.t_old1.guide, undefined); // 다음 쓰기에서 문서에서도 빠진다
   const fk = fakeTodoist();
   const { result: t } = await mutate(add, ME);
-  await pushToTodoist([{ op: add, result: t }], { token: 'tok', base: 'http://fake.test', fetch: fk.fetch });
-  assert.deepEqual(fk.calls[0].body, { content: '전입신고 하기', labels: ['외도민'] });
+  await mutate(opSchema.parse({ op: 'task.update', id: t.id, patch: { todoistId: 'GD1' } }), ME);
+  const cur = (await readDoc()).tasks[t.id];
+  const u = opSchema.parse({ op: 'task.update', id: t.id, baseVersion: cur.version, patch: { text: '전입신고 하러 가기' } });
+  const { result: t2 } = await mutate(u, ME);
+  await pushToTodoist([{ op: u, result: t2 }], { token: 'tok', base: 'http://fake.test', fetch: fk.fetch });
+  assert.deepEqual(fk.calls.map((c) => [c.path, c.body]), [['/api/v1/tasks/GD1', { content: '전입신고 하러 가기' }]]);
 });
 
 test('owner: 남편 · 아내 · 같이만 · null 이면 지움 · Todoist 로 보내지 않음', async () => {
@@ -468,84 +521,47 @@ test('저장소 503 뒤 재시도: 처음엔 던져서 다시 받고, 다시 오
 test('되돌아온 웹훅: 보낸 값과 같으면 사이트가 그 뒤에 또 고쳤어도 덮지 않는다', async () => {
   reset();
   const fk = fakeTodoist();
-  const { result: a } = await mutate(opSchema.parse({ op: 'task.add', stepId: 1, text: '처음' }), ME);
-  await pushTasks([{ id: a.id, intent: 'create' }], FAKE(fk));
+  const a = await pairedFromTodoist('BACK1', { content: '처음' });
   let t = (await readDoc()).tasks[a.id];
   await mutate(opSchema.parse({ op: 'task.update', id: a.id, baseVersion: t.version, patch: { text: '둘째' } }), ME);
   await pushTasks([{ id: a.id, intent: 'sync' }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((c) => c.path), ['/api/v1/tasks/BACK1']);
   t = (await readDoc()).tasks[a.id];
   await mutate(opSchema.parse({ op: 'task.update', id: a.id, baseVersion: t.version, patch: { text: '셋째' } }), ME);
-  const r = await send(event('item:updated', { id: t.todoistId, content: '둘째' }, iso(Date.now() + 3600_000)));
+  const r = await send(event('item:updated', { id: 'BACK1', content: '둘째' }, iso(Date.now() + 3600_000)));
   assert.equal(r.body.action, 'unchanged');
   assert.equal((await readDoc()).tasks[a.id].text, '셋째');
 });
 
-test('추가 직후 체크 · 고치기 · 삭제: 보내기 순서가 뒤집혀도 마지막 상태로', async () => {
+test('짝 있는 할 일 체크 · 고치기: 보내기 순서가 뒤집혀도 마지막 상태로 · 짝 없는 할 일은 순서와 상관없이 안 보냄', async () => {
   reset();
   let fk = fakeTodoist();
+  const p = await pairedFromTodoist('ORD1', { content: '처음 제목' });
+  const ren = opSchema.parse({ op: 'task.update', id: p.id, baseVersion: p.version, patch: { text: '고친 제목' } });
+  const { result: p1 } = await mutate(ren, ME);
+  const chk = opSchema.parse({ op: 'task.update', id: p.id, patch: { done: true } });
+  const { result: p2 } = await mutate(chk, ME);
+  await pushToTodoist([{ op: chk, result: p2 }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['POST /api/v1/tasks/ORD1', 'POST /api/v1/tasks/ORD1/close']);
+  fk.calls.length = 0;
+  await pushToTodoist([{ op: ren, result: p1 }], FAKE(fk));
+  assert.equal(fk.calls.length, 0);
+
+  reset();
+  fk = fakeTodoist();
   const add = opSchema.parse({ op: 'task.add', stepId: 1, text: '추가 직후 체크' });
   const { result: a } = await mutate(add, ME);
-  const chk = opSchema.parse({ op: 'task.update', id: a.id, patch: { done: true } });
-  const { result: a2 } = await mutate(chk, ME);
-  await pushToTodoist([{ op: chk, result: a2 }], FAKE(fk));
-  assert.equal(fk.calls.length, 0);
+  const chk2 = opSchema.parse({ op: 'task.update', id: a.id, patch: { done: true } });
+  const { result: a2 } = await mutate(chk2, ME);
+  await pushToTodoist([{ op: chk2, result: a2 }], FAKE(fk));
   await pushToTodoist([{ op: add, result: a }], FAKE(fk));
-  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['POST /api/v1/tasks', 'POST /api/v1/tasks/NEW1/close']);
-  fk.calls.length = 0;
-  await pushToTodoist([{ op: chk, result: a2 }], FAKE(fk));
   assert.equal(fk.calls.length, 0);
-
-  reset();
-  fk = fakeTodoist();
-  const { result: b } = await mutate(add, ME);
-  await mutate({ op: 'task.delete', id: b.id }, ME);
-  await pushToTodoist([{ op: add, result: b }], FAKE(fk));
-  assert.equal(fk.calls.length, 0);
-
-  reset();
-  fk = fakeTodoist();
-  const { result: c } = await mutate(add, ME);
-  let edited = false;
-  const racing = async (url, init) => {
-    const res = await fk.fetch(url, init);
-    if (!edited && new URL(url).pathname === '/api/v1/tasks') {
-      edited = true;
-      await mutate(opSchema.parse({ op: 'task.update', id: c.id, baseVersion: c.version, patch: { text: '만드는 사이 고침' } }), ME);
-    }
-    return res;
-  };
-  await pushToTodoist([{ op: add, result: c }], { token: 'tok', base: 'http://fake.test', fetch: racing });
-  assert.deepEqual(fk.calls.map((x) => `${x.method} ${x.path}`), ['POST /api/v1/tasks', 'POST /api/v1/tasks/NEW1']);
-  assert.equal(fk.calls[1].body.content, '만드는 사이 고침');
-  assert.equal((await readDoc()).tasks[c.id].todoistSent.text, '만드는 사이 고침');
 });
 
-test('되돌아온 item:added 가 짝 적기보다 먼저 와도 중복이 안 생긴다(단계 고르기도 안 부름)', async () => {
+test('복원: Todoist 지우기가 실패해 아직 있으면 새로 만들지 않음 · 이미 지운 것은 다시 안 지움 · Todoist 에서 지워졌으면 새로 만듦', async () => {
   reset();
   const fk = fakeTodoist();
-  const { result: a } = await mutate(opSchema.parse({ op: 'task.add', stepId: 4, text: '잔금 보내기', due: '2026-11-30' }), ME);
-  let classified = 0;
-  const racing = async (url, init) => {
-    const res = await fk.fetch(url, init);
-    if (new URL(url).pathname === '/api/v1/tasks' && init.method === 'POST') {
-      await send(event('item:added', { id: 'NEW1', content: '잔금 보내기', due: { date: '2026-11-30' } }), { classify: async () => { classified++; return { stepId: 9, kind: null, by: 'keyword' }; } });
-    }
-    return res;
-  };
-  await pushTasks([{ id: a.id, intent: 'create' }], { token: 'tok', base: 'http://fake.test', fetch: racing });
-  const all = await live();
-  assert.equal(all.length, 1);
-  assert.equal(all[0].todoistId, 'NEW1');
-  assert.equal(all[0].stepId, 4);
-  assert.equal(classified, 0);
-  assert.equal(fk.calls.filter((c) => c.method === 'DELETE').length, 0);
-});
-
-test('복원: Todoist 지우기가 실패해 아직 있으면 새로 만들지 않음 · 이미 지운 것은 다시 안 지움', async () => {
-  reset();
-  const fk = fakeTodoist();
-  const { result: a } = await mutate(opSchema.parse({ op: 'task.add', stepId: 1, text: '복원 시험' }), ME);
-  await pushTasks([{ id: a.id, intent: 'create' }], FAKE(fk));
+  const a = await pairedFromTodoist('RS1', { content: '복원 시험' });
   await mutate({ op: 'task.delete', id: a.id }, ME);
   const failDelete = async (url, init) => (init.method === 'DELETE' ? new Response('x', { status: 500 }) : fk.fetch(url, init));
   let r = await pushTasks([{ id: a.id, intent: 'sync' }], { token: 'tok', base: 'http://fake.test', fetch: failDelete });
@@ -558,15 +574,18 @@ test('복원: Todoist 지우기가 실패해 아직 있으면 새로 만들지 �
   r = await pushTasks([{ id: a.id, intent: 'sync' }], FAKE(fk));
   assert.equal(fk.calls.length, 0);
   t = (await readDoc()).tasks[a.id];
-  assert.equal(t.todoistId, 'NEW1');
+  assert.equal(t.todoistId, 'RS1');
   assert.equal('todoistError' in t, false);
   await mutate({ op: 'task.delete', id: a.id }, ME);
   await pushTasks([{ id: a.id, intent: 'sync' }], FAKE(fk));
   await pushTasks([{ id: a.id, intent: 'sync' }], FAKE(fk));
   assert.equal(fk.calls.filter((c) => c.method === 'DELETE').length, 1);
+  fk.calls.length = 0;
   await mutate({ op: 'task.restore', id: a.id }, ME);
-  await pushTasks([{ id: a.id, intent: 'sync' }], FAKE(fk));
-  assert.equal((await readDoc()).tasks[a.id].todoistId, 'NEW2');
+  r = await pushTasks([{ id: a.id, intent: 'sync' }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((c) => `${c.method} ${c.path}`), ['POST /api/v1/tasks']);
+  assert.deepEqual(r.linked, [{ id: a.id, todoistId: 'NEW1' }]);
+  assert.equal((await readDoc()).tasks[a.id].todoistId, 'NEW1');
 });
 
 test('로컬 연습 저장소 + 진짜 Todoist 주소면 토큰이 있어도 보내지 않는다', async () => {
@@ -602,13 +621,11 @@ test('제목 정규화: 사이트 입력과 Todoist 받기가 같다 · 내보�
 test('todoist-sync: 차이 · Todoist 에 없음 · 짝 없음 · Todoist 에만 → 맞추기는 사이트 값으로', async () => {
   reset();
   const fk = fakeTodoist();
-  const { result: a } = await mutate(opSchema.parse({ op: 'task.add', stepId: 1, text: '사이트 제목', due: '2026-11-01' }), ME);
-  await pushTasks([{ id: a.id, intent: 'create' }], FAKE(fk));
-  const { result: b } = await mutate(opSchema.parse({ op: 'task.add', stepId: 1, text: '없어진 것' }), ME);
-  await pushTasks([{ id: b.id, intent: 'create' }], FAKE(fk));
+  await pairedFromTodoist('SY1', { content: '사이트 제목', due: { date: '2026-11-01' } });
+  await pairedFromTodoist('SY2', { content: '없어진 것' });
   await mutate(opSchema.parse({ op: 'task.add', stepId: 1, text: '짝 없음' }), ME);
   const todoistNow = [
-    { id: 'NEW1', content: 'Todoist 에서 바꾼 제목', due: { date: '2026-11-01' }, labels: ['외도민'], checked: false },
+    { id: 'SY1', content: 'Todoist 에서 바꾼 제목', due: { date: '2026-11-01' }, labels: ['외도민'], checked: false },
     { id: 'ONLY', content: 'Todoist 에만', labels: ['외도민'] },
   ];
   const rows = planSync(await readDoc(), todoistNow);
@@ -616,11 +633,11 @@ test('todoist-sync: 차이 · Todoist 에 없음 · 짝 없음 · Todoist 에만
   assert.deepEqual(rows.find((r) => r.kind === 'differs').fields, ['text']);
   fk.calls.length = 0;
   await applySync(rows, FAKE(fk));
-  assert.deepEqual(fk.calls.map((c) => [c.path, c.body]), [['/api/v1/tasks/NEW1', { content: '사이트 제목' }]]);
+  assert.deepEqual(fk.calls.map((c) => [c.path, c.body]), [['/api/v1/tasks/SY1', { content: '사이트 제목' }]]); // 짝 없음은 만들지 않는다
 });
 
 // ── 시작일 · 세부 항목(1차: 사이트에만) ──
-test('세부 항목은 Todoist 에 평평하게 보냄(parent_id 없음) · 시작일은 보내지 않음 · 부모 지우기/되살리기는 세부 항목도 같이 보냄', async () => {
+test('세부 항목은 Todoist 에 평평하게 보냄(parent_id 없음) · 시작일은 보내지 않음 · 짝 있는 부모 지우기/되살리기는 세부 항목도 같이 보냄', async () => {
   reset();
   const fk = fakeTodoist();
   const addP = opSchema.parse({ op: 'task.add', stepId: 7, text: '가구 들이기', start: '2026-11-10', due: '2026-11-20' });
@@ -629,12 +646,11 @@ test('세부 항목은 Todoist 에 평평하게 보냄(parent_id 없음) · 시�
   const addC = opSchema.parse({ op: 'task.add', parentId: p.id, text: '침대 주문', start: '2026-11-10', due: '2026-11-12' });
   const { result: c } = await mutate(addC, ME);
   await pushToTodoist([{ op: addC, result: c }], FAKE(fk));
-  assert.deepEqual(fk.calls.map((x) => x.body), [
-    { content: '가구 들이기', labels: ['외도민'], due_date: '2026-11-20' },
-    { content: '침대 주문', labels: ['외도민'], due_date: '2026-11-12' },
-  ]);
+  assert.equal(fk.calls.length, 0); // 사이트에서 만든 것은 보내지 않는다
+  // 짝을 적는다(짝 맞추기로 이은 경우와 같음)
+  await mutate(opSchema.parse({ op: 'task.update', id: p.id, patch: { todoistId: 'TP1' } }), ME);
+  await mutate(opSchema.parse({ op: 'task.update', id: c.id, patch: { todoistId: 'TC1' } }), ME);
   // 시작일 · 부모만 바꾸면 Todoist 를 부르지 않는다
-  fk.calls.length = 0;
   let cur = (await readDoc()).tasks[c.id];
   const u = opSchema.parse({ op: 'task.update', id: c.id, baseVersion: cur.version, patch: { start: '2026-11-11' } });
   const { result: c2 } = await mutate(u, ME);
@@ -644,17 +660,53 @@ test('세부 항목은 Todoist 에 평평하게 보냄(parent_id 없음) · 시�
   const d = { op: 'task.delete', id: p.id };
   const { result: pd } = await mutate(d, ME);
   await pushToTodoist([{ op: d, result: pd }], FAKE(fk));
-  assert.deepEqual(fk.calls.map((x) => `${x.method} ${x.path}`).sort(), ['DELETE /api/v1/tasks/NEW1', 'DELETE /api/v1/tasks/NEW2']);
-  // 되살리면 둘 다 다시 만든다(여전히 평평하게)
+  assert.deepEqual(fk.calls.map((x) => `${x.method} ${x.path}`).sort(), ['DELETE /api/v1/tasks/TC1', 'DELETE /api/v1/tasks/TP1']);
+  // 되살리면 둘 다 다시 만든다(원래 짝이 있던 할 일이라 · 여전히 평평하게 · 시작일 대신 마감일)
   fk.calls.length = 0;
   const r = { op: 'task.restore', id: p.id };
   const { result: pr } = await mutate(r, ME);
   await pushToTodoist([{ op: r, result: pr }], FAKE(fk));
-  assert.equal(fk.calls.filter((x) => x.method === 'POST' && x.path === '/api/v1/tasks').length, 2);
-  assert.ok(fk.calls.every((x) => !x.body || !('parent_id' in x.body)));
+  const creates = fk.calls.filter((x) => x.method === 'POST' && x.path === '/api/v1/tasks');
+  assert.deepEqual(creates.map((x) => x.body).sort((x, y) => x.content.localeCompare(y.content)), [
+    { content: '가구 들이기', labels: ['외도민'], due_date: '2026-11-20' },
+    { content: '침대 주문', labels: ['외도민'], due_date: '2026-11-12' },
+  ]);
   cur = (await readDoc()).tasks[c.id];
   assert.equal(cur.parentId, p.id);
   assert.equal(cur.start, '2026-11-11');
+  assert.match(cur.todoistId, /^NEW/);
+});
+
+test('짝 없는 부모를 지웠다 되살려도 짝 없는 세부 항목까지 Todoist 를 부르지 않는다 · 짝 있는 세부 항목만 보낸다', async () => {
+  reset();
+  const fk = fakeTodoist();
+  const { result: p } = await mutate(opSchema.parse({ op: 'task.add', stepId: 7, text: '부모' }), ME);
+  const { result: c1 } = await mutate(opSchema.parse({ op: 'task.add', parentId: p.id, text: '세부 하나' }), ME);
+  const { result: c2 } = await mutate(opSchema.parse({ op: 'task.add', parentId: p.id, text: '세부 둘' }), ME);
+  const d = { op: 'task.delete', id: p.id };
+  let r = await pushToTodoist([{ op: d, result: (await mutate(d, ME)).result }], FAKE(fk));
+  const rs = { op: 'task.restore', id: p.id };
+  r = await pushToTodoist([{ op: rs, result: (await mutate(rs, ME)).result }], FAKE(fk));
+  assert.equal(fk.calls.length, 0);
+  assert.deepEqual(r.errors, []);
+  let doc = await readDoc();
+  for (const id of [p.id, c1.id, c2.id]) {
+    assert.equal(doc.tasks[id].deletedAt, null);
+    assert.equal(doc.tasks[id].todoistId ?? null, null);
+    assert.equal('todoistError' in doc.tasks[id], false);
+  }
+  // 세부 항목 하나만 짝이 있으면 그것만 지우고 · 되살리면 그것만 다시 만든다
+  await mutate(opSchema.parse({ op: 'task.update', id: c2.id, patch: { todoistId: 'MIX1' } }), ME);
+  await pushToTodoist([{ op: d, result: (await mutate(d, ME)).result }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((x) => `${x.method} ${x.path}`), ['DELETE /api/v1/tasks/MIX1']);
+  fk.calls.length = 0;
+  await pushToTodoist([{ op: rs, result: (await mutate(rs, ME)).result }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((x) => `${x.method} ${x.path}`), ['POST /api/v1/tasks']);
+  assert.equal(fk.calls[0].body.content, '세부 둘');
+  doc = await readDoc();
+  assert.equal(doc.tasks[c2.id].todoistId, 'NEW1');
+  assert.equal(doc.tasks[c1.id].todoistId ?? null, null);
+  assert.equal(doc.tasks[p.id].todoistId ?? null, null);
 });
 
 test('Todoist 갱신이 start · parentId 를 보존 · 마감일이 시작일보다 앞당겨지면 시작일을 맞춤 · Todoist 에서 부모를 지우면 세부 항목은 뗌', async () => {

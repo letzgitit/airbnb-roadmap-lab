@@ -163,24 +163,27 @@ node scripts/cardnotes.mjs rm admin.move-in n_0123456789 --yes    # 지우기(�
 
 Todoist 라벨 `외도민`(바꾸려면 `TODOIST_LABEL`) 할 일 ↔ 사이트 할 일을 양쪽으로 맞춘다. 코드: `lib/core/todoist*.ts`, 웹훅 `app/api/todoist/webhook`.
 
+🔴 **짝(`todoistId`)이 있는 할 일만 맞춘다**(2026-10-29). 사이트는 두 사람이 같이 쓰고 Todoist 는 한 사람 것이라, **사이트에서 새로 만든 할 일은 Todoist 에 만들지 않는다**(화면 · CLI `apply` · 부모 지우기/되살리기 연쇄 · `todoist-sync --yes` 모두). Todoist 에도 둘 할 일은 Todoist 에서 먼저 만든다 → 웹훅이 사이트에 짝지은 할 일을 만든다 → 그 뒤로는 어느 쪽에서 고쳐도 맞춰진다. 이미 있는 사이트 할 일을 잇고 싶으면 아래 「짝 맞추기」로 짝을 적는다.
+
 - 🔴 Todoist 토큰(`TODOIST_API_TOKEN` · `TODOIST_CLIENT_SECRET`)은 **Vercel 환경 변수에만** 둔다. `.env.local`에 넣지 않는다(공개 저장소 · 로컬 시험). CLI에서 쓸 때는 운영 키와 같이 저장소 밖에 받아 그 명령 안에서만 쓴다.
 - Todoist 로 보내는 것은 **운영 저장소(redis)일 때만**이다. 로컬 연습 저장소면 토큰이 있어도 보내지 않는다(stderr `[Todoist] 로컬 연습 저장소 — 반영 건너뜀`). 시험할 때만 `TODOIST_API_BASE`에 가짜 서버 주소를 주면 로컬에서도 그 서버로 보낸다.
-- 운영 저장소에 할 일 연산을 `apply --yes` 하는데 토큰이 없으면 쓰지 않고 멈춘다(종료 코드 4). Todoist 에 안 보내도 되면 `--no-todoist`(나중에 `todoist-sync`로 맞출 수 있다).
+- 운영 저장소에 `apply --yes` 하는데 **짝 있는 할 일이 걸린 연산**(짝 있는 할 일의 고치기 · 완료 · 지우기 · 되살리기, 짝 있는 세부 항목을 가진 부모 지우기 · 되살리기, `todoistId` 적기)이 있고 토큰이 없으면 쓰지 않고 멈춘다(종료 코드 4). Todoist 에 안 보내도 되면 `--no-todoist`(나중에 `todoist-sync`로 맞출 수 있다). `task.add` · 짝 없는 할 일만 건드리면 토큰이 없어도 멈추지 않는다(어차피 보내지 않는다).
 
-| 사이트 | Todoist | 비고 |
+| 사이트(짝 있는 할 일) | Todoist | 비고 |
 |---|---|---|
+| 새로 만들기(`task.add`) | — | 보내지 않는다(짝이 없으므로). Todoist 에서 만든 할 일만 웹훅으로 사이트에 들어와 짝이 생긴다 |
 | `text` | `content` | 200자 넘으면 199자 + `…` 로 줄여 받는다 |
 | `note` | `description` | 1000자 넘으면 999자 + `…` |
 | `due` | `due` | 날짜만. 시각이 있는 Todoist 날짜는 그날 날짜로 받는다. 사이트에서 날짜를 지우면 Sync API `item_update` 에 `due: null` |
 | `done` | 완료(close / reopen) | |
-| 삭제 · 복원 | 삭제 / 새로 만들기 | Todoist 는 지운 할 일을 되살리는 API 가 없어, 사이트에서 복원하면 새로 만들고 새 id 를 적는다 |
+| 삭제 · 복원 | 삭제 / 새로 만들기 | Todoist 는 지운 할 일을 되살리는 API 가 없어, 짝 있던 할 일을 사이트에서 복원하면 새로 만들고 새 id 를 적는다(원래 짝이 있던 할 일이라 만든다) |
 | `stepId` `kind` `owner` | — | 사이트에만 |
-| `start` `parentId` | — | 사이트에만(1차). 세부 항목은 Todoist 에 평평한 할 일로 간다. Todoist 에서 온 변경은 이 두 칸을 지우지 않는다. 예외: Todoist 에서 마감일을 시작일보다 앞으로 옮기면 시작일을 마감일로 맞춘다 · Todoist 에서 부모를 지우면 세부 항목은 지우지 않고 맨 위 층으로 뗀다(Todoist 에선 따로 있는 할 일이라). 사이트에서 부모를 지우거나 되살리면 세부 항목도 Todoist 에 같이 반영한다 |
+| `start` `parentId` | — | 사이트에만(1차). 세부 항목은 Todoist 에 평평한 할 일로 간다. Todoist 에서 온 변경은 이 두 칸을 지우지 않는다. 예외: Todoist 에서 마감일을 시작일보다 앞으로 옮기면 시작일을 마감일로 맞춘다 · Todoist 에서 부모를 지우면 세부 항목은 지우지 않고 맨 위 층으로 뗀다(Todoist 에선 따로 있는 할 일이라). 사이트에서 부모를 지우거나 되살리면 짝 있는 세부 항목도 Todoist 에 같이 반영한다(짝 없는 부모 · 세부 항목은 보내지 않는다) |
 
 - **Todoist → 사이트**: 웹훅(`item:added` `item:updated` `item:completed` `item:uncompleted` `item:deleted`) → 서명(`X-Todoist-Hmac-SHA256` = base64 HMAC-SHA256(client secret, 본문)) 확인 → 엔진 연산 `task.fromTodoist`(서버 안에서만 만든다, CLI · API 로는 못 보낸다). 라벨 없는 할 일은 무시한다. 짝이 있던 할 일에서 라벨을 떼도 사이트 할 일은 그대로 둔다.
-- **사이트 → Todoist**: `/api/progress/mutate`(응답 뒤 `after`)와 이 CLI의 `apply`(쓴 뒤, `--dry-run` · `--no-todoist` 제외)가 같은 `pushToTodoist`(`lib/core/todoist-push.ts`)를 부른다. 보낼 때마다 문서를 다시 읽어 **지금 사이트 값과 `todoistSent`(Todoist 에 있다고 아는 값)의 차이만** 보내고 `todoistSent`를 맞춘다. 그래서 같은 할 일에 대한 보내기 둘이 순서가 뒤집혀도 마지막 상태로 모이고, 추가 직후 고치기 · 체크 · 삭제도 (짝을 적은 뒤 다시 읽어) 따라간다. 새로 만든 Todoist id · `todoistSent` 는 `task.todoistSent`(서버 전용)로 적고 항목 version 을 올리지 않는다. 보내기가 실패하면 할 일에 `todoistError`가 남는다(`get`에 ⚠️).
-- **돌고 도는 것 막기 · 늦게 온 웹훅**: 웹훅으로 바뀐 것은 Todoist 로 다시 보내지 않는다. 웹훅 값이 `todoistSent`와 같으면 되돌아온 것(또는 Todoist 쪽은 그대로)이라 사이트를 건드리지 않는다. 다른 칸 중 사이트에서도 고친 칸(사이트 값 ≠ `todoistSent`)은 사람이 웹훅 시각보다 나중에 고쳤으면 사이트 값을 둔다(다음 보내기가 맞춘다). 이미 반영한 것보다 앞선 웹훅(`todoistAt`)은 버리고, 같은 시각은 값으로 가린다. 사이트에서 막 만든 할 일이 Todoist 를 돌아 `item:added`로 오면(아직 id 를 못 적었을 때) 짝 없는 · 같은 제목 · 같은 날짜 · 10분 안에 만들거나 고친 사이트 할 일에 짝만 적는다(단계 고르기도 안 한다). 짝을 적는 쪽이 늦으면 방금 만든 Todoist 할 일을 중복으로 보고 지운다. 저장소가 바빠(503) 웹훅 반영에 실패하면 500 으로 답해 Todoist 가 다시 보낸다(값으로 견주므로 다시 받아도 안전).
-- **복원**: Todoist 에서도 지웠으면(`todoistSent.deleted`) 새로 만들고 새 id 를 적는다. 지우기가 실패해 Todoist 에 아직 있으면 새로 만들지 않는다. 이미 지운 것은 다시 지우지 않는다.
+- **사이트 → Todoist**: `/api/progress/mutate`(응답 뒤 `after`)와 이 CLI의 `apply`(쓴 뒤, `--dry-run` · `--no-todoist` 제외)가 같은 `pushToTodoist`(`lib/core/todoist-push.ts`)를 부른다. **짝 없는 할 일이면 아무것도 보내지 않는다**(Todoist 호출 0번, `todoistError`도 안 남김). 짝이 있으면 보낼 때마다 문서를 다시 읽어 **지금 사이트 값과 `todoistSent`(Todoist 에 있다고 아는 값)의 차이만** 보내고 `todoistSent`를 맞춘다. 그래서 같은 할 일에 대한 보내기 둘이 순서가 뒤집혀도 마지막 상태로 모인다. 복원으로 새로 만든 Todoist id · `todoistSent` 는 `task.todoistSent`(서버 전용)로 적고 항목 version 을 올리지 않는다. 보내기가 실패하면 할 일에 `todoistError`가 남는다(`get`에 ⚠️).
+- **돌고 도는 것 막기 · 늦게 온 웹훅**: 웹훅으로 바뀐 것은 Todoist 로 다시 보내지 않는다. 웹훅 값이 `todoistSent`와 같으면 되돌아온 것(또는 Todoist 쪽은 그대로)이라 사이트를 건드리지 않는다. 다른 칸 중 사이트에서도 고친 칸(사이트 값 ≠ `todoistSent`)은 사람이 웹훅 시각보다 나중에 고쳤으면 사이트 값을 둔다(다음 보내기가 맞춘다). 이미 반영한 것보다 앞선 웹훅(`todoistAt`)은 버리고, 같은 시각은 값으로 가린다. 사이트가 막 만든 Todoist 할 일(사이트가 만드는 것은 이제 복원 때뿐)이 `item:added`로 되돌아오면(아직 id 를 못 적었을 때) 짝 없는 · 같은 제목 · 같은 날짜 · 10분 안에 만들거나 고친 사이트 할 일에 짝만 적는다(단계 고르기도 안 한다). 짝을 적는 쪽이 늦으면 방금 만든 Todoist 할 일을 중복으로 보고 지운다. 저장소가 바빠(503) 웹훅 반영에 실패하면 500 으로 답해 Todoist 가 다시 보낸다(값으로 견주므로 다시 받아도 안전).
+- **복원**: 짝 있던 할 일을 되살렸는데 Todoist 에서도 지웠으면(`todoistSent.deleted`) 새로 만들고 새 id 를 적는다. 짝이 한 번도 없던 할 일은 되살려도 만들지 않는다. 지우기가 실패해 Todoist 에 아직 있으면 새로 만들지 않는다. 이미 지운 것은 다시 지우지 않는다.
 - **반복 할 일**: Todoist 에서 반복 할 일을 완료하면 다음 날짜로 넘어갈 뿐이라 사이트에는 「안 끝남 · 새 날짜」로 들어온다. 🔴 사이트에서 반복 할 일의 날짜를 고치면 Todoist 쪽 반복 규칙이 사라진다(날짜 하나로 바뀐다). 반복 할 일의 날짜는 Todoist 에서 고친다.
 - **제목 정규화**: 사이트 입력과 Todoist 에서 받는 제목 모두 줄바꿈 · 겹친 공백을 한 칸으로 줄이고 앞뒤 공백을 지운다.
 - **Todoist 에서 새로 만든 할 일의 단계 · 종류**: ① `ANTHROPIC_API_KEY`가 있으면 Claude API(`claude-haiku-5-5`, 4초 제한)에 제목과 14단계 이름 · 설명(공개 콘텐츠)을 주고 단계 번호 · 종류를 받는다 → ② 실패 · 키 없음이면 낱말 규칙(`lib/core/todoist-classify.ts`) → ③ 그래도 없으면 지금 진행 중인 단계(없으면 아직 안 끝난 첫 단계). 고른 방법은 할 일의 `autoFill`(`claude` · `keyword` · `default`)에 남고, `get` 에 「단계 자동(…)」, md 에 「(단계 자동)」으로 보인다. 사람이 단계나 종류를 고치면 지워진다. 만든 사람(`createdBy`)은 `Todoist`.

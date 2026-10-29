@@ -1,4 +1,6 @@
 // 사이트 → Todoist: 사이트(API · CLI)에서 할 일이 바뀌면 Todoist REST API v1 로 반영한다.
+// - 짝(todoistId)이 있는 할 일만 보낸다. 사이트에서 새로 만든 할 일(짝이 한 번도 없었던 것)은 Todoist 에 만들지 않는다.
+//   예외: 짝이 있던 할 일을 사이트에서 되살렸는데 Todoist 쪽은 이미 지워졌으면 새로 만들고 새 id 를 적는다.
 // - TODOIST_API_TOKEN 이 없으면 아무것도 하지 않는다.
 // - 운영 저장소(redis)일 때만 보낸다. 로컬 파일 저장소(연습 데이터)는 토큰이 있어도 보내지 않는다(로컬 시험이 운영 Todoist 를 건드리지 않게).
 //   예외: TODOIST_API_BASE 가 진짜 Todoist(api.todoist.com)가 아닌 주소(시험용 가짜 서버)면 로컬에서도 보낸다.
@@ -113,7 +115,7 @@ export interface PushReport { calls: string[]; linked: { id: string; todoistId: 
 const isTask = (x: unknown): x is TaskItem => !!x && typeof x === 'object' && typeof (x as TaskItem).id === 'string' && (x as TaskItem).id.startsWith('t_');
 const TODOIST_FIELDS: Record<string, keyof TodoistState> = { text: 'text', note: 'note', due: 'due', done: 'done' };
 
-// 적용된 연산 → 보낼 할 일 목록(같은 할 일은 하나로). task.add 만 새로 만든다.
+// 적용된 연산 → 보낼 할 일 목록(같은 할 일은 하나로). intent 'create'(task.add)라도 짝이 없으면 pushOne 이 아무것도 보내지 않는다.
 export function targetsFromOps(applied: AppliedTaskOp[]): PushTarget[] {
   const map = new Map<string, PushTarget>();
   for (const { op, result } of applied) {
@@ -166,11 +168,12 @@ async function pushOne(cfg: TodoistConfig, target: PushTarget, report: PushRepor
     const cur = siteState(t);
     const S = (round === 0 ? knownOverride : undefined) ?? t.todoistSent ?? null;
 
-    // 새로 만들 때: 사이트에서 막 추가했고 아직 짝이 없음 · 짝이 있었는데 Todoist 쪽을 지웠고 사이트에서 되살림
-    const goneThere = !!t.todoistId && S?.deleted === true && !cur.deleted;
-    if (!t.todoistId || goneThere) {
-      if (cur.deleted) return; // 만들기 전에 지움 → 보낼 것 없음
-      if (!t.todoistId && target.intent !== 'create') return; // 짝 없는 옛 할 일 · 만들기가 아직 진행 중(그쪽이 끝나고 차이를 다시 본다)
+    // 짝(todoistId)이 한 번도 없었던 할 일은 Todoist 에 만들지 않는다(사이트는 부부가 같이 쓰고 Todoist 는 한 사람 것이라,
+    // 사이트에서 만든 할 일이 그쪽으로 넘어가면 안 된다). Todoist 에서 먼저 만든 할 일만 웹훅으로 짝이 생기고, 그 뒤로 맞춘다.
+    if (!t.todoistId) return;
+    // 새로 만들 때: 짝이 있었는데 Todoist 쪽을 지웠고 사이트에서 되살림(원래 짝이 있던 할 일이라 다시 만든다)
+    const goneThere = S?.deleted === true && !cur.deleted;
+    if (goneThere) {
       let newId: string;
       try {
         newId = (await todoistApi.create(cfg, cur)).id;
@@ -178,7 +181,7 @@ async function pushOne(cfg: TodoistConfig, target: PushTarget, report: PushRepor
         if (cur.done) { await todoistApi.close(cfg, newId); report.calls.push(`close ${newId}`); }
       } catch (e) {
         report.errors.push(`create ${t.id}: ${msg(e)}`);
-        if (t.todoistId) await record({ id: t.id, todoistId: t.todoistId, expectId: t.todoistId, error: msg(e) }).catch(() => undefined);
+        await record({ id: t.id, todoistId: t.todoistId, expectId: t.todoistId, error: msg(e) }).catch(() => undefined);
         return;
       }
       const o = await record({ id: t.id, todoistId: newId, expectId: t.todoistId ?? null, sent: { ...cur, deleted: false }, error: null });

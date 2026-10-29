@@ -35,7 +35,7 @@ function usage(msg) {
   node scripts/progress.mjs export-md <out.md> --doc <progress.json>   (저장소 대신 사이트 /api/progress 응답 파일로)
   --dry-run  지금 저장된 값에 적용해 보기만 하고 쓰지 않음
   --yes      원격(운영) 저장소에 실제로 쓸 때 필요
-  --no-todoist  운영 저장소에 쓰는데 Todoist 토큰이 없을 때, Todoist 에 안 보내는 것을 알고 쓴다는 표시
+  --no-todoist  Todoist 에 보내지 않는다(운영에서 짝 있는 할 일을 바꾸는데 토큰이 없을 때는 이걸 붙여야 쓴다)
 자세한 내용: scripts/README-progress.md`);
   process.exit(2);
 }
@@ -201,10 +201,17 @@ try {
       console.error('원격(운영) 저장소입니다. 위 내용이 맞으면 --yes 를 붙여 다시 실행하세요(미리 보기는 --dry-run).');
       process.exit(3);
     }
-    // 운영에 할 일을 쓰는데 Todoist 토큰이 없으면 Todoist 와 어긋난다 → 알고 쓰는지 묻는다
-    const hasTaskOps = items.some((it) => it.op.op.startsWith('task.'));
-    if (remote && !dryRun && hasTaskOps && !todoistConfig() && !flags.has('--no-todoist')) {
-      console.error('🔴 운영 저장소에 할 일을 쓰는데 TODOIST_API_TOKEN 이 없어 Todoist 에 반영되지 않습니다.');
+    // 운영에서 Todoist 짝이 있는 할 일을 바꾸는데 토큰이 없으면 Todoist 와 어긋난다 → 알고 쓰는지 묻는다.
+    // 짝 없는 할 일(새로 만든 것 포함)은 Todoist 로 보내지 않으므로 토큰이 없어도 멈추지 않는다.
+    const touchesPaired = (doc) => items.some(({ op }) => {
+      if (!op.op.startsWith('task.') || op.op === 'task.add') return false;
+      if (op.op === 'task.update' && op.patch?.todoistId) return true;
+      if (Object.hasOwn(doc.tasks, op.id) && doc.tasks[op.id].todoistId) return true;
+      if (op.op === 'task.delete' || op.op === 'task.restore') return Object.values(doc.tasks).some((c) => c.parentId === op.id && c.todoistId);
+      return false;
+    });
+    if (remote && !dryRun && !todoistConfig() && !flags.has('--no-todoist') && touchesPaired(await readDoc())) {
+      console.error('🔴 운영 저장소에서 Todoist 짝이 있는 할 일을 바꾸는데 TODOIST_API_TOKEN 이 없어 Todoist 에 반영되지 않습니다.');
       console.error('   토큰을 같이 받아 다시 실행하거나, Todoist 에 안 보내도 되면 --no-todoist 를 붙이세요(나중에 todoist-sync 로 맞출 수 있음).');
       process.exit(4);
     }
