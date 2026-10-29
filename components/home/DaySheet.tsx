@@ -6,7 +6,7 @@ import { shortDate, todayStr } from '@/lib/client/format';
 import { Sheet } from '@/components/Sheet';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { TrashCard } from '@/components/progress/TrashCard';
-import { AddButton } from '@/components/ui/AddButton';
+import { AddTextButton } from '@/components/ui/AddButton';
 import { dateCls, textBtn } from '@/components/ui/buttonCls';
 import { Card, cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
@@ -25,7 +25,7 @@ import { axisOf, diffDays, pinsOf, stepRanges, toDate, type Pin, type TimelineSt
 //   고른 날 = 진한 테두리, 열 때 고른 날이 띠 가운데.
 //   머리: 「10/27 (화)」 + 「오늘」/「D-3」/「2일 전」 + 그날 고정 일정
 //   종류 걸러 보기(0개인 종류는 꺼 둠) · 같은 줄 오른쪽 「일정 옮기기」
-//   ＋ 할 일 추가(마감일 = 그날) / 「기한 지남」(어느 날을 열어도 늘 맨 위) / 단계 머리 + 그날 마감 할 일(단계 번호 순, 그날 기간이
+//   ＋ 할 일(마감일 = 그날) / 「기한 지남」(어느 날을 열어도 늘 맨 위) / 단계 머리 + 그날 마감 할 일(단계 번호 순, 그날 기간이
 //   겹치는 단계는 할 일이 없어도 머리만. 머리를 누르면 그 단계 창으로 바뀐다) / 「날짜 없음 n개」(접음) / 「삭제한 할 일」
 // 할 일 줄은 단계 창 「우리 할 일」과 같은 TaskRow. 고치는 폼의 「쓰던 글」 범위는 시트(modal)라 닫을 때 확인 창이 뜬다.
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -136,7 +136,7 @@ function DayBody({ sel, steps, currentId, fixedDay0, onStep }: {
         <div className={cardRowCls}>
           {composing
             ? <div className="px-3"><TaskComposer stepId={defaultStep} steps={stepRefs} scope="modal" initialDue={sel} onClose={() => setComposing(false)} /></div>
-            : <AddButton label="할 일 추가" onClick={() => { setComposing(true); setShifting(false); }} />}
+            : <div className="px-1"><AddTextButton label="할 일" onClick={() => { setComposing(true); setShifting(false); }} /></div>}
         </div>
         {late.length > 0 && (
           <section aria-labelledby={`${uid}-late`} className={cardRowCls}>

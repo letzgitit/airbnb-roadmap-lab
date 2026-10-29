@@ -10,6 +10,7 @@ import { longDate, treeRows, SOON_DAYS } from '@/components/tasks/task-view';
 import { useEditingSet, useStickyDone } from '@/components/tasks/useTaskList';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { addBtnCls, btnGhost, btnPrimary, inputCls } from '@/components/ui/buttonCls';
+import { AddTextButton } from '@/components/ui/AddButton';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { byDue, daysBetween, prepareAdd, progressSr, progressText, relDay, type CardDef, type CardSummary } from './home-model';
@@ -225,14 +226,8 @@ export function StepBlock({ blockId, card, cards, title, tasks, summary, steps, 
                 <NoteComposer blockId={blockId} title={title} onClose={closeComposer} />
               ) : (
                 <div className="-mx-3 flex flex-wrap items-center">
-                  <button ref={addRef} type="button" onClick={() => setComposing('task')} className={addBtnCls}>
-                    <LineIcon name="plus" className="size-4.5" stroke={2.2} />할 일
-                    <span className="sr-only">: {title}에 더하기</span>
-                  </button>
-                  <button ref={noteRef} type="button" onClick={() => setComposing('note')} className={addBtnCls}>
-                    <LineIcon name="plus" className="size-4.5" stroke={2.2} />메모
-                    <span className="sr-only">: {title}에 더하기</span>
-                  </button>
+                  <AddTextButton buttonRef={addRef} label="할 일" srLabel={`: ${title}에 더하기`} onClick={() => setComposing('task')} />
+                  <AddTextButton buttonRef={noteRef} label="메모" srLabel={`: ${title}에 더하기`} onClick={() => setComposing('note')} />
                   <AddPhotoButton blockId={blockId} stepId={card.addStep} title={title} />
                 </div>
               )}

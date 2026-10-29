@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { StepStatus, TaskItem } from '@/lib/core/types';
 import { shortDate } from '@/lib/client/format';
-import { AddButton } from '@/components/ui/AddButton';
+import { AddTextButton } from '@/components/ui/AddButton';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { TaskComposer, type StepRef } from '@/components/tasks/TaskComposer';
 import { TaskRow } from '@/components/tasks/TaskRow';
@@ -22,7 +22,7 @@ const STATUS: { v: StepStatus; label: string }[] = [
 ];
 
 // ───────────────────────── 우리 할 일 ─────────────────────────
-// 단계 시트 「할 일」 탭의 우리 할 일: 첫 줄 「＋ 할 일 추가」 → 안 끝난 일(마감 순) → 「끝낸 일 n개」(접힘).
+// 단계 시트 「할 일」 탭의 우리 할 일: 첫 줄 「＋ 할 일」 → 안 끝난 일(마감 순) → 「완료 n」(접힘 — 새 홈 단계 블록과 같은 이름 · 모양).
 // 줄 모양은 홈 「할 일」과 같은 TaskRow 다(이 단계 안이라 보조 줄에 단계 이름은 없다).
 export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] }) {
   const { doc } = useProgress();
@@ -65,7 +65,7 @@ export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] 
         <li className="border-b border-line">
           {composing
             ? <TaskComposer stepId={stepId} scope="modal" onClose={closeComposer} />
-            : <AddButton buttonRef={addRef} label="할 일 추가" onClick={() => setComposing(true)} />}
+            : <div className="-mx-3"><AddTextButton buttonRef={addRef} label="할 일" onClick={() => setComposing(true)} /></div>}
         </li>
         {rows(open)}
         {open.length === 0 && editing.size === 0 && (
@@ -73,7 +73,7 @@ export function StepTasks({ stepId, steps }: { stepId: number; steps: StepRef[] 
         )}
         {done.length > 0 && (
           <li className="border-b border-line [&>button]:px-0">
-            <FoldRow label="끝낸 일" count={done.length} open={doneExpanded} onToggle={() => setShowDone((v) => !v)} controls={doneId} />
+            <FoldRow strongChevron label="완료" count={done.length} unit="" open={doneExpanded} onToggle={() => setShowDone((v) => !v)} controls={doneId} />
           </li>
         )}
       </ul>
