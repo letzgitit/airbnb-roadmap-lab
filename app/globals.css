@@ -23,7 +23,7 @@
   --color-ink-soft: #262626;      /* 본문 글자 — 데일리 --text */
   --color-sub: #555555;           /* 요지 글(제목 아래 설명 · 메모 첫 줄) — 데일리 --sub */
   --color-muted: #6b6b6b;         /* 날짜 · 개수 같은 메타 — 데일리 --meta */
-  --color-faint: #9a9a9a;         /* 장식 · 꺼짐(읽을 정보엔 쓰지 않는다) */
+  --color-faint: #8a8a8a;         /* 장식 · 꺼짐 · 빈 체크 칸 테두리(흰 면 3.4:1 — 2026-10-30 #9a9a9a 2.8:1 에서 올림). 읽을 정보엔 쓰지 않는다 */
 
   /* 형광: 누르지 않는 표시에만(머리 띠 칠 · 블록 머리 밑줄 · 잠깐 강조). 위 글자는 늘 검정 */
   --color-marker: #edfc47;
@@ -234,7 +234,7 @@
   --color-ink-soft: #262626;
   --color-sub: #555555;
   --color-muted: #6b6b6b;
-  --color-faint: #9a9a9a;
+  --color-faint: #8a8a8a;
   --color-head-mark: #edfc47;
   --color-accent: #000000;
   --color-accent-hover: #262626;

@@ -8,13 +8,16 @@ import { btnPrimary, clipLabel, inputCls, LastEdit, TRASH_NOTE, useDirty, useFor
 import { START_AFTER_DUE, taskErrorMessage } from '@/components/tasks/task-errors';
 import { placeOf, placePatch } from '@/components/tasks/task-view';
 import { CheckLineButton } from '@/components/tasks/TaskMemo';
-import { cleanNote } from '@/components/tasks/checklist';
+import { cleanNote, formNoteMax, toFormNote } from '@/components/tasks/checklist';
 import type { Editing, Phase } from './gantt-model';
 import s from './gantt.module.css';
-import { Plus, Trash } from './icons';
+import { Trash } from './icons';
+import { addBtnCls } from '@/components/ui/buttonCls';
+import { LineIcon } from '@/components/ui/LineIcon';
 
 // 간트 안에서 그 자리에 펼쳐지는 할 일 폼(고치기 · 새 할 일 · 새 세부 항목).
-//   이름 · 시작일(없어도 됨) · 마감일 · 종류 · 메모 · 넣을 곳 · 끝냄 · 지우기 · 「＋ 세부 항목 추가」.
+//   이름 · 시작일(없어도 됨) · 마감일 · 종류 · 메모(+ 「＋ 체크 항목」 — 체크 줄은 ☐ · ☑ 로 보이고 저장 때 `- [ ] ` · `- [x] `) · 넣을 곳 · 끝냄 · 지우기 · 「＋ 세부 할 일」.
+//   「＋ 체크 항목」 · 「＋ 세부 할 일」은 같은 글자 단추(addBtnCls — ＋ 18px, 두 ＋ 가 한 세로줄).
 //   넣을 곳 = 「n단계 할 일」(어느 단계든) 또는 같은 단계 맨 위 할 일의 「‘제목’의 세부 항목」(한 층만) — 할 일 줄 폼(TaskRow)과 같은 말 · 같은 값.
 //   저장 거절(시작일 > 마감일 · 넣을 곳 문제)은 알림 대신 폼 안 빨강 한 줄(send quiet + taskErrorMessage).
 //   지우기 = 확인 창(세부 항목이 있으면 같이 지워진다고) → 지움 → 8초 「되돌리기」(세부 항목도 같이 돌아온다).
@@ -33,7 +36,7 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
   const cur = ed.kind === 'edit' ? tasks[ed.id] : undefined;
   const parent = ed.kind === 'newsub' ? tasks[ed.parentId] : undefined;
   const [orig] = useState<Form>(() => cur
-    ? { text: cur.text, start: cur.start ?? '', due: cur.due ?? '', kind: cur.kind ?? '', note: cur.note ?? '', place: placeOf(cur), done: cur.done }
+    ? { text: cur.text, start: cur.start ?? '', due: cur.due ?? '', kind: cur.kind ?? '', note: toFormNote(cur.note), place: placeOf(cur), done: cur.done }
     : { text: '', start: '', due: parent?.due ?? '', kind: '', note: '', place: parent ? `p:${parent.id}` : `s:${phase.id}`, done: false });
   const [f, setF] = useState<Form>(orig);
   const noteId = useId();
@@ -139,7 +142,7 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
         {kidCount > 0 && parents.length > 0 && <span className={s.hint}>이 할 일에 세부 항목이 달려 있어서 다른 할 일 밑에는 못 넣어요.</span>}
       </label>
       <label className={s.f}>메모
-        <textarea id={noteId} className={`${fieldCls} min-h-[70px] resize-y`} rows={2} value={f.note} maxLength={1000} placeholder="전화번호 · 물어볼 것" onChange={(e) => set('note', e.target.value)} />
+        <textarea id={noteId} className={`${fieldCls} min-h-[70px] resize-y`} rows={2} value={f.note} maxLength={formNoteMax(f.note, 1000)} placeholder="전화번호 · 물어볼 것" onChange={(e) => set('note', e.target.value)} />
       </label>
       {/* 메모 칸 바로 밑 「＋ 체크 항목」(할 일 폼과 같은 단추 — 빈 체크 줄을 넣고 그 줄 끝에 커서) */}
       <CheckLineButton noteId={noteId} value={f.note} onChange={(v) => set('note', v)} className="-ml-2.5 justify-self-start" />
@@ -147,7 +150,9 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
         <label className={s.check}><input type="checkbox" checked={f.done} onChange={(e) => set('done', e.target.checked)} />끝냄</label>
       )}
       {cur && !cur.parentId && (
-        <button type="button" className={s.addSub} onClick={() => onAddSub(cur.id)}><Plus />세부 항목 추가</button>
+        <button type="button" className={`${addBtnCls} -ml-2.5 justify-self-start`} onClick={() => onAddSub(cur.id)}>
+          <LineIcon name="plus" className="size-4.5" stroke={2.2} />세부 할 일
+        </button>
       )}
       {err && <p className={s.ferr} role="alert">{err}</p>}
       <div className={s.acts}>

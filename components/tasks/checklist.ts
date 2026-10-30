@@ -76,39 +76,64 @@ export function addItem(note: string | null | undefined, text: string): string |
   return ls.join('\n');
 }
 
-/** 폼에서 저장할 메모: 글 없이 남은 체크 줄(「＋ 체크 항목」만 누르고 안 쓴 줄)을 빼고 앞뒤 공백을 지운다 */
-export function cleanNote(note: string): string {
-  return note.split('\n').filter((l) => !/^\s*[-*+]\s+\[[ xX]\]\s*$/.test(l)).join('\n').trim();
+// ── 편집 폼 메모 칸(고치는 폼 · 새 할 일 폼 · 간트 편집 폼): 기호 `- [ ] ` · `- [x] ` 대신 「☐ 」 · 「☑ 」로 보인다 ──
+// 폼에 띄울 때만 바꾸고(toFormNote) 저장할 때 되돌린다(cleanNote). 저장되는 메모 모양(Todoist 설명 · 내보내기 · CLI)은 그대로 `- [ ] ` · `- [x] `.
+// 폼에서 「☐」 · 「☑」를 직접 쳐도(줄 맨 앞) 체크 항목으로 저장한다. 폼에 `- [ ] ` 을 그대로 쳐도 그대로 체크 항목.
+const STORED_BOX = /^(\s*)[-*+]\s+\[([ xX])\](?=\s|$)[ \t]*/;
+const FORM_BOX = /^(\s*)([☐☑])[ \t]*/;
+
+/** 저장된 메모 → 폼 메모 칸 글: 체크 줄 머리 `- [ ] ` → 「☐ 」, `- [x] ` · `- [X] ` → 「☑ 」(다른 줄은 글자 하나 안 바꾼다) */
+export function toFormNote(note: string | null | undefined): string {
+  return linesOf(note).map((l) => l.replace(STORED_BOX, (_m, sp: string, x: string) => `${sp}${x === ' ' ? '☐' : '☑'} `)).join('\n');
 }
 
+/** 폼 메모 칸 글 → 저장 모양: 줄 맨 앞 「☐」 → `- [ ] `, 「☑」 → `- [x] `(다른 줄은 그대로) */
+export function fromFormNote(text: string): string {
+  return text.split('\n').map((l) => l.replace(FORM_BOX, (_m, sp: string, b: string) => `${sp}- [${b === '☑' ? 'x' : ' '}] `)).join('\n');
+}
+
+/** 폼 메모 칸 글자 수 한도: 저장 모양(☐ → `- [ ] `)이 서버 한도(max)를 넘지 않게, 체크 줄이 늘린 만큼 줄인다 */
+export function formNoteMax(text: string, max: number): number {
+  return max - (fromFormNote(text).length - text.length);
+}
+
+/** 폼에서 저장할 메모: 저장 모양으로 되돌리고(fromFormNote), 글 없이 남은 체크 줄(「＋ 체크 항목」만 누르고 안 쓴 「☐ 」 줄)을 빼고 앞뒤 공백을 지운다 */
+export function cleanNote(note: string): string {
+  return fromFormNote(note).split('\n').filter((l) => !/^\s*[-*+]\s+\[[ xX]\]\s*$/.test(l)).join('\n').trim();
+}
+
+/** 폼 메모 칸 글의 체크 줄인가(「☐ 글」 · 「☑ 글」, 또는 직접 친 `- [ ] 글`) */
+const formCheck = (l: string) => /^\s*[☐☑][ \t]*\S/.test(l) || !!checkLine(l);
+
 /**
- * 편집 폼 「＋ 체크 항목」: 빈 체크 줄 `- [ ] ` 하나를 넣은 새 메모와 커서 자리(그 줄 끝).
+ * 편집 폼 「＋ 체크 항목」: 폼 메모 칸 글(toFormNote 모양)에 빈 체크 줄 「☐ 」 하나를 넣은 새 글과 커서 자리(그 줄 끝).
  * 체크 줄이 있으면 마지막 체크 줄 바로 밑, 없으면 메모 끝(메모가 비었으면 첫 줄). 메모 끝의 빈 줄 · 공백은 걷어 낸다.
  */
 export function insertCheckLine(note: string): { note: string; caret: number } {
-  const row = '- [ ] ';
-  const items = checkItems(note);
-  if (!items.length) {
+  const row = '☐ ';
+  const ls = note.split('\n');
+  let last = -1;
+  ls.forEach((l, i) => { if (formCheck(l)) last = i; });
+  if (last < 0) {
     const body = note.trimEnd();
     const next = body ? `${body}\n${row}` : row;
     return { note: next, caret: next.length };
   }
-  const ls = linesOf(note);
-  const at = items[items.length - 1].line + 1;
-  ls.splice(at, 0, row);
-  const caret = ls.slice(0, at + 1).join('\n').length;
+  ls.splice(last + 1, 0, row);
+  const caret = ls.slice(0, last + 2).join('\n').length;
   return { note: ls.join('\n'), caret };
 }
 
 /**
  * 접힌 할 일 줄의 메모 줄: 체크리스트가 있으면 { 글, 끝낸 수, 전체 수 }, 없으면 null(지금 그대로 메모 첫 줄).
- * 메모 첫 줄이 글이면 그 글, 첫 줄이 체크 줄이면 아직 안 끝낸 항목들(「화장지 · 수건 · …」 — 다 끝냈으면 빈 글).
+ * 메모 첫 줄이 글이면 그 글, 첫 줄이 체크 줄이면 아직 안 끝낸 항목들을 「, 」로 이은 것(「화장지, 수건, …」 — 항목 안 「·」와 헷갈리지 않게.
+ * 다 끝냈으면 빈 글 — 부른 쪽이 「모두 체크했어요」를 띄운다).
  */
 export function memoSummary(note: string | null | undefined): { text: string; done: number; total: number } | null {
   const items = checkItems(note);
   if (!items.length) return null;
   const first = linesOf(note).find((l) => l.trim()) ?? '';
-  const text = checkLine(first) ? items.filter((x) => !x.done).map((x) => x.text).join(' · ') : first.trim();
+  const text = checkLine(first) ? items.filter((x) => !x.done).map((x) => x.text).join(', ') : first.trim();
   return { text, done: items.filter((x) => x.done).length, total: items.length };
 }
 

@@ -8,7 +8,7 @@ import {
 } from '@/components/progress/bits';
 import { START_AFTER_DUE, taskErrorMessage } from './task-errors';
 import { CheckLineButton } from './TaskMemo';
-import { cleanNote } from './checklist';
+import { cleanNote, formNoteMax } from './checklist';
 
 export interface StepRef { id: number; title: string }
 
@@ -17,13 +17,15 @@ export type TaskWithNote = TaskItem;
 export const NOTE_MAX = 1000;
 
 /** 메모 칸(새 할 일 · 고치는 폼 공용). 여러 줄, 자세한 내용은 여기에 — 할 일 제목은 한 줄로 짧게. */
-// 메모 칸 바로 밑 「＋ 체크 항목」 = 빈 체크 줄 `- [ ] ` 을 넣고 그 줄 끝에 커서(TaskMemo.tsx CheckLineButton)
+// 메모 칸 바로 밑 「＋ 체크 항목」 = 빈 체크 줄 「☐ 」을 넣고 그 줄 끝에 커서(TaskMemo.tsx CheckLineButton).
+// value 는 폼 모양(체크 줄 = 「☐ 」 · 「☑ 」 — checklist.ts toFormNote), 저장은 cleanNote 가 `- [ ] ` · `- [x] ` 로 되돌린다.
+// 글자 수 한도는 저장 모양 기준(formNoteMax — ☐ 한 줄이 저장 때 4자 늘어난다).
 export function NoteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const id = useId();
   return (
     <div className="flex flex-col">
       <label className={`block ${labelCls}`}>메모
-        <AutoTextarea id={id} className={`${inputCls} mt-1`} rows={2} value={value} maxLength={NOTE_MAX} placeholder="자세한 내용(선택)"
+        <AutoTextarea id={id} className={`${inputCls} mt-1`} rows={2} value={value} maxLength={formNoteMax(value, NOTE_MAX)} placeholder="자세한 내용(선택)"
           onChange={(e) => onChange(e.target.value)} />
       </label>
       <CheckLineButton noteId={id} value={value} onChange={onChange} />

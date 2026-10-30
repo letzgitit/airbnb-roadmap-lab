@@ -16,7 +16,7 @@ import { longDate, PHASE_WORD, placeOf, placePatch, placeStep, spanDate, taskPha
 import { KindSelect, NoteField, SimpleWhenFields, type StepRef, type TaskWithNote } from './TaskComposer';
 import { TaskPhotos } from './TaskPhotos';
 import { TaskMemo } from './TaskMemo';
-import { cleanNote, memoSummary } from './checklist';
+import { cleanNote, memoSummary, toFormNote } from './checklist';
 import { GuideButton, GuideField } from './TaskGuide';
 import { fetchGuide, saveGuide, useGuideIds } from './guides-client';
 import { usePhotos } from '@/components/progress/PhotosPanel';
@@ -32,7 +32,8 @@ import { KeepText } from '@/components/ui/KeepText';
  *               [보조 줄 13 muted ……… 전화 · 연필 · 휴지통(각 44px, 20px 선 아이콘)]
  *               [메모 첫 줄 14 sub ……… (체크리스트면 「3/10」) 고정 꺾쇠]
  * - 제목 · 메모 줄 · 꺾쇠를 누르면 그 자리에서 내용만 펼친다(메모 전체 · 메모 사진 · 「＋ 사진」 · 전화번호 바로 걸기 — 보기만). 같은 꺾쇠 자리로 접는다.
- *   메모 안 `- [ ] 글` 줄은 펼치면 체크 칸(그 자리에서 바로 체크 · 「＋ 항목」 — TaskMemo), 접으면 메모 줄 오른쪽에 진행 「3/10」.
+ *   메모 안 `- [ ] 글` 줄은 펼치면 체크 칸(그 자리에서 바로 체크 · 「＋ 체크 항목」 — TaskMemo), 접으면 메모 줄 오른쪽에 진행 「3/10」.
+ *   체크리스트가 있는 메모를 펼치면 꺾쇠 · 「3/10」은 접힌 메모 줄 자리에 그대로 남고 메모 전체는 그 밑(꺾쇠가 첫 항목 옆에 붙지 않게).
  *   꺾쇠는 줄 오른쪽 끝 고정 자리(단추 열과 같은 세로줄)에서 위 · 아래로만 돈다. 펼쳐도 달라질 것이 없으면(짧은 한 줄 · 사진 · 전화번호 없음) 꺾쇠도 접고 펴기도 없다.
  * - 연필 = 그 자리 고치는 폼, 휴지통 = 확인 창 없이 바로 지우고 8초 「되돌리기」 알림, 체크 = 완료.
  * - 고치는 폼: simple(새 홈) = 제목 · 언제부터(선택) · 언제까지 · 문의 필요(종류 「문의」) · 메모 · 도움말 · 사진(종류 · 넣을 곳은 숨김, 값은 그대로) + 「이 할 일 지우기」(확인 창).
@@ -148,7 +149,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
       .catch(() => setGf({ ...NO_GUIDE, error: '도움말을 불러오지 못했어요. 폼을 닫았다 다시 열어 주세요.' }));
   };
   const formOf = (c: Record<string, unknown>): Form => ({
-    text: String(c.text ?? ''), start: String(c.start ?? ''), due: String(c.due ?? ''), kind: (c.kind ?? '') as TaskKind | '', note: String(c.note ?? ''),
+    text: String(c.text ?? ''), start: String(c.start ?? ''), due: String(c.due ?? ''), kind: (c.kind ?? '') as TaskKind | '', note: toFormNote(String(c.note ?? '')), // 폼 메모 칸은 체크 줄을 ☐ · ☑ 로
     place: placeOf({ stepId: typeof c.stepId === 'number' ? c.stepId : t.stepId, parentId: typeof c.parentId === 'string' ? c.parentId : null }),
   });
   const tasks = doc?.tasks ?? {};
@@ -323,7 +324,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   // 둘째 줄에 보일 글이 없어도(날짜 없는 할 일 · 날짜를 숨긴 달력 그날 목록) 단추는 둘째 줄 오른쪽 — 어느 줄이든 같은 자리.
   const phase = taskPhase(t, todayStr());
   const noteLines = (t.note ?? '').trim();
-  // 메모 안 체크리스트(checklist.ts)가 있으면 접힌 메모 줄 = 요약 글(첫 줄이 글이면 그 글, 체크 줄이면 안 끝낸 항목들) + 오른쪽 「3/10」
+  // 메모 안 체크리스트(checklist.ts)가 있으면 접힌 메모 줄 = 요약 글(첫 줄이 글이면 그 글, 체크 줄이면 안 끝낸 항목들을 「, 」로 —
+  // 다 체크했으면 빈 글이라 「모두 체크했어요」 muted) + 오른쪽 「3/10」
   const checks = memoSummary(t.note);
   const firstLine = checks ? checks.text : noteLines.split('\n')[0];
   const photos = taskPhotos.filter((p) => p.taskId === t.id);
@@ -332,6 +334,8 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   // 펼치면 달라지는 것이 있을 때만 접고 편다: 메모가 여러 줄 · 첫 줄이 잘림 · 메모 사진 · 메모 속 전화번호(펼치면 바로 걸기) · 체크리스트(한 항목뿐이어도)
   const expandable = noteLines.includes('\n') || clipped || photoN > 0 || phones.length > 0 || !!checks;
   const open = noteOpen && expandable;
+  // 체크리스트가 있는 메모를 펼치면 꺾쇠 · 「3/10」을 메모 위 따로 된 줄(접힌 메모 줄과 같은 자리)에 둔다 — 체크리스트가 없으면 지금 그대로
+  const headRow = open && !!checks;
   const toggleMemo = () => setNoteOpen((v) => !v);
   const memoId = `task-${t.id}-memo`;
   const ask = t.kind === '문의';
@@ -423,30 +427,37 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
             메모 줄 어디를 눌러도 접고 편다(글을 끌어 고르는 중이면 그대로 — 펼친 메모 글은 골라 복사할 수 있게 button 이 아닌 글).
             펼쳐도 달라질 것이 없으면(짧은 한 줄 · 사진 · 전화번호 없음) 꺾쇠 없이 글만. 사진은 첫 줄 제목 뒤에 이미 보인다 */}
         {noteLines && (
-          <div className={`${open ? '' : '-mb-2.5'} flex items-start`}
+          <div className={open ? '' : '-mb-2.5'}
             onClick={expandable ? (e) => {
-              // 체크리스트 칸 · 「＋ 항목」 입력을 눌러도 메모가 접히지 않게
+              // 체크리스트 칸 · 「＋ 체크 항목」 입력을 눌러도 메모가 접히지 않게
               if ((e.target as HTMLElement).closest('a, button, label, input, form')) return;
               if (window.getSelection()?.toString()) return;
               toggleMemo();
             } : undefined}>
-            <div id={memoId} className={`min-w-0 flex-1 ${expandable ? 'cursor-pointer' : ''} ${open ? 'pt-2' : 'flex min-h-11 items-center'}`}>
-              {open ? <TaskMemo t={t} note={noteLines} />
-                : <span ref={memoRef} className="block min-w-0 truncate text-sm font-normal text-sub">{firstLine}</span>}
+            <div className="flex items-start">
+              <div id={headRow ? undefined : memoId} className={`min-w-0 flex-1 ${expandable ? 'cursor-pointer' : ''} ${open && !headRow ? 'pt-2' : 'flex min-h-11 items-center'}`}>
+                {open ? (!headRow && <TaskMemo t={t} note={noteLines} />)
+                  : firstLine
+                    ? <span ref={memoRef} className="block min-w-0 truncate text-sm font-normal text-sub">{firstLine}</span>
+                    : <span ref={memoRef} className="block min-w-0 truncate text-sm font-normal text-muted">모두 체크했어요</span>}
+              </div>
+              {/* 체크리스트 진행 「3/10」(13/600 ink-soft — 블록 머리 「2/7」과 같은 글자), 꺾쇠 바로 앞. 펼쳐도 같은 자리에 남는다 */}
+              {checks && (
+                <span className="flex min-h-11 shrink-0 items-center pl-2 text-meta font-semibold tabular-nums text-ink-soft">
+                  <span aria-hidden>{checks.done}/{checks.total}</span>
+                  <span className="sr-only">체크리스트 {checks.total}개 중 {checks.done}개 체크</span>
+                </span>
+              )}
+              {expandable && (
+                <button type="button" aria-expanded={open} aria-controls={memoId} aria-label={open ? `메모 접기: ${t.text}` : `메모 펼치기: ${t.text}`} onClick={toggleMemo}
+                  className="-mb-2.5 -mr-2.5 flex size-11 shrink-0 items-center justify-center rounded-control text-ink-soft transition-colors hover:bg-sunken">
+                  <LineIcon name="chevron" stroke={2} className={`size-5 transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
+                </button>
+              )}
             </div>
-            {/* 접힌 줄의 체크리스트 진행 「3/10」(13/600 ink-soft — 블록 머리 「2/7」과 같은 글자), 꺾쇠 바로 앞 */}
-            {checks && !open && (
-              <span className="flex min-h-11 shrink-0 items-center pl-2 text-meta font-semibold tabular-nums text-ink-soft">
-                <span aria-hidden>{checks.done}/{checks.total}</span>
-                <span className="sr-only">체크리스트 {checks.total}개 중 {checks.done}개 체크</span>
-              </span>
-            )}
-            {expandable && (
-              <button type="button" aria-expanded={open} aria-controls={memoId} aria-label={open ? `메모 접기: ${t.text}` : `메모 펼치기: ${t.text}`} onClick={toggleMemo}
-                className="-mb-2.5 -mr-2.5 flex size-11 shrink-0 items-center justify-center rounded-control text-ink-soft transition-colors hover:bg-sunken">
-                <LineIcon name="chevron" stroke={2} className={`size-5 transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
-              </button>
-            )}
+            {/* 체크리스트가 있는 메모를 펼치면: 꺾쇠 · 「3/10」 줄(접힌 메모 줄 자리 그대로 — 꺾쇠가 움직이지 않는다)은 비워 두고 메모 전체는 그 밑.
+                꺾쇠가 첫 체크 항목 줄 옆에 붙어 그 항목의 단추처럼 보이지 않게 */}
+            {headRow && <div id={memoId} className="cursor-pointer"><TaskMemo t={t} note={noteLines} /></div>}
           </div>
         )}
         {/* 펼친 메모 밑: 메모 사진 · 「＋ 사진」, 메모 속 전화번호는 바로 건다(따로 접는 단추는 없다 — 꺾쇠 · 제목 · 메모 줄로 접는다) */}

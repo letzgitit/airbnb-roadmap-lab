@@ -195,7 +195,9 @@
 /* 펼친 칸 바닥 = 맨 아래 글자 ~ 줄 끝 14px(다른 화면 할 일 줄 아래 여백과 같음 — 44px 누르는 칸은 그 여백과 겹쳐 걸친다).
    연필 · 휴지통 = 첫 줄 오른쪽에 띄움(float — 메모 글이 옆으로 흐른다). 오른쪽 −12px 로 휴지통 가운데 = 이름 줄 꺾쇠 가운데(보이는 폭 − 22px) */
 .detail { position: sticky; left: 0; z-index: 4; width: var(--vw); display: flow-root; padding: 0 12px 14px 0; background: var(--rowbg); cursor: auto; user-select: text; -webkit-user-select: text; }
-.dActs { float: right; position: relative; z-index: 1; margin: -6px -12px 0 8px; display: inline-flex; color: var(--ink-soft); }
+/* 연필 · 휴지통 = 펼친 칸 맨 위 따로 된 단추 줄(오른쪽 끝, 휴지통 가운데 = 이름 줄 꺾쇠 가운데). 메모 줄 옆에 두지 않는다 —
+   메모 첫 줄이 체크 항목이면 「이 항목 지우기」로 읽혀서(실제론 할 일 전체) */
+.dActs { display: flex; justify-content: flex-end; margin: -6px -12px 0 0; color: var(--ink-soft); }
 .dBtn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 8px; }
 .dBtn svg { width: 20px; height: 20px; }
 .dBtn:hover { background: var(--sunken); }
@@ -247,9 +249,6 @@
 .ibtn { width: 44px; height: 44px; border-radius: 8px; display: grid; place-items: center; color: var(--danger-ink); margin-left: auto; }
 .ibtn:hover { background: var(--surface); }
 .ibtn svg { width: 20px; height: 20px; }
-.addSub { justify-self: start; color: var(--accent-ink); font-weight: 700; height: 44px; display: inline-flex; align-items: center; gap: 6px; padding: 0 2px; }
-.addSub:hover { text-decoration: underline; }
-.addSub svg { width: 16px; height: 16px; }
 .ferr { color: var(--danger-ink); font-size: 13px; line-height: 18px; font-weight: 700; }
 
 /* 범례 */

@@ -1,7 +1,7 @@
 // 할 일 메모 안 체크리스트 확인(node --test). 예시 글은 일반 물건 이름만 — 개인정보 없음.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addItem, checkItems, cleanNote, insertCheckLine, memoParts, memoSummary, noteOp, plainMemo, refOf, retryOnConflict, setItem } from './checklist.ts';
+import { addItem, checkItems, cleanNote, formNoteMax, fromFormNote, insertCheckLine, memoParts, memoSummary, noteOp, plainMemo, refOf, retryOnConflict, setItem, toFormNote } from './checklist.ts';
 
 const NOTE = '전화 가게 02-000-0000\n「휴지 있나요?」\n- 몇 시까지 여나\n- [ ] 화장지\n- [x] 수건\n- [X] 샴푸\n- [ ]   \n* [ ] 칫솔';
 
@@ -39,7 +39,7 @@ test('더하기: 마지막 체크 줄 바로 밑, 체크 줄이 없으면 맨 �
 
 test('접힌 줄 요약: 첫 줄이 글이면 그 글, 체크 줄이면 안 끝낸 항목들 · 끝낸 수 / 전체', () => {
   assert.deepEqual(memoSummary(NOTE), { text: '전화 가게 02-000-0000', done: 2, total: 4 });
-  assert.deepEqual(memoSummary('- [x] 수건\n- [ ] 화장지\n- [ ] 칫솔'), { text: '화장지 · 칫솔', done: 1, total: 3 });
+  assert.deepEqual(memoSummary('- [x] 수건\n- [ ] 화장지\n- [ ] 칫솔'), { text: '화장지, 칫솔', done: 1, total: 3 });
   assert.deepEqual(memoSummary('- [x] 수건'), { text: '', done: 1, total: 1 });
 });
 
@@ -67,15 +67,41 @@ test('동시 체크: 409 를 받으면 최신 메모에 내 바꿀 것만 다시
   assert.equal(retryOnConflict('t_x', mine)({ note: '- [ ] 화장지', version: 5 }), null);
 });
 
-test('편집 폼 「＋ 체크 항목」: 빈 메모면 첫 줄, 체크 줄이 없으면 끝, 있으면 마지막 체크 줄 밑 — 커서는 그 줄 끝', () => {
-  assert.deepEqual(insertCheckLine(''), { note: '- [ ] ', caret: 6 });
-  assert.deepEqual(insertCheckLine('전화 가게\n\n'), { note: '전화 가게\n- [ ] ', caret: 12 });
-  const r = insertCheckLine('위 글\n- [x] 화장지\n- [ ] 수건\n아래 글');
-  assert.equal(r.note, '위 글\n- [x] 화장지\n- [ ] 수건\n- [ ] \n아래 글');
-  assert.equal(r.note.slice(0, r.caret), '위 글\n- [x] 화장지\n- [ ] 수건\n- [ ] ');
+test('편집 폼 「＋ 체크 항목」: 빈 메모면 첫 줄, 체크 줄이 없으면 끝, 있으면 마지막 체크 줄 밑에 「☐ 」 — 커서는 그 줄 끝', () => {
+  assert.deepEqual(insertCheckLine(''), { note: '☐ ', caret: 2 });
+  assert.deepEqual(insertCheckLine('전화 가게\n\n'), { note: '전화 가게\n☐ ', caret: 8 });
+  const r = insertCheckLine('위 글\n☑ 화장지\n☐ 수건\n아래 글');
+  assert.equal(r.note, '위 글\n☑ 화장지\n☐ 수건\n☐ \n아래 글');
+  assert.equal(r.note.slice(0, r.caret), '위 글\n☑ 화장지\n☐ 수건\n☐ ');
+  // 폼에 직접 친 `- [ ] 글` 도 체크 줄로 본다
+  assert.equal(insertCheckLine('- [ ] 화장지\n아래 글').note, '- [ ] 화장지\n☐ \n아래 글');
 });
 
-test('폼 저장 메모: 글 없이 남은 체크 줄은 뺀다', () => {
+test('폼 메모 칸: 띄울 때 ☐ · ☑, 저장할 때 `- [ ] ` · `- [x] ` — 글 줄 · 빈 줄 · 「- 」 질문 줄은 그대로(왕복)', () => {
+  const stored = '전화 가게 02-000-0000\n「휴지 있나요?」\n- 몇 시까지 여나\n\n- [ ] 화장지\n- [x] 수건\n  - [ ] 들여 쓴 칫솔\n- [ ]화장지 아님\n끝 글';
+  const form = toFormNote(stored);
+  assert.equal(form, '전화 가게 02-000-0000\n「휴지 있나요?」\n- 몇 시까지 여나\n\n☐ 화장지\n☑ 수건\n  ☐ 들여 쓴 칫솔\n- [ ]화장지 아님\n끝 글');
+  assert.equal(fromFormNote(form), stored);
+  assert.equal(cleanNote(form), stored);
+  // 대문자 X 는 ☑ 로 보이고 소문자 x 로 저장(체크 그대로)
+  assert.equal(toFormNote('- [X] 샴푸'), '☑ 샴푸');
+  assert.equal(cleanNote(toFormNote('- [X] 샴푸')), '- [x] 샴푸');
+  // 사람이 ☐ · ☑ 를 직접 쳐도(띄어쓰기 없이도) 체크 항목으로 저장
+  assert.equal(cleanNote('☐우산\n☑ 장갑'), '- [ ] 우산\n- [x] 장갑');
+  assert.deepEqual(checkItems(cleanNote('☐우산\n☑ 장갑')).map((x) => [x.text, x.done]), [['우산', false], ['장갑', true]]);
+  // 줄 가운데 ☐ 는 글
+  assert.equal(fromFormNote('가방 ☐ 우산'), '가방 ☐ 우산');
+  assert.equal(toFormNote(null), '');
+});
+
+test('폼 저장 메모: 글 없이 남은 체크 줄(「☐ 」만 · `- [ ] `만)은 뺀다', () => {
   assert.equal(cleanNote('전화 가게\n- [ ] \n- [x] 화장지\n- [ ]'), '전화 가게\n- [x] 화장지');
+  assert.equal(cleanNote('전화 가게\n☐ \n☑ 화장지\n☐'), '전화 가게\n- [x] 화장지');
   assert.equal(cleanNote('- [ ] '), '');
+  assert.equal(cleanNote('☐ '), '');
+});
+
+test('폼 메모 칸 글자 수 한도: 저장 모양이 늘어나는 만큼(체크 줄 하나에 4자) 줄인다', () => {
+  assert.equal(formNoteMax('글', 1000), 1000);
+  assert.equal(formNoteMax('☐ 화장지\n☑ 수건\n- 질문', 1000), 992);
 });
