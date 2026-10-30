@@ -1,7 +1,7 @@
 // 할 일 메모 안 체크리스트 확인(node --test). 예시 글은 일반 물건 이름만 — 개인정보 없음.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addItem, checkItems, memoParts, memoSummary, noteOp, plainMemo, refOf, retryOnConflict, setItem } from './checklist.ts';
+import { addItem, checkItems, cleanNote, insertCheckLine, memoParts, memoSummary, noteOp, plainMemo, refOf, retryOnConflict, setItem } from './checklist.ts';
 
 const NOTE = '전화 가게 02-000-0000\n「휴지 있나요?」\n- 몇 시까지 여나\n- [ ] 화장지\n- [x] 수건\n- [X] 샴푸\n- [ ]   \n* [ ] 칫솔';
 
@@ -65,4 +65,17 @@ test('동시 체크: 409 를 받으면 최신 메모에 내 바꿀 것만 다시
   assert.ok(retry(server));
   assert.equal(retry(server), null);
   assert.equal(retryOnConflict('t_x', mine)({ note: '- [ ] 화장지', version: 5 }), null);
+});
+
+test('편집 폼 「＋ 체크 항목」: 빈 메모면 첫 줄, 체크 줄이 없으면 끝, 있으면 마지막 체크 줄 밑 — 커서는 그 줄 끝', () => {
+  assert.deepEqual(insertCheckLine(''), { note: '- [ ] ', caret: 6 });
+  assert.deepEqual(insertCheckLine('전화 가게\n\n'), { note: '전화 가게\n- [ ] ', caret: 12 });
+  const r = insertCheckLine('위 글\n- [x] 화장지\n- [ ] 수건\n아래 글');
+  assert.equal(r.note, '위 글\n- [x] 화장지\n- [ ] 수건\n- [ ] \n아래 글');
+  assert.equal(r.note.slice(0, r.caret), '위 글\n- [x] 화장지\n- [ ] 수건\n- [ ] ');
+});
+
+test('폼 저장 메모: 글 없이 남은 체크 줄은 뺀다', () => {
+  assert.equal(cleanNote('전화 가게\n- [ ] \n- [x] 화장지\n- [ ]'), '전화 가게\n- [x] 화장지');
+  assert.equal(cleanNote('- [ ] '), '');
 });

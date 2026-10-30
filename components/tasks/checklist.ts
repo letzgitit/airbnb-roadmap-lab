@@ -76,6 +76,30 @@ export function addItem(note: string | null | undefined, text: string): string |
   return ls.join('\n');
 }
 
+/** 폼에서 저장할 메모: 글 없이 남은 체크 줄(「＋ 체크 항목」만 누르고 안 쓴 줄)을 빼고 앞뒤 공백을 지운다 */
+export function cleanNote(note: string): string {
+  return note.split('\n').filter((l) => !/^\s*[-*+]\s+\[[ xX]\]\s*$/.test(l)).join('\n').trim();
+}
+
+/**
+ * 편집 폼 「＋ 체크 항목」: 빈 체크 줄 `- [ ] ` 하나를 넣은 새 메모와 커서 자리(그 줄 끝).
+ * 체크 줄이 있으면 마지막 체크 줄 바로 밑, 없으면 메모 끝(메모가 비었으면 첫 줄). 메모 끝의 빈 줄 · 공백은 걷어 낸다.
+ */
+export function insertCheckLine(note: string): { note: string; caret: number } {
+  const row = '- [ ] ';
+  const items = checkItems(note);
+  if (!items.length) {
+    const body = note.trimEnd();
+    const next = body ? `${body}\n${row}` : row;
+    return { note: next, caret: next.length };
+  }
+  const ls = linesOf(note);
+  const at = items[items.length - 1].line + 1;
+  ls.splice(at, 0, row);
+  const caret = ls.slice(0, at + 1).join('\n').length;
+  return { note: ls.join('\n'), caret };
+}
+
 /**
  * 접힌 할 일 줄의 메모 줄: 체크리스트가 있으면 { 글, 끝낸 수, 전체 수 }, 없으면 null(지금 그대로 메모 첫 줄).
  * 메모 첫 줄이 글이면 그 글, 첫 줄이 체크 줄이면 아직 안 끝낸 항목들(「화장지 · 수건 · …」 — 다 끝냈으면 빈 글).

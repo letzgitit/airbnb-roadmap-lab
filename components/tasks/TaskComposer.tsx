@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { STEP_COUNT, TASK_KINDS, type TaskItem, type TaskKind } from '@/lib/core/types';
 import { useProgress, type DirtyScope } from '@/components/progress/ProgressProvider';
 import {
   AutoTextarea, btnGhost, btnPrimary, composerCls, dateCls, enterSubmit, inputCls, oneLine, useBusy, useDirty, useFormEsc,
 } from '@/components/progress/bits';
 import { START_AFTER_DUE, taskErrorMessage } from './task-errors';
+import { CheckLineButton } from './TaskMemo';
+import { cleanNote } from './checklist';
 
 export interface StepRef { id: number; title: string }
 
@@ -15,12 +17,17 @@ export type TaskWithNote = TaskItem;
 export const NOTE_MAX = 1000;
 
 /** 메모 칸(새 할 일 · 고치는 폼 공용). 여러 줄, 자세한 내용은 여기에 — 할 일 제목은 한 줄로 짧게. */
+// 메모 칸 바로 밑 「＋ 체크 항목」 = 빈 체크 줄 `- [ ] ` 을 넣고 그 줄 끝에 커서(TaskMemo.tsx CheckLineButton)
 export function NoteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const id = useId();
   return (
-    <label className={`block ${labelCls}`}>메모
-      <AutoTextarea className={`${inputCls} mt-1`} rows={2} value={value} maxLength={NOTE_MAX} placeholder="자세한 내용(선택)"
-        onChange={(e) => onChange(e.target.value)} />
-    </label>
+    <div className="flex flex-col">
+      <label className={`block ${labelCls}`}>메모
+        <AutoTextarea id={id} className={`${inputCls} mt-1`} rows={2} value={value} maxLength={NOTE_MAX} placeholder="자세한 내용(선택)"
+          onChange={(e) => onChange(e.target.value)} />
+      </label>
+      <CheckLineButton noteId={id} value={value} onChange={onChange} />
+    </div>
   );
 }
 
@@ -112,7 +119,7 @@ export function TaskComposer({ stepId, steps, scope, onClose, initialDue = '', p
       setErr(null);
       const where = parentId ? { parentId } : { stepId: sid };
       const ready = prepare ? prepare(text.trim(), kind) : { text, kind };
-      void run(() => send({ op: 'task.add', ...where, text: ready.text, due: due || null, ...(start ? { start } : {}), ...(ready.kind ? { kind: ready.kind } : {}), ...(note.trim() ? { note: note.trim() } : {}) }, {
+      void run(() => send({ op: 'task.add', ...where, text: ready.text, due: due || null, ...(start ? { start } : {}), ...(ready.kind ? { kind: ready.kind } : {}), ...(cleanNote(note) ? { note: cleanNote(note) } : {}) }, {
         quiet: true,
         onSuccess: () => { setText(''); setStart(''); setDue(initialDue); setKind(''); setNote(''); onClose(); },
       }).then((r) => setErr(taskErrorMessage(r))));

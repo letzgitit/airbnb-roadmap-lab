@@ -6,7 +6,7 @@ import { useProgress } from '@/components/progress/ProgressProvider';
 import { inputCls } from '@/components/progress/bits';
 import { addBtnCls } from '@/components/ui/buttonCls';
 import { LineIcon } from '@/components/ui/LineIcon';
-import { checkItems, memoParts, noteOp, refOf, retryOnConflict, type CheckChange, type CheckItem } from './checklist';
+import { checkItems, insertCheckLine, memoParts, noteOp, refOf, retryOnConflict, type CheckChange, type CheckItem } from './checklist';
 
 /**
  * 펼친 할 일 메모(할 일 줄 TaskRow · 간트 펼친 칸 TaskDetail 이 같이 쓴다 — 「모두 다 동일하게」).
@@ -99,5 +99,32 @@ function AddItem({ title, onAdd }: { title: string; onAdd: (text: string) => voi
         onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); } }}
         onBlur={() => { if (!text.trim()) close(false); }} />
     </form>
+  );
+}
+
+/**
+ * 편집 폼(연필) · 새 할 일 폼 메모 칸 바로 밑 「＋ 체크 항목」(「＋ 할 일」과 같은 글자 단추 — addBtnCls, ＋ 가 메모 칸 왼쪽 끝).
+ * 누르면 메모에 빈 체크 줄 `- [ ] ` 을 넣고(마지막 체크 줄 밑, 없으면 끝 · 빈 메모면 첫 줄) 메모 칸의 그 줄 끝에 커서를 둔다 — 글로 `- [ ]` 를 몰라도 체크리스트를 시작하게.
+ * noteId = 메모 칸(textarea)의 id.
+ */
+export function CheckLineButton({ noteId, value, onChange, className = '-ml-3' }: {
+  noteId: string; value: string; onChange: (v: string) => void;
+  /** 왼쪽 맞춤(기본 = ＋ 가 메모 칸 왼쪽 끝, 간트 폼 = 밑 「＋ 세부 항목 추가」의 ＋ 와 한 세로줄) */
+  className?: string;
+}) {
+  return (
+    <button type="button" className={`${addBtnCls} ${className} self-start`}
+      onClick={() => {
+        const r = insertCheckLine(value);
+        onChange(r.note);
+        window.requestAnimationFrame(() => {
+          const el = document.getElementById(noteId) as HTMLTextAreaElement | null;
+          if (!el) return;
+          el.focus();
+          el.setSelectionRange(r.caret, r.caret);
+        });
+      }}>
+      <LineIcon name="plus" className="size-4.5" stroke={2.2} />체크 항목<span className="sr-only">: 메모에 체크 줄 더하기</span>
+    </button>
   );
 }

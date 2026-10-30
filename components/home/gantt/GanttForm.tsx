@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { liveChildrenOf } from '@/lib/core/task-tree';
 import { STEP_COUNT, TASK_KINDS, type TaskKind } from '@/lib/core/types';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { btnPrimary, clipLabel, inputCls, LastEdit, TRASH_NOTE, useDirty, useFormEsc } from '@/components/progress/bits';
 import { START_AFTER_DUE, taskErrorMessage } from '@/components/tasks/task-errors';
 import { placeOf, placePatch } from '@/components/tasks/task-view';
+import { CheckLineButton } from '@/components/tasks/TaskMemo';
+import { cleanNote } from '@/components/tasks/checklist';
 import type { Editing, Phase } from './gantt-model';
 import s from './gantt.module.css';
 import { Plus, Trash } from './icons';
@@ -34,6 +36,7 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
     ? { text: cur.text, start: cur.start ?? '', due: cur.due ?? '', kind: cur.kind ?? '', note: cur.note ?? '', place: placeOf(cur), done: cur.done }
     : { text: '', start: '', due: parent?.due ?? '', kind: '', note: '', place: parent ? `p:${parent.id}` : `s:${phase.id}`, done: false });
   const [f, setF] = useState<Form>(orig);
+  const noteId = useId();
   const [base] = useState(cur?.version ?? 0);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -72,7 +75,7 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
       if (f.start !== orig.start) patch.start = f.start || null;
       if (f.due !== orig.due) patch.due = f.due || null;
       if (f.kind !== orig.kind) patch.kind = f.kind || null;
-      if (f.note !== orig.note) patch.note = f.note.trim() || null;
+      if (f.note !== orig.note) patch.note = cleanNote(f.note) || null;
       if (f.done !== orig.done) patch.done = f.done;
       Object.assign(patch, placePatch(orig.place, f.place));
       if (Object.keys(patch).length === 0) { setBusy(false); onClose(); return; }
@@ -81,7 +84,7 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
       const where = f.place.startsWith('p:') ? { parentId: f.place.slice(2) } : { stepId: Number(f.place.slice(2)) };
       r = await send({
         op: 'task.add', text, ...where, due: f.due || null, ...(f.start ? { start: f.start } : {}),
-        ...(f.kind ? { kind: f.kind } : {}), ...(f.note.trim() ? { note: f.note.trim() } : {}),
+        ...(f.kind ? { kind: f.kind } : {}), ...(cleanNote(f.note) ? { note: cleanNote(f.note) } : {}),
       }, { quiet: true });
     }
     setBusy(false);
@@ -136,8 +139,10 @@ export function GanttForm({ ed, phase, steps, onClose, onAddSub }: {
         {kidCount > 0 && parents.length > 0 && <span className={s.hint}>이 할 일에 세부 항목이 달려 있어서 다른 할 일 밑에는 못 넣어요.</span>}
       </label>
       <label className={s.f}>메모
-        <textarea className={`${fieldCls} min-h-[70px] resize-y`} rows={2} value={f.note} maxLength={1000} placeholder="전화번호 · 물어볼 것" onChange={(e) => set('note', e.target.value)} />
+        <textarea id={noteId} className={`${fieldCls} min-h-[70px] resize-y`} rows={2} value={f.note} maxLength={1000} placeholder="전화번호 · 물어볼 것" onChange={(e) => set('note', e.target.value)} />
       </label>
+      {/* 메모 칸 바로 밑 「＋ 체크 항목」(할 일 폼과 같은 단추 — 빈 체크 줄을 넣고 그 줄 끝에 커서) */}
+      <CheckLineButton noteId={noteId} value={f.note} onChange={(v) => set('note', v)} className="-ml-2.5 justify-self-start" />
       {cur && (
         <label className={s.check}><input type="checkbox" checked={f.done} onChange={(e) => set('done', e.target.checked)} />끝냄</label>
       )}

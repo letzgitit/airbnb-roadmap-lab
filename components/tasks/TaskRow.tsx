@@ -16,7 +16,7 @@ import { longDate, PHASE_WORD, placeOf, placePatch, placeStep, spanDate, taskPha
 import { KindSelect, NoteField, SimpleWhenFields, type StepRef, type TaskWithNote } from './TaskComposer';
 import { TaskPhotos } from './TaskPhotos';
 import { TaskMemo } from './TaskMemo';
-import { memoSummary } from './checklist';
+import { cleanNote, memoSummary } from './checklist';
 import { GuideButton, GuideField } from './TaskGuide';
 import { fetchGuide, saveGuide, useGuideIds } from './guides-client';
 import { usePhotos } from '@/components/progress/PhotosPanel';
@@ -198,7 +198,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
   const saveAsNew = () => {
     if (spanBad()) return;
     const where = place.startsWith('p:') ? { parentId: place.slice(2) } : { stepId: listStepId ?? placeStep(place, tasks) ?? t.stepId };
-    void run(() => send({ op: 'task.add', ...where, text, due: due || null, ...(start ? { start } : {}), ...(kind ? { kind } : {}), ...(note.trim() ? { note: note.trim() } : {}) }, {
+    void run(() => send({ op: 'task.add', ...where, text, due: due || null, ...(start ? { start } : {}), ...(kind ? { kind } : {}), ...(cleanNote(note) ? { note: cleanNote(note) } : {}) }, {
       quiet: true, onSuccess: () => { ed.stop(); onGone(); },
     }).then((r) => setErr(taskErrorMessage(r))));
   };
@@ -219,7 +219,7 @@ export function TaskRow({ t: task, steps, listStepId, showStep = false, scope, i
               text, due: due || null,
               ...(start !== orig.start ? { start: start || null } : {}),
               ...placePatch(orig.place, place),
-              ...(kind !== orig.kind ? { kind: kind || null } : {}), ...(note !== orig.note ? { note: note.trim() || null } : {}),
+              ...(kind !== orig.kind ? { kind: kind || null } : {}), ...(note !== orig.note ? { note: cleanNote(note) || null } : {}),
             };
             void run(async () => {
               // 설명서가 바뀌었으면 먼저 따로 저장한다(실패하면 할 일도 저장하지 않고 폼에 까닭을 적는다)
