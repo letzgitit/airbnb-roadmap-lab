@@ -3,7 +3,7 @@
 //
 // 받는 모양(부부가 폼에서 직접 쓰는 정도만):
 //   # · ## 소제목 → 큰 소제목, ### 이하 → 작은 소제목
-//   - · * · • 점 목록, 1. · 1) 번호 목록(목록 안 줄을 두 칸 이상 들여 쓰면 앞 항목에 이어 붙음)
+//   - · * · • 점 목록, 1. · 1) 번호 목록(목록 안 줄을 두 칸 이상 들여 쓰면 앞 항목에 이어 붙음 — 들여 쓴 표는 그 항목 밑 표)
 //   > 인용 → 「알아 두기」 상자(안에 목록 · 굵은 글씨도 됨)
 //   | 표 | (둘째 줄이 |---|---| 이면 첫 줄이 머리)
 //   --- 가로줄, **굵게**, [글](https://…) 링크, 맨 주소(https://…), 문단 안 줄바꿈은 그대로 줄바꿈
@@ -18,11 +18,14 @@ export type Inline =
 export type Block =
   | { t: 'h'; level: 1 | 2; c: Inline[] }
   | { t: 'p'; c: Inline[] }
-  | { t: 'ul'; items: Inline[][] }
-  | { t: 'ol'; start: number; items: Inline[][] }
+  | { t: 'ul'; items: ListItem[] }
+  | { t: 'ol'; start: number; items: ListItem[] }
   | { t: 'quote'; blocks: Block[] }
   | { t: 'table'; head: Inline[][] | null; rows: Inline[][][] }
   | { t: 'hr' };
+
+/** 목록 한 항목: 글(c) + 그 밑에 들여 쓴 표 같은 블록(more — 없으면 빈 배열) */
+export interface ListItem { c: Inline[]; more: Block[] }
 
 const SAFE_HREF = /^(https?:\/\/|tel:|mailto:)/i;
 
@@ -73,6 +76,14 @@ const RE_HR = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
 const RE_TABLE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 const RE_INDENT = /^(\s{2,}|\t)\S/;
 const isRow = (l: string) => /^\s*\|.*\|\s*$/.test(l);
+// 표가 시작하는 줄: 이 줄과 다음 줄이 모두 「| … |」(다음 줄이 나눔 줄이면 첫 줄이 머리)
+const tableAt = (ls: string[], i: number) => isRow(ls[i]) && i + 1 < ls.length && (RE_TABLE_SEP.test(ls[i + 1]) || isRow(ls[i + 1]));
+// 목록 한 항목의 줄들 → 글 + 밑 블록: 들여 쓴 줄 중 표가 시작하는 곳부터는 블록으로 읽는다(번호 목록 안 「| 물건 | 채울 곳 |」 표)
+function listItem(ls: string[]): ListItem {
+  const k = ls.findIndex((_, i) => i > 0 && tableAt(ls, i));
+  if (k < 0) return { c: lines(ls), more: [] };
+  return { c: lines(ls.slice(0, k)), more: parseGuide(ls.slice(k).map((x) => x.trim()).join('\n')) };
+}
 const cells = (l: string) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => parseInline(c.trim()));
 
 export function parseGuide(src: string): Block[] {
@@ -99,7 +110,7 @@ export function parseGuide(src: string): Block[] {
       out.push({ t: 'quote', blocks: parseGuide(inner.join('\n')) });
       continue;
     }
-    if (isRow(l) && i + 1 < ls.length && (RE_TABLE_SEP.test(ls[i + 1]) || isRow(ls[i + 1]))) {
+    if (tableAt(ls, i)) {
       flush();
       const head = RE_TABLE_SEP.test(ls[i + 1]) ? cells(l) : null;
       let j = head ? i + 2 : i;
@@ -127,7 +138,7 @@ export function parseGuide(src: string): Block[] {
         if (RE_INDENT.test(x) && !mu && !mo && items.length) { items[items.length - 1].push(x.trim()); continue; }
         break;
       }
-      out.push(kind === 'ul' ? { t: 'ul', items: items.map(lines) } : { t: 'ol', start, items: items.map(lines) });
+      out.push(kind === 'ul' ? { t: 'ul', items: items.map(listItem) } : { t: 'ol', start, items: items.map(listItem) });
       i = j - 1;
       continue;
     }

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Sheet } from '@/components/Sheet';
 import { AutoTextarea, inputCls, textBtn } from '@/components/progress/bits';
 import { LineIcon } from '@/components/ui/LineIcon';
-import { parseGuide, plainText, type Block, type Inline } from './guide-md';
+import { parseGuide, plainText, type Block, type Inline, type ListItem } from './guide-md';
 import { fetchGuide } from './guides-client';
 
 /**
@@ -55,6 +55,16 @@ function Hosts({ c }: { c: Inline[] }) {
   return hs.length ? <span className="whitespace-nowrap text-sm font-normal text-muted"> ({hs.join(', ')})</span> : null;
 }
 
+// 목록 한 항목: 글 + (들여 쓴 표 같은) 밑 블록 — 번호 · 점 자리는 그대로, 블록은 글 밑 12px
+function Item({ it, inBox }: { it: ListItem; inBox: boolean }) {
+  return (
+    <li className="pl-1">
+      <Inl c={it.c} /><Hosts c={it.c} />
+      {it.more.length > 0 && <div className="mt-3"><Blocks blocks={it.more} inBox={inBox} /></div>}
+    </li>
+  );
+}
+
 function Blocks({ blocks, inBox = false }: { blocks: Block[]; inBox?: boolean }) {
   return (
     <>
@@ -69,13 +79,13 @@ function Blocks({ blocks, inBox = false }: { blocks: Block[]; inBox?: boolean })
           case 'ul':
             return (
               <ul key={i} className="mb-4 list-disc space-y-2 pl-6 marker:text-muted last:mb-0">
-                {b.items.map((it, j) => <li key={j} className="pl-1"><Inl c={it} /><Hosts c={it} /></li>)}
+                {b.items.map((it, j) => <Item key={j} it={it} inBox={inBox} />)}
               </ul>
             );
           case 'ol':
             return (
               <ol key={i} start={b.start} className="mb-4 list-decimal space-y-2 pl-7 marker:font-semibold marker:text-ink last:mb-0">
-                {b.items.map((it, j) => <li key={j} className="pl-1"><Inl c={it} /><Hosts c={it} /></li>)}
+                {b.items.map((it, j) => <Item key={j} it={it} inBox={inBox} />)}
               </ol>
             );
           case 'quote': {
@@ -95,12 +105,12 @@ function Blocks({ blocks, inBox = false }: { blocks: Block[]; inBox?: boolean })
                 <table className="w-full border-collapse text-left text-base leading-normal">
                   {b.head && (
                     <thead>
-                      <tr>{b.head.map((c, j) => <th key={j} scope="col" className="border-b border-line-strong py-2 pr-4 text-sm font-semibold text-muted"><Inl c={c} /></th>)}</tr>
+                      <tr>{b.head.map((c, j) => <th key={j} scope="col" className="border-b border-line-strong py-2 pr-4 text-sm font-semibold text-muted last:pr-0"><Inl c={c} /></th>)}</tr>
                     </thead>
                   )}
                   <tbody>
                     {b.rows.map((r, j) => (
-                      <tr key={j}>{r.map((c, k) => <td key={k} className="border-b border-line py-2.5 pr-4 align-top"><Inl c={c} /></td>)}</tr>
+                      <tr key={j}>{r.map((c, k) => <td key={k} className="border-b border-line py-2.5 pr-4 align-top last:pr-0"><Inl c={c} /></td>)}</tr>
                     ))}
                   </tbody>
                 </table>

@@ -14,7 +14,7 @@ test('소제목 · 문단 · 줄바꿈', () => {
 test('점 목록 · 번호 목록 · 들여 쓴 줄은 앞 항목에', () => {
   const b = parseGuide('- 신분증\n- 도장\n  (없으면 서명)\n\n3. 셋째\n4) 넷째');
   assert.equal(b[0].t, 'ul');
-  if (b[0].t === 'ul') { assert.equal(b[0].items.length, 2); assert.equal(plainText(b[0].items[1]), '도장\n(없으면 서명)'); }
+  if (b[0].t === 'ul') { assert.equal(b[0].items.length, 2); assert.equal(plainText(b[0].items[1].c), '도장\n(없으면 서명)'); }
   assert.equal(b[1].t, 'ol');
   if (b[1].t === 'ol') { assert.equal(b[1].start, 3); assert.equal(b[1].items.length, 2); }
 });
@@ -31,6 +31,25 @@ test('표: 머리 줄 + 나눔 줄 + 본문', () => {
   assert.equal(b.length, 1);
   if (b[0].t === 'table') { assert.equal(b[0].head?.length, 2); assert.equal(b[0].rows.length, 2); assert.equal(plainText(b[0].rows[1][0]), '계약서'); }
   else assert.fail('표가 아님');
+});
+
+test('번호 목록 항목 밑에 들여 쓴 표 = 그 항목 밑 표(기호째 글로 나오지 않게), 다음 번호는 이어서', () => {
+  const md = '1. **채울 양을 정해요.** 아래는 제안이에요.\n   | 물건 | 채울 곳 · 양 |\n   |---|---|\n   | 화장지 | 욕실에 2롤 |\n   | 수건 | 한 사람에 2장 |\n2. **나머지는 보관함에.** 끝';
+  const b = parseGuide(md);
+  assert.equal(b.length, 1);
+  if (b[0].t !== 'ol') return assert.fail('번호 목록이 아님');
+  assert.equal(b[0].items.length, 2);
+  const [one, two] = b[0].items;
+  assert.equal(plainText(one.c), '채울 양을 정해요. 아래는 제안이에요.');
+  assert.equal(one.more.length, 1);
+  const t = one.more[0];
+  if (t.t !== 'table') return assert.fail('표가 아님');
+  assert.deepEqual(t.head?.map(plainText), ['물건', '채울 곳 · 양']);
+  assert.deepEqual(t.rows.map((r) => r.map(plainText)), [['화장지', '욕실에 2롤'], ['수건', '한 사람에 2장']]);
+  assert.deepEqual(two.more, []);
+  // 표가 아닌 들여 쓴 줄은 지금처럼 글에 이어 붙는다
+  const c = parseGuide('- 도장\n  | 하나뿐인 줄 |');
+  assert.ok(c[0].t === 'ul' && c[0].items[0].more.length === 0 && plainText(c[0].items[0].c).includes('| 하나뿐인 줄 |'));
 });
 
 test('굵게 · 링크(도메인) · 맨 주소 · 위험한 주소는 글자로', () => {
