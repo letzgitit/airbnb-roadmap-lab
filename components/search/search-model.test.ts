@@ -212,3 +212,12 @@ test('속도 연기 시험: 68만 자 가짜 글에서 찾기 p95 < 10ms', () =>
   const p95 = times[Math.floor(times.length * 0.95)];
   assert.ok(p95 < 10, `p95 ${p95.toFixed(2)}ms`);
 });
+
+test('메모 안 체크리스트: 조각에 「- [ ]」 표시 없이 항목 글만', () => {
+  const index = buildIndex({ ...(doc() as object), tasks: byId([T('t_k', 10, '생활용품 사기', { note: '- [x] 화장지\n- [ ] 주방 세제' })]) } as never);
+  const r = search(index, '세제');
+  const v = rowView(r.groups[0].hits[0], r.terms);
+  assert.equal(v.snip?.name, '메모');
+  assert.ok(!v.snip!.text.includes('[ ]') && !v.snip!.text.includes('[x]'));
+  assert.deepEqual(v.snip!.ranges.map(([x, y]) => v.snip!.text.slice(x, y)), ['세제']);
+});

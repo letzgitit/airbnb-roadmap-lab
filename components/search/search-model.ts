@@ -9,6 +9,7 @@ import {
 } from '../../lib/shared/search-text.ts';
 import { contacts, fieldLabel, taskTabs, type Contact, type WorkTabId } from '../simple-home/home-model.ts';
 import { manwon } from '../../lib/plan.ts';
+import { plainMemo } from '../tasks/checklist.ts';
 import { QUESTION_STATUS_LABEL, STEP_COUNT } from '../../lib/core/types.ts';
 
 export type SearchKind = 'task' | 'log' | 'contact' | 'property' | 'money' | 'question';
@@ -72,7 +73,7 @@ export function buildIndex(doc: Pick<ProgressDoc, 'tasks' | 'log' | 'property' |
     const guide = g ? (g.text ?? stripMarkdown(g.md ?? '', { headings: 'drop' })) : '';
     const heads = g ? (g.heads ?? (g.md ? stripMarkdown(g.md, { headings: 'only' }) : '')) : '';
     out.push({ kind: 'task', id: t.id, item: t, tab: tabs.get(t.id) ?? null, ...head(t.text),
-      fields: fields(field('종류', t.kind, 'meta'), field('메모', t.note, 'snippet'), field('도움말', guide, 'snippet', true), field('도움말', heads, 'none', true)) });
+      fields: fields(field('종류', t.kind, 'meta'), field('메모', plainMemo(t.note), 'snippet'), field('도움말', guide, 'snippet', true), field('도움말', heads, 'none', true)) });
   }
   for (const l of doc.log ?? []) {
     if (l.deletedAt) continue;

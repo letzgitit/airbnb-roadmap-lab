@@ -11,7 +11,12 @@ type Status = 'loading' | 'anon' | 'forbidden' | 'ready';
 export interface SendResult { ok: boolean; status: number; body: Record<string, unknown> | null }
 // quiet: 400 거절 문구를 알림으로 띄우지 않는다(부른 쪽이 r.body.error 로 직접 알린다).
 // onTakeLatest: 충돌 창에서 「최신 내용 받기」를 고르면 서버 최신값(current)으로 불린다. 열린 편집 칸을 그 값·version 으로 다시 채우는 데 쓴다.
-interface SendOpts { optimistic?: boolean; onSuccess?: () => void; quiet?: boolean; onTakeLatest?: (current: Record<string, unknown>) => void }
+// retry: 409(그 사이 다른 사람이 고침)를 받으면 충돌 창 대신 서버 최신값(current)으로 다시 만든 연산을 조용히 보낸다(할 일 메모 체크리스트 —
+//   components/tasks/checklist.ts retryOnConflict). null 을 돌려주면(횟수 넘음 · 고칠 항목이 사라짐) 화면을 되돌리고 알린다.
+interface SendOpts {
+  optimistic?: boolean; onSuccess?: () => void; quiet?: boolean; onTakeLatest?: (current: Record<string, unknown>) => void;
+  retry?: (current: Record<string, unknown>) => Op | null;
+}
 interface Toast { id: number; msg: string; kind: 'info' | 'error'; action?: { label: string; run: () => void } }
 interface Conflict { op: Op; body: Record<string, unknown>; opts?: SendOpts }
 
@@ -180,7 +185,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const send = useCallback<Ctx['send']>(async (op, opts) => {
+  const send = useCallback<Ctx['send']>(async function sendOp(op, opts) {
     const before = docRef.current;
     const optimistic = opts?.optimistic !== false && before && meRef.current && !op.op.startsWith('editing') && !op.op.endsWith('.add');
     if (optimistic && before && meRef.current) commit(applyLocal(before, op, meRef.current));
@@ -194,6 +199,16 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       return r;
     }
     if (op.op.startsWith('editing')) return r;
+    // 409 + retry: 최신값 위에 내 바꿀 것만 다시 적용해 보낸다(이번 낙관적 반영은 그대로 두고 다시 보낸 연산이 그 위에 덮는다)
+    if (r.status === 409 && opts?.retry) {
+      const cur = r.body?.current;
+      const again = cur && typeof cur === 'object' ? opts.retry(cur as Record<string, unknown>) : null;
+      if (again) return sendOp(again, opts);
+      toast('그 사이 다른 사람이 메모를 고쳐서 저장하지 못했어요. 다시 해 주세요.', { kind: 'error' });
+      if (optimistic) { docRef.current = before; setDoc(before); }
+      await refresh();
+      return r;
+    }
     // 실패: 화면을 서버 값으로 되돌리고 알림
     if (r.status === 409) {
       setConflict({ op, body: r.body ?? {}, opts });

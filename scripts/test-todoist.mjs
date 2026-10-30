@@ -743,3 +743,21 @@ test('Todoist 갱신이 start · parentId 를 보존 · 마감일이 시작일�
 
 test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 void DATA;
+
+test('메모 안 체크리스트(- [ ] · - [x]): 체크 하나 바꾸면 그 메모 그대로 설명으로 가고, 되돌아온 웹훅은 아무것도 안 바꾼다', async () => {
+  reset();
+  const fk = fakeTodoist();
+  const t = await pairedFromTodoist('CHK1', { content: '생활용품 사기', description: '전화 가게\n- [ ] 화장지\n- [ ] 수건' });
+  let cur = (await readDoc()).tasks[t.id];
+  assert.equal(cur.note, '전화 가게\n- [ ] 화장지\n- [ ] 수건');
+  const note = '전화 가게\n- [x] 화장지\n- [ ] 수건';
+  const u = opSchema.parse({ op: 'task.update', id: t.id, baseVersion: cur.version, patch: { note } });
+  const { result } = await mutate(u, ME);
+  await pushToTodoist([{ op: u, result }], FAKE(fk));
+  assert.deepEqual(fk.calls.map((c) => [c.path, c.body]), [['/api/v1/tasks/CHK1', { description: note }]]);
+  cur = (await readDoc()).tasks[t.id];
+  const r = await send(event('item:updated', { id: 'CHK1', content: '생활용품 사기', description: note }, iso(Date.now() + 3600_000)));
+  assert.equal(r.body.action, 'unchanged');
+  assert.equal((await readDoc()).tasks[t.id].version, cur.version);
+  // 내보내기(볼트)의 ☐ · ☑ 는 위 「제목 정규화 …」 시험이 본다
+});
