@@ -315,6 +315,10 @@ export function dayDots(doc: Pick<ProgressDoc, 'tasks'>, tabOf: Map<string, Work
   for (const [d, m] of acc) out.set(d, FIELD_TABS.filter((t) => m.has(t)).map((tab) => ({ tab, done: m.get(tab)! })));
   return out;
 }
+/** 기한 지난 일정: 오늘 전 마감인 안 끝난 할 일(세부 항목 포함). 마감 이른 순 → 만든 순 */
+export function lateTasks(doc: Pick<ProgressDoc, 'tasks'>, today: string, isDone: (t: TaskItem) => boolean = (t) => t.done): TaskItem[] {
+  return Object.values(doc.tasks).filter((t) => live(t) && !isDone(t) && !!t.due && t.due < today).sort(byDue);
+}
 /** 다가오는 일정: 내일부터 days 일 뒤까지 마감인 안 끝난 할 일(세부 항목 포함, 오늘 것은 「오늘」 묶음에). 마감 이른 순 → 만든 순 */
 export const UPCOMING_DAYS = 14;
 export function upcomingTasks(doc: Pick<ProgressDoc, 'tasks'>, today: string, days = UPCOMING_DAYS, isDone: (t: TaskItem) => boolean = (t) => t.done): TaskItem[] {

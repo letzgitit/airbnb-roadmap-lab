@@ -14,6 +14,7 @@ import { AccountMenu } from './AccountMenu';
 import { useGuardedLinkClick } from './useGuardedNav';
 import { isHomePath, NAV_ITEMS, navItemsFor, type NavItem } from './nav';
 import { useSite } from './SiteShell';
+import { ViewToggle } from './ViewPicker';
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -44,6 +45,8 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
   const tl = useMemo(() => toTimelineSteps(steps), [steps]);
   const guest = useMemo(() => (doc && today ? firstGuest(tl, doc, today, FIXED_DAY0) : null), [tl, doc, today]);
   const back = !isHomePath(path);
+  const isHome = isHomePath(path);
+  const showViewPicker = loggedIn && isHome;
   const width = wide ? 'max-w-content lg:max-w-wide' : 'max-w-content';
   const dateText = today ? `${Number(today.slice(5, 7))}월 ${Number(today.slice(8))}일(${WEEK[new Date(`${today}T00:00:00`).getDay()]})` : null;
   const n = guest?.dday ?? null;
@@ -59,7 +62,7 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
       <div className="bg-marker text-on-marker [--color-accent-ink:var(--color-on-marker)]">
         {/* 360px 보다 좁은 폰(320 등): 시안 · 자금 · 우리 집 화면은 제호 앞 「‹」 · 돋보기 · 톱니까지 한 줄이라 10px 넘쳤다 —
             제호 22px · 제호와 문 사이 최소 4px 로 줄인다(누르는 칸 44px 그대로, 홈도 같은 값이라 화면마다 머리 띠 모양이 같다) */}
-        <div className={`mx-auto flex min-h-14 ${width} items-center gap-x-4 pl-[max(20px,env(safe-area-inset-left))] pr-[max(8px,env(safe-area-inset-right))] max-[359px]:gap-x-1`}>
+        <div className={`mx-auto flex min-h-14 ${width} items-center gap-x-2 pl-[max(12px,env(safe-area-inset-left))] pr-[max(6px,env(safe-area-inset-right))] md:gap-x-4 md:pl-[max(20px,env(safe-area-inset-left))] md:pr-[max(8px,env(safe-area-inset-right))]`}>
           <Link href="/" onClick={guard('/')} aria-label={back ? '홈으로: 외도민 준비' : undefined}
             className="group -ml-1.5 inline-flex min-h-11 shrink-0 items-center whitespace-nowrap px-1.5 text-2xl font-extrabold leading-none tracking-[-0.03em] max-[359px]:text-[22px]">
             {back && <span className="mr-1 font-normal" aria-hidden>‹</span>}
@@ -72,6 +75,7 @@ export function SiteHeader({ wide = false }: { wide?: boolean }) {
             </p>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-0.5 self-stretch md:gap-1">
+            {showViewPicker && <ViewToggle className="mr-1" />}
             {items.length > 0 ? (
               <nav aria-label="사이트" className="flex self-stretch">
                 {items.map((it) => <Door key={it.href} item={it} on={it.match(path)} onClick={guard(it.href)} />)}

@@ -6,7 +6,6 @@ import { usePhotos } from '@/components/progress/PhotosPanel';
 import { todayStr } from '@/lib/client/format';
 import { useProgress } from '@/components/progress/ProgressProvider';
 import { useSite } from '@/components/shell/SiteShell';
-import { ViewPicker } from '@/components/shell/ViewPicker';
 import { focusTask } from '@/components/tasks/TaskRow';
 import type { StepRef } from '@/components/tasks/TaskComposer';
 import { DueBadge } from '@/components/tasks/DueBadge';
@@ -206,10 +205,6 @@ export function SimpleHome() {
           <QuickCalls doc={doc} onMore={() => pick('contacts')} />
         </aside>
       </div>
-
-      <footer className="mt-10 px-safe">
-        <ViewPicker />
-      </footer>
     </>
   );
 }

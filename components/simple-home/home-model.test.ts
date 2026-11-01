@@ -5,7 +5,7 @@ import {
   AIRBNB_CARDS, DOC_CARDS, DONE_CARDS, INTERIOR_CARDS, contactToProperty, guQuestions, housePhotos, ourUnits, parseContact, pickCard, prepareAdd,
   progressText, sortCards, summarize, tasksByCard, workTab, isWorkTab,
   TABS, addMonths, calendarMarks, monthWeeks, startMonth, weekTasks, progressSr, askOnly, docPhotos,
-  dayTasks, dayDots, taskTabs, upcomingTasks, blockId, blockTab, docKind, docKindGroups, galleryParts, photoMatches, sortPhotos,
+  dayTasks, dayDots, taskTabs, upcomingTasks, lateTasks, blockId, blockTab, docKind, docKindGroups, galleryParts, photoMatches, sortPhotos,
 } from './home-model.ts';
 import { CARD_ID_RE } from '../../lib/core/cardnotes.ts';
 
@@ -53,6 +53,14 @@ test('다가오는 일정: 내일부터 14일 안 · 안 끝난 것만 · 마감
   assert.deepEqual(upcomingTasks(doc, '2026-10-28').map((t: { id: string }) => t.id), ['c', 'h']); // 11-11 = 14일째까지, 11-12 는 빠짐
   assert.deepEqual(upcomingTasks(doc, '2026-10-29').map((t: { id: string }) => t.id), ['c', 'h', 'i']);
   assert.deepEqual(upcomingTasks(doc, '2026-10-28', 5).map((t: { id: string }) => t.id), ['c']); // 11-02 = 5일째
+});
+
+test('기한 지난 일정: 오늘 전 마감 · 안 끝난 것만 · 마감 이른 순(끝낸 일 · 지운 일 · 오늘 마감은 빠짐)', () => {
+  const doc = dayDoc();
+  // 2026-10-28 기준: 10-20 마감인 e만 기한 지남(f는 완료, d는 삭제, a·g는 오늘)
+  assert.deepEqual(lateTasks(doc, '2026-10-28').map((t: { id: string }) => t.id), ['e']);
+  // 2026-10-29 기준: e(10-20), a·g(10-28)가 기한 지남
+  assert.deepEqual(lateTasks(doc, '2026-10-29').map((t: { id: string }) => t.id), ['e', 'a', 'g']);
 });
 
 test('블록 id: 「분야.블록」 — 모든 일터 블록이 서버 꼴 검사를 지나고 서로 겹치지 않는다', () => {

@@ -18,7 +18,7 @@ const MODES: { mode: ThemeMode; label: string; icon: string }[] = [
 ];
 const VIEWS: { mode: ViewMode; label: string }[] = [
   { mode: 'simple', label: '간단히 보기' },
-  { mode: 'detail', label: '자세히 보기' },
+  { mode: 'detail', label: '상세 보기' },
 ];
 
 const itemCls = 'flex min-h-11 w-full items-center gap-3 whitespace-nowrap px-4 text-left text-base hover:bg-sunken focus-visible:bg-sunken focus-visible:outline-none';

@@ -44,6 +44,8 @@ config.js
 .data/
 .vercel/
 .review/
+.claude/
+skills-lock.json
 .env*
 !.env.example
 next-env.d.ts

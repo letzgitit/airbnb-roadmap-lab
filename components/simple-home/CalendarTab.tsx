@@ -15,7 +15,7 @@ import { blockCls } from './StepBlock';
 import { useMonthSwipe } from './TabSwipe';
 import { CAL_FOLD_KEY, savedCalFolded, write, type CalGroup } from './home-state';
 import {
-  addMonths, dateParts, dayDots, dayTasks, fieldLabel, monthOf, monthWeeks, taskTabs, upcomingTasks, UPCOMING_DAYS,
+  addMonths, dateParts, dayDots, dayTasks, fieldLabel, lateTasks, monthOf, monthWeeks, taskTabs, upcomingTasks, UPCOMING_DAYS,
   type DayDot, type WorkTabId,
 } from './home-model';
 
@@ -35,12 +35,13 @@ const SAT_DIM = 'text-[color-mix(in_srgb,var(--color-info-ink),var(--color-muted
  * - 판(요일 줄 + 날 칸)을 왼쪽으로 쓸면 다음 달, 오른쪽으로 쓸면 이전 달(TabSwipe.tsx useMonthSwipe — 판 위 쓸기는 탭을 넘기지 않는다).
  * - 날 칸(56px): 숫자 16 + 36px 동그라미 — 오늘 = 검정 동그라미 · 흰 숫자, 고른 날 = 회색 동그라미, 앞으로 할 일이 있는 날 = 굵게. 다른 달 날은 비워 둔다.
  *   숫자 밑 분야 색 점(그날 마감 할 일의 분야 — 행정 · 설비 · 운영 셋까지, 그 분야를 다 끝냈으면 회색 점). 칸 안에 글자는 없다.
+ * - 「기한 지남 n개」(빨강 tone="danger"): 오늘 전 마감인 안 끝난 할 일. 없으면 묶음 숨김. 할 일 줄에 분야 색 점 + 꼬리표 + 남은 날(「n일 지남」 위험 꼬리표).
  * - 「오늘」(또는 고른 날 「10월 30일 (금)」) 묶음: 그날 마감 · 그날 시작 할 일 줄(TaskRow 쉬운 모양 — 체크 · 설명서 · 연필 · 휴지통). 없으면 「오늘은 할 일이 없어요」.
  *   날을 누르면 이 자리가 그날 할 일로 바로 바뀐다(한 번 더 누르게 하지 않는다).
  * - 「다가오는 일정 n개」: 내일부터 14일 안 마감인 안 끝난 할 일 — 위 묶음에 나온 것은 뺀다(데일리 일정 줄 — 왼쪽 체크 칸, 큰 날짜 「29 / 10월 목」, 제목,
  *   분야 점 + 꼬리표, 오른쪽 남은 날 — 3일 안 = 주의 꼬리표, 그 밖 = 13 보조 글자). 줄을 누르면 그 자리에서 펼쳐 메모 · 사진 · 도움말 · 고치기 · 지우기.
- * - 두 묶음은 머리 줄 전체를 눌러 접고 편다(오른쪽 꺾쇠 — 접히면 머리 「이름 n개」만 남고 줄 · 빈 안내가 숨는다).
- *   달력 탭을 열 때(새로 들어옴 · 탭 고르기) 「오늘」은 펼치고 「다가오는 일정」은 접는다(2026-10-30, home-state.ts CAL_FOLD_START).
+ * - 세 묶음은 머리 줄 전체를 눌러 접고 편다(오른쪽 꺾쇠 — 접히면 머리 「이름 n개」만 남고 줄 · 빈 안내가 숨는다).
+ *   달력 탭을 열 때(새로 들어옴 · 탭 고르기) 「기한 지남」과 「오늘」은 펼치고 「다가오는 일정」은 접는다(2026-10-30, home-state.ts CAL_FOLD_START).
  *   그 뒤 접고 편 것은 날을 바꾸거나 새로고침해도 그대로(이 브라우저 탭에 기억). 「오늘」 묶음은 날을 바꿔도 같은 접힘 하나(DayList 는 날마다 새로 그려져 상태를 여기 둔다).
  * 「첫 손님까지」 큰 카드는 없앴다(머리 띠에 있다).
  */
@@ -133,10 +134,62 @@ export function CalendarTab({ rowSteps, today }: { rowSteps: StepRef[]; today: s
         </div>
       </div>
 
+      <LateList doc={doc} today={today} steps={rowSteps} tabOf={tabOf} open={!folded.has('late')} onToggle={() => toggleFold('late')} />
       <div id={`${uid}-day`} ref={dayRef} aria-live="polite" className="scroll-mt-[calc(var(--spacing-tabbar)+0.5rem)]">
         <DayList key={picked} doc={doc} date={picked} today={today} steps={rowSteps} open={!folded.has('day')} onToggle={() => toggleFold('day')} />
       </div>
       <Upcoming doc={doc} today={today} picked={picked} steps={rowSteps} tabOf={tabOf} open={!folded.has('upcoming')} onToggle={() => toggleFold('upcoming')} />
+    </section>
+  );
+}
+
+/**
+ * 「기한 지남 n개」: 오늘 전 마감인 안 끝난 할 일.
+ * 없으면 묶음 자체를 숨긴다. 머리는 빨간색(tone="danger"), 펼침이 기본.
+ */
+function LateList({ doc, today, steps, tabOf, open, onToggle }: {
+  doc: ProgressDoc; today: string; steps: StepRef[]; tabOf: Map<string, WorkTabId>; open: boolean; onToggle: () => void;
+}) {
+  const uid = useId();
+  const { isDone, onToggle: onToggleDone } = useStickyDone();
+  const { reportEdit } = useEditingSet();
+  const list = useMemo(() => lateTasks(doc, today, isDone), [doc, today, isDone]);
+  if (list.length === 0) return null;
+
+  return (
+    <section aria-labelledby={`${uid}-h`}>
+      <GroupHead id={`${uid}-h`} name="기한 지남" count={list.length} tone="danger" fold={{ open, onToggle, controls: `${uid}-b` }} />
+      <div id={`${uid}-b`} hidden={!open}>
+        {!open ? null : (
+          <ul className="px-5">
+            {treeRows(list, doc.tasks).map((r) => {
+              const tab = tabOf.get(r.item.id) ?? null;
+              const tag = tab && (
+                <>
+                  <i className={`block size-[7px] shrink-0 rounded-full ${FIELD_DOT[tab]}`} aria-hidden />
+                  <Badge>{fieldLabel(tab)}</Badge>
+                </>
+              );
+              return (
+                <TaskRow
+                  key={r.item.id}
+                  t={r.item}
+                  steps={steps}
+                  listStepId={null}
+                  scope="page"
+                  simple
+                  depth={r.depth}
+                  parentTitle={r.parentTitle}
+                  tag={tag}
+                  onEditChange={reportEdit}
+                  onToggle={onToggleDone}
+                  onGone={() => undefined}
+                />
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }

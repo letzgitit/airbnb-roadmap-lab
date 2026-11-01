@@ -2,49 +2,57 @@
 
 import { usePathname } from 'next/navigation';
 import { setViewMode, VIEW_HREF, type ViewMode } from '@/lib/client/view-mode';
-import { useProgress } from '@/components/progress/ProgressProvider';
 import { useGuardedNav } from './useGuardedNav';
-
-const OPTIONS: { mode: ViewMode; label: string }[] = [
-  { mode: 'simple', label: '간단히 보기' },
-  { mode: 'detail', label: '자세히 보기' },
-];
-
-/** 예전 화면(/classic) 맨 아래: 로그인했을 때만 고르개(로그인 전 공개 안내에는 「간단히 보기」가 없다) */
-export function SignedInViewPicker() {
-  const { status, doc } = useProgress();
-  if (status !== 'ready' || !doc) return null;
-  return <ViewPicker className="mt-10" />;
-}
 
 /** 지금 화면이 어느 보기인가(주소로 정한다 — /classic = 자세히) */
 export const viewOfPath = (path: string): ViewMode => (path === '/classic' ? 'detail' : 'simple');
 
 /**
- * 홈 보기 고르개 「간단히 보기 | 자세히 보기」(데일리 고르개 꼴 — 고른 칸 = 굵은 글자 + 아래 2px 검정 선, 채움 없음).
- * 홈(간단히) 맨 아래 · 예전 화면(자세히) 맨 아래에 둔다. 고르면 이 기기에 기억하고 그 화면으로 옮긴다(저장 안 한 입력이 있으면 확인 창).
+ * 시안 문 왼쪽에 배치되는 「상세」 토글 스위치 버튼.
+ * 켜면 상세 보기(/classic), 끄면 간단히 보기(/)로 전환하고 기기에 기억한다.
  */
-export function ViewPicker({ className = '' }: { className?: string }) {
+export function ViewToggle({ className = '' }: { className?: string }) {
   const path = usePathname() ?? '/';
   const now = viewOfPath(path);
   const go = useGuardedNav();
-  const pick = (m: ViewMode) => {
-    if (m === now) return;
-    void go(VIEW_HREF[m]).then((moved) => { if (moved) setViewMode(m); });
+  const isDetail = now === 'detail';
+  const toggle = () => {
+    const target = isDetail ? 'simple' : 'detail';
+    void go(VIEW_HREF[target]).then((moved) => { if (moved) setViewMode(target); });
   };
+
   return (
-    <div role="group" aria-label="홈 보기" className={`flex justify-center ${className}`}>
-      <div className="flex border-b border-line">
-        {OPTIONS.map((o) => {
-          const on = o.mode === now;
-          return (
-            <button key={o.mode} type="button" aria-pressed={on} onClick={() => pick(o.mode)}
-              className={`flex min-h-11 items-center px-4 text-cta transition-colors ${on ? 'font-bold text-ink shadow-[inset_0_-2px_0_var(--color-ink)]' : 'font-semibold text-muted hover:text-ink'}`}>
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isDetail}
+      aria-label={`상세 보기 ${isDetail ? '켜짐' : '꺼짐'}, 누르면 ${isDetail ? '간단히' : '상세'} 보기로 전환`}
+      onClick={toggle}
+      className={`group flex items-center gap-1.5 self-center rounded-control px-1.5 py-1 transition-colors hover:bg-black/10 ${className}`}
+      title={isDetail ? '간단히 보기로 전환' : '상세 보기로 전환'}
+    >
+      <span className="text-xs font-bold text-on-marker">상세</span>
+      <span
+        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out ${
+          isDetail ? 'bg-black' : 'bg-black/25 group-hover:bg-black/35'
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block size-3.5 transform rounded-full shadow transition duration-200 ease-in-out ${
+            isDetail ? 'translate-x-4 bg-[#edfc47]' : 'translate-x-1 bg-white'
+          }`}
+        />
+      </span>
+    </button>
   );
+}
+
+/** @deprecated 머리 띠의 ViewToggle 로 교체됨 */
+export function ViewPicker({ className = '' }: { className?: string }) {
+  return <ViewToggle className={className} />;
+}
+
+/** @deprecated */
+export function SignedInViewPicker() {
+  return null;
 }

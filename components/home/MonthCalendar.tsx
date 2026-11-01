@@ -99,23 +99,24 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
                   const late = list.some((t) => !t.done && d < today);
                   const active = ranges.filter((r) => r.from <= d && d <= r.to);
                   const label = `${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW_FULL[dt.getDay()]}요일${isToday ? ' 오늘' : ''}`
-                    + `${dayPins.length ? `, 고정 일정 ${dayPins.map((p) => p.label).join(', ')}` : ''}`
                     + `${list.length ? `, 마감 할 일 ${list.length}개` : ''}${late ? ', 기한 지난 일 있음' : ''}`
                     + `${active.length ? `, 단계 ${active.map((r) => `${r.id}. ${r.title}`).join(', ')}` : ''}`;
+                  const circle = isToday
+                    ? 'bg-ink font-bold text-surface'
+                    : on
+                    ? 'bg-strong font-bold text-ink ring-2 ring-inset ring-ink'
+                    : inMonth
+                    ? 'font-semibold text-ink'
+                    : 'font-normal text-muted';
                   const body = (
                     <>
                       <span className="flex h-8 items-center justify-center gap-0.5">
-                        <span className={`flex size-7 items-center justify-center rounded-full text-sm tabular-nums ${on ? 'ring-2 ring-inset ring-ink' : ''} ${isToday ? 'font-bold text-accent-ink' : inMonth ? 'font-semibold text-ink' : 'font-normal text-muted'}`}>
+                        <span className={`flex size-7 items-center justify-center rounded-full text-sm tabular-nums transition-colors ${circle} ${!isToday && !on ? 'group-hover:bg-sunken' : ''}`}>
                           {dt.getDate()}
                         </span>
                       </span>
                       <span className="block shrink-0" style={{ height: laneH }} />
                       <span className="flex min-w-0 flex-col gap-0.5 px-0.5 pb-1.5">
-                        {dayPins.map((p) => (
-                          <span key={p.label} className="block overflow-hidden text-xs font-bold whitespace-nowrap text-ink-soft sm:truncate">
-                            <i className="fas fa-thumbtack mr-0.5" aria-hidden /><span className="sm:hidden">{shortPin(p.label)}</span><span className="hidden sm:inline">{p.label}</span>
-                          </span>
-                        ))}
                         {/* 폰: 개수 한 줄 / 넓은 화면: 할 일 글자 세 개까지 */}
                         {list.length > 0 && <span className={`block text-xs whitespace-nowrap sm:hidden ${late ? 'font-bold text-danger-ink' : 'font-normal text-ink-soft'}`}>할 일 {list.length}</span>}
                         {list.slice(0, 3).map((t) => <TaskLine key={t.id} t={t} late={!t.done && d < today} />)}

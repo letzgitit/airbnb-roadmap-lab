@@ -119,7 +119,6 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
       {...dragScroll}
       className={`overflow-x-auto overscroll-x-contain select-none ${className}`}>
       <div className="relative" style={{ width: total * dayW, minWidth: '100%' }}>
-        {axisPins.map((p) => <span key={`l${p.date}${p.label}`} className="pointer-events-none absolute inset-y-0 z-10 block w-px bg-ink-soft" style={{ left: x(p.date) + dayW / 2 }} aria-hidden />)}
         {inAxis(today) && <span className="pointer-events-none absolute inset-y-0 z-10 block w-0.5 -translate-x-1/2 bg-accent-ink" style={{ left: x(today) + dayW / 2 }} aria-hidden />}
         {/* 주 줄 */}
         <div className="relative flex h-6 border-b border-line" aria-hidden>
@@ -139,17 +138,21 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
             const isToday = d === today;
             const on = d === picked;
             const c = dayInfo.get(d);
-            const pin = pinsOn(d);
             const num = showNum(d, i);
+            const circle = isToday
+              ? 'bg-ink font-bold text-surface'
+              : on
+              ? 'bg-strong font-bold text-ink ring-2 ring-inset ring-ink'
+              : 'bg-surface font-semibold text-ink';
             return (
               <DayCell key={d} width={dayW} onPick={onPick ? () => onPick(d) : undefined} pressed={on}
-                label={`${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW[dt.getDay()]}요일${isToday ? ' 오늘' : ''}${pin.length ? `, 고정 일정 ${pin.map((p) => p.label).join(', ')}` : ''}${c ? `, 마감 할 일 ${c.n}개` : ''}${c?.late ? ', 기한 지난 일 있음' : ''}`}
+                label={`${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW[dt.getDay()]}요일${isToday ? ' 오늘' : ''}${c ? `, 마감 할 일 ${c.n}개` : ''}${c?.late ? ', 기한 지난 일 있음' : ''}`}
                 className={`flex min-h-11 shrink-0 flex-col items-center pt-0.5 pb-1 focus-visible:-outline-offset-2 ${i % 7 === 0 && i > 0 ? 'border-l border-line-strong' : ''}`}>
                 {narrow
-                  ? <span className="relative z-20 flex h-4 items-center">{pin.length > 0 && <i className="fas fa-thumbtack bg-surface text-xs text-ink-soft" aria-hidden />}</span>
+                  ? <span className="relative z-20 flex h-4 items-center" />
                   : (
                     <span className={`relative z-20 flex h-4 items-center bg-surface px-0.5 text-xs ${isToday ? 'font-bold text-accent-ink' : 'font-normal text-muted'}`}>
-                      {pin.length > 0 ? <i className="fas fa-thumbtack text-ink-soft" aria-hidden /> : isToday ? '오늘' : DOW[dt.getDay()]}
+                      {isToday ? '오늘' : DOW[dt.getDay()]}
                     </span>
                   )}
                 {narrow
@@ -157,14 +160,14 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
                   ? (
                     <span className="relative z-20 flex h-7 w-full items-center justify-center">
                       {num && (
-                        <span className={`flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-surface px-0.5 text-xs tabular-nums ${on ? 'font-bold ring-2 ring-inset ring-ink' : isToday ? 'font-bold' : 'font-semibold'} ${isToday ? 'text-accent-ink' : 'text-ink'}`}>
+                        <span className={`flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full px-0.5 text-xs tabular-nums transition-colors ${circle}`}>
                           {dt.getDate()}
                         </span>
                       )}
                     </span>
                   )
                   : (
-                    <span className={`relative z-20 flex size-7 items-center justify-center rounded-full bg-surface text-sm tabular-nums ${on ? 'font-bold ring-2 ring-inset ring-ink' : isToday ? 'font-bold' : 'font-semibold'} ${isToday ? 'text-accent-ink' : 'text-ink'}`}>
+                    <span className={`relative z-20 flex size-7 items-center justify-center rounded-full text-sm tabular-nums transition-colors ${circle}`}>
                       {dt.getDate()}
                     </span>
                   )}
