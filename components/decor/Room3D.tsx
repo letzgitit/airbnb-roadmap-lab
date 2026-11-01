@@ -87,7 +87,7 @@ const VARIANT_RE = /^[a-z0-9-]{1,20}$/;
 function asState(v: unknown): SavedState | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
-  if (typeof o.concept !== 'string' || !/^[A-F]$/.test(o.concept)) return null;
+  if (typeof o.concept !== 'string' || !/^[A-G]$/.test(o.concept)) return null;
   if (!Array.isArray(o.on) || o.on.length > 200 || !o.on.every((id) => typeof id === 'string' && ID_RE.test(id))) return null;
   const doors: Record<string, boolean> = {};
   if (o.doors && typeof o.doors === 'object') {

@@ -8,7 +8,7 @@ import { parseVariants } from './room3d-layouts';
 // 항목 이름 · 값은 여기 없다(공개 저장소). 3D 시안 HTML(private/)이 id를 정하고, 여기서는 모양만 검사한다.
 // 값(가격)은 private/room3d-prices.json 에만 있고, 로그인한 사람에게만 라우트가 실어 준다.
 export const ROOM3D_STATE_KEY = 'oedomin:room3d:state';
-const CONCEPTS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
+const CONCEPTS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 const DOORS = ['big', 'small', 'util', 'bath', 'ent'] as const;
 const ID_RE = /^[a-z0-9-]{1,40}$/;
 const MAX_ITEMS = 200;
