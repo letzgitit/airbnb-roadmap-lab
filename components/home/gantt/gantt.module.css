@@ -6,7 +6,7 @@
   --line: var(--color-line); --line-strong: var(--color-line-strong);
   --ink: var(--color-ink); --ink-soft: var(--color-ink-soft); --muted: var(--color-muted); --faint: var(--color-faint);
   --accent: var(--color-accent); --accent-ink: var(--color-accent-ink); --accent-soft: var(--color-accent-soft); --on-accent: var(--color-on-accent);
-  --danger-ink: var(--color-danger-ink);
+  --danger-ink: var(--color-danger-ink); --info-ink: var(--color-info-ink);
   --today: var(--color-today); --milestone: var(--color-milestone); --on-type: var(--color-on-type);
   /* 고른 날 면: 「고른 것」 색(ink)을 아주 옅게 — 밝은 화면은 살짝 어둡게, 어두운 화면은 살짝 밝게. 투명이라 칸 선 · 줄 면이 비친다 */
   --pk: color-mix(in srgb, var(--ink) 7%, transparent); --pa: 0px; --pb: 0px;
@@ -38,16 +38,21 @@
 .axMs { position: absolute; top: 6px; height: 16px; z-index: 2; pointer-events: none; }
 .axM { position: sticky; left: 0; display: inline-block; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--ink); padding: 0 4px 0 6px; white-space: nowrap; background: var(--surface); }
 /* 날짜 숫자 = 고르기 단추: 누르는 칸 44px(머리 아래쪽 — 윗줄 달 이름 자리까지), 폭 = 일 칸(주 · 달 단위는 그 주 7일).
-   숫자 자리는 전과 같다(일 단위 = 칸 가운데, 주 · 달 단위 = 월요일 칸 왼쪽 5px). 고른 숫자 = 검정 2px 고리 + 700(그날 창 날짜 띠 · 달력의 고른 날) */
+   숫자 자리는 전과 같다(일 단위 = 칸 가운데, 주 · 달 단위 = 일요일 칸 왼쪽 5px). 고른 숫자 = 검정 2px 고리 + 700(그날 창 날짜 띠 · 달력의 고른 날) */
 .axB { position: absolute; top: 8px; height: 44px; z-index: 1; display: flex; justify-content: center; align-items: flex-start; padding-top: 16px; }
 .axB.wk { justify-content: flex-start; padding-left: 1px; }
 .axN { height: 24px; min-width: 24px; padding: 0 3px; border-radius: 12px; font-size: 12px; line-height: 24px; color: var(--muted); text-align: center; white-space: nowrap; }
 .axB.wk .axN { padding: 0 4px; }
 /* 일 단위 오늘: 그날 숫자 하나만 오늘 색 700(바탕 없이 — 옆 칸 숫자 · 칸 선을 덮지 않는다) */
+/* 일 단위 날짜 숫자: 일요일 빨강 · 토요일 파랑(간단 모드 · 달력과 같은 토큰). 오늘 색이 먼저, 고른 숫자도 글자색만 유지 */
+.axB.sun .axN { color: var(--danger-ink); }
+.axB.sat .axN { color: var(--info-ink); }
 .axB.axTodayD .axN { color: var(--today); font-weight: 700; }
 .axB[aria-pressed='true'] .axN { color: var(--ink); font-weight: 700; box-shadow: inset 0 0 0 2px var(--ink); }
+.axB.sun[aria-pressed='true'] .axN { color: var(--danger-ink); }
+.axB.sat[aria-pressed='true'] .axN { color: var(--info-ink); }
 .axB.axTodayD[aria-pressed='true'] .axN { color: var(--today); }
-/* 「오늘 27」 글자에 가려 뺀 월요일 숫자: 단추는 남는다(그 글자를 누르면 그 주를 고른다) */
+/* 「오늘 27」 글자에 가려 뺀 일요일 숫자: 단추는 남는다(그 글자를 누르면 그 주를 고른다) */
 .axHid .axN { visibility: hidden; }
 .axB:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; border-radius: 8px; }
 @media (hover: hover) { .axB:hover .axN { background: var(--sunken); } }

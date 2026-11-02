@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ganttRows, initialOpen, phasesOf, spanOf, taskRange, tasksOf, type GTask, type PhaseIn, type Row } from './gantt-model.ts';
-import { axisOf, dayWidth, todayScroll } from './gantt-scale.ts';
+import { axisOf, dayTone, dayWidth, todayScroll } from './gantt-scale.ts';
+import { sundayOf, toDate } from './../step-dates.ts';
 
 const TODAY = '2026-10-27';
 const phase = (id: number, o: Partial<PhaseIn> = {}): PhaseIn => ({
@@ -110,13 +111,13 @@ test('편집 폼 자리: 고치기 = 그 줄 밑, 새 할 일 = 단계 끝, 새 
   assert.deepEqual(kinds(ganttRows(ps, { ...open, guest: true, editing: { kind: 'edit', id: p.id } })), ['sep', 'phase']);
 });
 
-test('축 범위: 보이는 단계 · 할 일 · 목표일 · 오늘을 담고 월요일~일요일(고정 일정은 넓히지 않는다)', () => {
+test('축 범위: 보이는 단계 · 할 일 · 목표일 · 오늘을 담고 일요일~토요일(고정 일정은 넓히지 않는다)', () => {
   const ps = phasesOf([phase(1, { done: true, from: '2026-09-01', to: '2026-09-10', target: '2026-09-10' }), phase(2, { from: '2026-10-21', to: '2026-11-09' })],
     [task(2, { start: '2026-10-14', due: '2026-10-16' }), task(2, { due: '2026-11-18' })], TODAY);
   const a = spanOf(ps, TODAY, { showDone: false, types: [] });
-  assert.deepEqual(a, { first: '2026-10-12', last: '2026-11-22' }); // 11/18 마감이 든 주의 일요일(고정 일정으로 넓히지 않음)
+  assert.deepEqual(a, { first: '2026-10-11', last: '2026-11-21' }); // 10/14(수) 시작이 든 주의 일요일 10/11, 11/18(수) 마감이 든 주의 토요일 11/21(고정 일정으로 넓히지 않음)
   const b = spanOf(ps, TODAY, { showDone: true, types: [] });
-  assert.equal(b.first, '2026-08-31');
+  assert.equal(b.first, '2026-08-30'); // 9/1(화)이 든 주의 일요일
 });
 
 test('하루 폭: 일 · 주 · 달, 폰 · PC, 보이는 폭을 다 채움', () => {
@@ -126,52 +127,79 @@ test('하루 폭: 일 · 주 · 달, 폰 · PC, 보이는 폭을 다 채움', ()
   assert.equal(dayWidth('month', false, 1200, 70), 1200 / 70);
 });
 
-test('날짜 머리: 달이 바뀌는 자리 · 월요일 숫자 · 오늘 글자와 겹치는 숫자 빼기', () => {
-  // 2026-10-26(월) ~ 2026-11-08(일), 주 단위 12px
-  const w = axisOf('2026-10-26', '2026-11-08', 12, 'week', TODAY);
-  assert.deepEqual(w.months.map((m) => m.text), ['10월', '11월']); // 첫 칸: 다음 달 선(11/2 첫 월요일)까지 84px > 40 이라 「10월」도
-  assert.equal(w.months[1].x, 7 * 12); // 주 단위 달 이름 · 진한 선 = 그달 첫 월요일
-  assert.equal(w.todayX, 1 * 12 + 6);
-  assert.deepEqual(w.days.filter((d) => !d.hidden).map((d) => d.text), ['2']); // 10/26 은 오늘 글자와 겹쳐 뺀다
-  assert.deepEqual(w.days.map((d) => [d.iso, !!d.hidden]), [['2026-10-26', true], ['2026-11-02', false]]); // 글자를 뺀 주도 고르는 단추는 있다
-  assert.deepEqual(w.lines.map((l) => l.kind), ['month']); // 11/1 선을 따로 긋지 않고 11/2(첫 월요일) 선이 진한 선
-  const d = axisOf('2026-10-26', '2026-11-08', 30, 'day', TODAY);
+test('날짜 머리: 달이 바뀌는 자리 · 일요일 숫자 · 오늘 글자와 겹치는 숫자 빼기', () => {
+  // 2026-10-25(일) ~ 2026-11-07(토), 주 단위 12px
+  const w = axisOf('2026-10-25', '2026-11-07', 12, 'week', TODAY);
+  assert.deepEqual(w.months.map((m) => m.text), ['10월', '11월']); // 첫 칸: 다음 달 선(11/1 첫 일요일)까지 84px > 40 이라 「10월」도
+  assert.equal(w.months[1].x, 7 * 12); // 주 단위 달 이름 · 진한 선 = 그달 첫 일요일
+  assert.equal(w.todayX, 2 * 12 + 6); // 10/27 은 10/25 에서 이틀째
+  assert.deepEqual(w.days.filter((d) => !d.hidden).map((d) => d.text), ['1']); // 10/25 는 오늘 글자와 겹쳐 뺀다
+  assert.deepEqual(w.days.map((d) => [d.iso, !!d.hidden]), [['2026-10-25', true], ['2026-11-01', false]]); // 글자를 뺀 주도 고르는 단추는 있다
+  assert.deepEqual(w.lines.map((l) => l.kind), ['month']); // 11/1(일)이 첫 일요일이라 그 선 하나가 진한 선
+  const d = axisOf('2026-10-25', '2026-11-07', 30, 'day', TODAY);
   assert.equal(d.todayText, '27'); // 일 단위: 그날 숫자 하나만 오늘 색(옆 칸 숫자는 그대로)
   assert.deepEqual(d.days.filter((x) => x.today).map((x) => [x.text, x.iso]), [['27', '2026-10-27']]); // 오늘 숫자도 고르는 단추(모양만 오늘 색)
   assert.ok(d.days.some((x) => x.text === '26') && d.days.some((x) => x.text === '28'));
   assert.ok(d.days.some((x) => x.text === '29'));
-  const m = axisOf('2026-09-28', '2026-12-13', 4, 'month', TODAY);
+  const m = axisOf('2026-09-27', '2026-12-12', 4, 'month', TODAY);
   assert.deepEqual(m.months.map((x) => x.text), ['10월', '11월', '12월']);
   assert.ok(m.lines.every((l) => l.kind !== 'week'));
 });
 
-test('날짜 머리: 주 · 달 단위 달이 바뀌는 선은 그달 첫 월요일 하나(월요일 선과 두 줄로 겹치지 않음), 월요일 숫자는 그대로', () => {
-  const m = axisOf('2026-11-23', '2026-12-13', 8, 'month', '2026-11-01');
-  assert.deepEqual(m.days.map((d) => d.text), ['23', '30', '7']);
+test('날짜 머리: 주 · 달 단위 달이 바뀌는 선은 그달 첫 일요일 하나(일요일 선과 두 줄로 겹치지 않음), 일요일 숫자는 그대로', () => {
+  const m = axisOf('2026-11-22', '2026-12-12', 8, 'month', '2026-11-01'); // 11/22 · 11/29 · 12/6 이 일요일
+  assert.deepEqual(m.days.map((d) => d.text), ['22', '29', '6']);
   assert.ok(m.days.every((d) => !d.hidden));
-  assert.deepEqual(m.lines.map((l) => [l.x / 8, l.kind]), [[7, 'faint'], [14, 'month']]); // 11/30 흐린 선, 12/7 진한 선(12/1 선 없음)
-  const w = axisOf('2026-11-23', '2026-12-13', 16, 'week', '2026-11-01');
-  assert.ok(w.days.some((d) => d.text === '30'));
+  assert.deepEqual(m.lines.map((l) => [l.x / 8, l.kind]), [[7, 'faint'], [14, 'month']]); // 11/29 흐린 선, 12/6 진한 선(12/1 선 없음)
+  const w = axisOf('2026-11-22', '2026-12-12', 16, 'week', '2026-11-01');
+  assert.ok(w.days.some((d) => d.text === '29'));
 });
 
 test('달 이름 칸: 달마다 그달 폭(달이 바뀌는 선 ~ 다음 선) — 글자가 그 안에서 왼쪽에 붙어 따라온다', () => {
-  const d = axisOf('2026-10-26', '2026-12-13', 30, 'day', TODAY); // 일 단위: 11/1 · 12/1 선
-  assert.deepEqual(d.months.map((m) => [m.text, m.x / 30, m.w / 30]), [['10월', 0, 6], ['11월', 6, 30], ['12월', 36, 13]]);
-  const w = axisOf('2026-10-26', '2026-12-13', 12, 'week', TODAY); // 주 단위: 그달 첫 월요일 11/2 · 12/7
+  const d = axisOf('2026-10-25', '2026-12-12', 30, 'day', TODAY); // 일 단위: 11/1 · 12/1 선
+  assert.deepEqual(d.months.map((m) => [m.text, m.x / 30, m.w / 30]), [['10월', 0, 7], ['11월', 7, 30], ['12월', 37, 12]]);
+  const w = axisOf('2026-10-25', '2026-12-12', 12, 'week', TODAY); // 주 단위: 그달 첫 일요일 11/1 · 12/6
   assert.deepEqual(w.months.map((m) => [m.text, m.x / 12, m.w / 12]), [['10월', 0, 7], ['11월', 7, 35], ['12월', 42, 7]]);
   // 첫 칸이 40px 이하면 첫 달 이름은 없다(바로 옆 다음 달 이름과 겹치지 않게)
   assert.deepEqual(axisOf('2026-10-31', '2026-11-20', 30, 'day', TODAY).months.map((m) => m.text), ['11월']);
 });
 
 test('「오늘 27」: 달이 바뀌는 선을 넘거나 그달 이름이 없으면 「오늘 10/27」', () => {
-  assert.equal(axisOf('2026-10-26', '2026-12-13', 12, 'week', TODAY).todayText, '오늘 27');
-  const g = axisOf('2026-10-26', '2026-12-13', 360 / 49, 'month', TODAY); // 로그인 전 폰 달 단위: 11/1 선이 글자 안으로
+  assert.equal(axisOf('2026-10-25', '2026-12-12', 12, 'week', TODAY).todayText, '오늘 27');
+  const g = axisOf('2026-10-25', '2026-12-12', 360 / 49, 'month', TODAY); // 로그인 전 폰 달 단위: 11/1 선이 글자 안으로
   assert.equal(g.todayText, '오늘 10/27');
   assert.ok(g.labelX! >= 36); // 첫머리에서 잘리지 않게 반폭만큼 안쪽
-  assert.equal(axisOf('2026-10-26', '2026-12-13', 4, 'month', '2026-11-11').todayText, '오늘 11');
+  assert.equal(axisOf('2026-10-25', '2026-12-12', 4, 'month', '2026-11-11').todayText, '오늘 11');
 });
 
 test('오늘 자리: 보이는 폭 30%, 0 보다 작지 않음', () => {
-  assert.equal(todayScroll('2026-10-26', 12, TODAY, 360), 0);
-  assert.equal(todayScroll('2026-09-28', 12, TODAY, 360), 29 * 12 + 6 - 108);
+  assert.equal(todayScroll('2026-10-25', 12, TODAY, 360), 0);
+  assert.equal(todayScroll('2026-09-27', 12, TODAY, 360), 30 * 12 + 6 - 108);
+});
+
+test('주는 일요일에 시작한다: sundayOf · 주 · 달 단위 숫자는 전부 일요일 · 선 · 구분선도 일요일', () => {
+  // 달력 검산: 2026-11-01 = 일요일, 10-31 = 토요일, 11-07 = 토요일
+  assert.equal(toDate('2026-11-01').getDay(), 0);
+  assert.equal(sundayOf('2026-11-01'), '2026-11-01'); // 일요일은 자기 자신
+  assert.equal(sundayOf('2026-11-07'), '2026-11-01'); // 토요일은 그 주 일요일로
+  assert.equal(sundayOf('2026-10-31'), '2026-10-25');
+  assert.equal(sundayOf('2026-11-02'), '2026-11-01'); // 월요일도 앞 일요일로(예전엔 월요일이 주 첫날)
+  for (const zoom of ['week', 'month'] as const) {
+    const a = axisOf('2026-10-25', '2026-12-12', 12, zoom, TODAY);
+    assert.ok(a.days.length > 0 && a.days.every((d) => toDate(d.iso).getDay() === 0), zoom);
+  }
+  // 일 단위 주 구분선(week)은 일요일 칸 왼쪽: 11/8(일) = 축 첫날 10/25 에서 14일째
+  const d = axisOf('2026-10-25', '2026-11-14', 30, 'day', TODAY);
+  assert.deepEqual(d.lines.filter((l) => l.kind === 'week').map((l) => l.x / 30), [14]); // 11/1(7일째)은 달 선, 11/8 만 주 선
+  assert.deepEqual(d.lines.filter((l) => l.kind === 'month').map((l) => l.x / 30), [7]);
+});
+
+test('요일 색(일요일 빨강 · 토요일 파랑)은 일 단위에서만 붙는다', () => {
+  assert.equal(dayTone('2026-11-01', 'day'), 'sun');
+  assert.equal(dayTone('2026-11-07', 'day'), 'sat');
+  assert.equal(dayTone('2026-11-02', 'day'), null); // 월요일
+  for (const z of ['week', 'month'] as const) {
+    assert.equal(dayTone('2026-11-01', z), null); // 일요일이어도 주 · 달 단위는 색 없음
+    assert.equal(dayTone('2026-11-07', z), null);
+  }
 });

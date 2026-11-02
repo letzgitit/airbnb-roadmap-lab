@@ -17,8 +17,8 @@ export const toDate = (iso: string) => new Date(`${iso}T00:00:00`);
 export const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const addDays = (iso: string, n: number) => { const d = toDate(iso); d.setDate(d.getDate() + n); return isoOf(d); };
 export const diffDays = (a: string, b: string) => Math.round((toDate(b).getTime() - toDate(a).getTime()) / 86400000);
-/** 그 날이 든 주의 월요일 */
-export const mondayOf = (iso: string) => { const d = toDate(iso); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return isoOf(d); };
+/** 그 날이 든 주의 일요일(사이트의 한 주는 일요일에 시작한다) */
+export const sundayOf = (iso: string) => { const d = toDate(iso); d.setDate(d.getDate() - d.getDay()); return isoOf(d); };
 
 export function stepRanges(steps: TimelineStep[], doc: DocLike, today: string, fixedDay0?: string): StepRange[] {
   const tasks = Object.values(doc.tasks).filter((t) => !t.deletedAt);
@@ -58,7 +58,7 @@ export function pinsOf(doc: DocLike | null, marks: Pin[] = []): Pin[] {
 
 // 날짜 띠의 범위와 날마다의 표시(홈 타임라인과 그날 창이 같이 쓴다).
 //   끝 = 단계 목표일 중 가장 늦은 날과 오늘 중 늦은 날이 든 주의 일요일(목표일이 없으면 단계 기간 끝). 그 뒤의 할 일 · 고정 일정은 beyond 로만 센다.
-//   시작 = showDone 이 아니면 안 끝난 단계 시작 · 오늘 · 고정 일정 · 안 끝난 할 일 마감 중 가장 이른 날, showDone 이면 전체 — 가 든 주의 월요일.
+//   시작 = showDone 이 아니면 안 끝난 단계 시작 · 오늘 · 고정 일정 · 안 끝난 할 일 마감 중 가장 이른 날, showDone 이면 전체 — 가 든 주의 일요일.
 //   include: 반드시 띠 안에 들어와야 하는 날(그날 창에서 고른 날 등).
 //   types: 단계 종류 거르기(비었으면 전체). 단계 기간은 전체 단계로 계산한 뒤 거른다(출발일이 거르기에 따라 바뀌지 않게). 할 일은 그 단계 종류로 거르고, 고정 일정은 늘 보인다.
 export interface DayMark { n: number; late: boolean }
@@ -80,13 +80,13 @@ export function axisOf(steps: TimelineStep[], doc: DocLike, today: string, opts:
   const pins = pinsOf(doc, opts.marks);
   const targets = Object.entries(doc.steps).filter(([k]) => keep(Number(k))).map(([, s]) => s.targetDate).filter((d): d is string => !!d).sort();
   const endBase = [targets[targets.length - 1] ?? ranges.map((r) => r.to).sort().pop() ?? today, today, opts.include ?? today].sort().pop()!;
-  const last = addDays(mondayOf(endBase), 6);
+  const last = addDays(sundayOf(endBase), 6);
   const openDues = tasks.filter((t) => !t.done && t.due).map((t) => t.due!);
   const startSrc = (opts.showDone
     ? [...ranges.map((r) => r.from), ...tasks.map((t) => t.due).filter((d): d is string => !!d), ...pins.map((p) => p.date), today]
     : [...ranges.filter((r) => !r.done).map((r) => r.from), today, ...pins.map((p) => p.date), ...openDues]
   ).concat(opts.include ? [opts.include] : []).filter((d) => d <= last).sort();
-  const first = mondayOf(startSrc[0] ?? today);
+  const first = sundayOf(startSrc[0] ?? today);
   const beyond = tasks.filter((t) => !t.done && t.due && t.due > last).length + pins.filter((p) => p.date > last).length;
   const dayInfo = new Map<string, DayMark>();
   tasks.forEach((t) => {

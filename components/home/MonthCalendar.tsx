@@ -6,9 +6,9 @@ import type { TaskItem } from '@/lib/core/types';
 import { textBtn } from '@/components/ui/buttonCls';
 import { IconButton } from '@/components/ui/IconButton';
 import { TYPE_COLOR, TYPE_LABEL } from '@/components/TimelineChart';
-import { addDays, diffDays, isoOf, pinsOf, stepRanges, toDate, typeFilter, type DocLike, type Pin, type StepRange, type TimelineStep } from './step-dates';
+import { addDays, diffDays, isoOf, pinsOf, stepRanges, sundayOf, toDate, typeFilter, type DocLike, type Pin, type StepRange, type TimelineStep } from './step-dates';
 
-// 홈 「달력」 탭: 한 달을 일요일부터 토요일까지 주 단위로(간단 모드 달력과 같은 기준 — 날짜 띠 · 간트는 월요일 기준 그대로).
+// 홈 「달력」 탭: 한 달을 일요일부터 토요일까지 주 단위로(간단 모드 달력 · 날짜 띠 · 간트와 같은 기준).
 //   한 주 줄 = 날짜 숫자(오늘 = 강조색, 마지막으로 연 날 = ink 2px 테두리, 고정 일정 날은 숫자 옆 핀)
 //            → 단계 기간 띠(16px, 종류 색을 옅게 깐 면 + 시작하는 날에 진한 색 점, 이름은 띠 안에 12px. 주마다 겹치지 않게 줄을 나눈다)
 //              띠가 한 칸뿐이면 「5단계」(안 들어가면 「5.」, 말줄임표 없이). 여러 칸이 좁으면 「~10/30」을 먼저 빼고 이름만 말줄임.
@@ -24,7 +24,6 @@ const SUN = 'text-danger-ink', SAT = 'text-info-ink';
 const SUN_DIM = 'text-[color-mix(in_srgb,var(--color-danger-ink),var(--color-muted))]';
 const SAT_DIM = 'text-[color-mix(in_srgb,var(--color-info-ink),var(--color-muted))]';
 /** 그 날이 든 주의 일요일 */
-const sundayOf = (iso: string) => addDays(iso, -toDate(iso).getDay());
 const LANE = 18; // 단계 띠 한 줄(16px + 2px 틈)
 /** 폰 달력 칸의 고정 일정 이름: 「잔금 · 전입 · 신청」 → 「잔금」 */
 const shortPin = (label: string) => label.split(/\s*·\s*/)[0];

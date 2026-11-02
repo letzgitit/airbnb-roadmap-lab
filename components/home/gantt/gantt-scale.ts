@@ -5,16 +5,16 @@ import { addDays, diffDays, toDate } from '../step-dates.ts';
 //
 // 하루 폭(px): 일 · 주 · 달 세 단위. 폰(768px 미만)과 PC 는 모양이 같고 폭만 다르다.
 //   일 = 폰 30 · PC 40, 주 = 폰 12 · PC 16, 달 = 폰 4 · PC 7. 보이는 폭보다 축이 짧으면 보이는 폭을 다 채우게 늘린다.
-// 날짜 머리(52px, 위에 붙음): 윗줄 = 달 이름, 아랫줄 = 일 단위는 날마다 숫자, 주 · 달 단위는 월요일 숫자.
+// 날짜 머리(52px, 위에 붙음): 윗줄 = 달 이름, 아랫줄 = 일 단위는 날마다 숫자, 주 · 달 단위는 일요일 숫자(한 주는 일요일에 시작한다 — 달력 · 날짜 띠와 같은 기준).
 //   본문과 같은 칸 선을 머리 높이까지 이어 그어 숫자가 어느 칸인지 줄과 맞게 보인다.
 //   고정 일정(집 정보 「고정 · 」)은 간트에 그리지 않는다(2026-10-29 「복잡해, 없애」 — 날짜 띠 · 그날 창 · 달력 · 요약에는 그대로).
 // 오늘: 일 단위 = 그날 칸의 숫자 하나를 오늘 색 700 으로(바탕 없이 — 옆 칸 숫자 · 선을 덮지 않는다),
-//   주 · 달 단위 = 「오늘 27」 글자(바탕 있음), 그 글자와 실제로 겹치는 월요일 숫자만 뺀다.
-// 칸 선: 달이 바뀌는 선 = 진한 선(line-strong) — 일 단위는 그달 1일, 주 · 달 단위는 그달 첫 월요일(월요일 선과 두 줄로 겹치지 않게).
-//   그 밖의 월요일 = 선(달 단위는 흐리게), 일 단위의 나머지 날 = 흐린 선. 주말 면은 없다(칸 선이 날짜를 맡는다).
+//   주 · 달 단위 = 「오늘 27」 글자(바탕 있음), 그 글자와 실제로 겹치는 일요일 숫자만 뺀다.
+// 칸 선: 달이 바뀌는 선 = 진한 선(line-strong) — 일 단위는 그달 1일, 주 · 달 단위는 그달 첫 일요일(일요일 선과 두 줄로 겹치지 않게).
+//   그 밖의 일요일 = 선(달 단위는 흐리게), 일 단위의 나머지 날 = 흐린 선. 주말 면은 없다(칸 선이 날짜를 맡는다).
 //   달 이름 = 달마다 그달 폭만큼의 칸(달이 바뀌는 선 ~ 다음 선) 안에서 왼쪽에 붙는 글자(CSS sticky) — 옆으로 넘겨 1일이 화면 밖으로 나가도
 //   보이는 맨 왼쪽 날의 달 이름이 머리 윗줄 왼쪽에 남고, 다음 달 선이 왼쪽 끝에 다가오면 다음 달 이름이 밀어내며 바뀐다(첫 칸은 40px 넘을 때만).
-// 날짜 고르기: 숫자 = 단추(days 의 iso). 일 단위 = 그날 하루, 주 · 달 단위 = 그 월요일부터 7일(오늘 글자에 가려 숫자를 뺀 월요일도 단추는 있다 — hidden).
+// 날짜 고르기: 숫자 = 단추(days 의 iso). 일 단위 = 그날 하루, 주 · 달 단위 = 그 일요일부터 7일(오늘 글자에 가려 숫자를 뺀 일요일도 단추는 있다 — hidden).
 export type Zoom = 'day' | 'week' | 'month';
 export const ZOOMS: Zoom[] = ['day', 'week', 'month'];
 export const ZOOM_LABEL: Record<Zoom, string> = { day: '일', week: '주', month: '달' };
@@ -28,16 +28,23 @@ export function dayWidth(zoom: Zoom, phone: boolean, viewW: number, days: number
   return days > 0 && viewW > 0 ? Math.max(base, viewW / days) : base;
 }
 
+/** 날짜 머리 숫자의 요일 색: 일 단위에서만 일요일 = 'sun' · 토요일 = 'sat'. 주 · 달 단위는 숫자가 전부 일요일이라 색을 넣지 않는다(간트에서 빨강은 기한 지남 뜻이기도 하다) */
+export function dayTone(iso: string, zoom: Zoom): 'sun' | 'sat' | null {
+  if (zoom !== 'day') return null;
+  const dow = toDate(iso).getDay();
+  return dow === 0 ? 'sun' : dow === 6 ? 'sat' : null;
+}
+
 export interface AxisLabel { x: number; text: string }
 /** 달 이름 칸: x ~ x + w 가 그달(달이 바뀌는 선 ~ 다음 선). 글자는 칸 안에서 왼쪽에 붙는다 */
 export interface MonthSpan extends AxisLabel { w: number }
-/** 날짜 숫자 = 고르는 단추. iso = 그날(주 · 달 단위는 그 월요일) */
+/** 날짜 숫자 = 고르는 단추. iso = 그날(주 · 달 단위는 그 일요일) */
 export interface DayLabel extends AxisLabel { iso: string; today?: boolean; hidden?: boolean }
 export interface GridLine { x: number; kind: 'month' | 'week' | 'faint' }
 export interface Axis {
   /** 달 이름 칸(윗줄, 달이 바뀌는 선부터 다음 선까지) */
   months: MonthSpan[];
-  /** 날짜 숫자(아랫줄). 일 단위 = 칸 가운데(오늘 = today), 주 · 달 단위 = 월요일 칸 왼쪽(「오늘 27」 글자와 겹치면 hidden) */
+  /** 날짜 숫자(아랫줄). 일 단위 = 칸 가운데(오늘 = today), 주 · 달 단위 = 일요일 칸 왼쪽(「오늘 27」 글자와 겹치면 hidden) */
   days: DayLabel[];
   lines: GridLine[];
   /** 오늘 칸 가운데 x(오늘 선 자리, 축 밖이면 null) */
@@ -59,8 +66,8 @@ export function axisOf(first: string, last: string, dw: number, zoom: Zoom, toda
   const inAxis = today >= first && today <= last;
   const todayX = inAxis ? diffDays(first, today) * dw + dw / 2 : null;
   const td = toDate(today);
-  // 달이 바뀌는 자리: 일 단위 = 1일, 주 · 달 단위 = 그달 첫 월요일(1~7일인 월요일)
-  const monthStart = (d: Date) => (zoom === 'day' ? d.getDate() === 1 : d.getDay() === 1 && d.getDate() <= 7);
+  // 달이 바뀌는 자리: 일 단위 = 1일, 주 · 달 단위 = 그달 첫 일요일(1~7일인 일요일)
+  const monthStart = (d: Date) => (zoom === 'day' ? d.getDate() === 1 : d.getDay() === 0 && d.getDate() <= 7);
   const monthXs = Array.from({ length: total }, (_, i) => i).filter((i) => i > 0 && monthStart(toDate(addDays(first, i)))).map((i) => i * dw);
   let labelX: number | null = null;
   let todayText = `${td.getDate()}`;
@@ -93,11 +100,11 @@ export function axisOf(first: string, last: string, dw: number, zoom: Zoom, toda
     }
     if (ms && i > 0) lines.push({ x, kind: 'month' });
     if (zoom === 'day') {
-      if (!ms && i > 0) lines.push({ x, kind: dow === 1 ? 'week' : 'faint' });
+      if (!ms && i > 0) lines.push({ x, kind: dow === 0 ? 'week' : 'faint' });
       days.push({ x: x + dw / 2, text: String(date), iso, ...(iso === today ? { today: true } : {}) });
-    } else if (dow === 1) {
+    } else if (dow === 0) {
       if (!ms && i > 0) lines.push({ x, kind: zoom === 'month' ? 'faint' : 'week' });
-      // 월요일 숫자(왼쪽 5px 안쪽)가 「오늘 27」 글자 상자와 실제로 겹칠 때만 뺀다(3px 띄움)
+      // 일요일 숫자(왼쪽 5px 안쪽)가 「오늘 27」 글자 상자와 실제로 겹칠 때만 뺀다(3px 띄움)
       const a = x + 5;
       const b = a + numW(String(date));
       const clear = labelX == null || b + 3 <= labelX - half || a >= labelX + half + 3;

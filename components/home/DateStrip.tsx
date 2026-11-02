@@ -8,13 +8,13 @@ import { useDragScroll, useMedia } from './use-drag-scroll';
 // 가로로 넘겨 보는 날짜 띠(지금은 그날 창 머리에서 쓴다 — 홈 「단계」 탭은 2026-10-27 트리 간트 components/home/gantt/ 로 바뀜). 하루 한 칸 30px.
 //   dense · fit 은 옛 홈 「단계」 탭용(지산판이 아직 쓸 수 있어 남겨 둠).
 //   dense: 폰(640px 미만)에서는 하루 14px — 한 화면에 약 4주가 보인다. 칸이 좁아 요일 글자는 빼고(오늘은 선과 강조색 숫자,
-//     고정 일정 날은 핀), 날짜 숫자는 주 첫날(월요일) · 오늘 · 고른 날에만 적는다(오늘 · 고른 날 바로 옆 월요일 숫자는 겹치지 않게 뺀다).
+//     고정 일정 날은 핀), 날짜 숫자는 주 첫날(일요일) · 오늘 · 고른 날에만 적는다(오늘 · 고른 날 바로 옆 일요일 숫자는 겹치지 않게 뺀다).
 //     날짜 칸은 띠 높이 전체(44px 넘게)를 누르는 칸으로 쓰고, 칸 사이가 붙어 있어 누른 자리에서 가장 가까운 날이 골린다.
 //   fit(로그인 전 단계 탭): 처음부터 끝까지 한 화면에 들게 하루 폭을 상자 폭 ÷ 날수로(4~30px, 폰은 약 7px) — 막대가 화면 밖으로 나가지 않는다.
 //     좁은 띠와 같은 모양이고, 한 주 폭이 주 이름보다 좁으면 달이 바뀌는 주에만 「11월」.
-//   주 줄: 「10월 4주」(그 주 목요일이 든 달의 몇째 주), 주가 바뀌는 자리에 line-strong 세로 선. 이름 글자는 면 바탕을 깔아 세로선이 가로지르지 않는다
+//   주 줄: 「10월 4주」(그 주 가운데 날 = 수요일이 든 달의 몇째 주), 주가 바뀌는 자리에 line-strong 세로 선. 이름 글자는 면 바탕을 깔아 세로선이 가로지르지 않는다
 //   날짜 줄: 요일 첫 글자(오늘은 「오늘」, 고정 일정 날은 핀) · 날짜 숫자 · 그날 할 일 점(ink-soft, 기한 지난 안 끝난 일이 있으면 빨강)
-//     오늘 = 강조색 글자, 고른 날 = ink 2px 테두리. 누르면 onPick(없으면 — 로그인 전 공개 화면 — 누를 수 없는 칸).
+//     오늘 = 강조색 글자, 고른 날 = ink 2px 테두리. 칸마다 숫자가 적히는 넓은 모드는 요일 글자 · 숫자를 일요일 danger-ink · 토요일 info-ink(좁은 모드는 색 없음). 누르면 onPick(없으면 — 로그인 전 공개 화면 — 누를 수 없는 칸).
 //   오늘 = 청록 2px · 고정 일정 = ink-soft 1px 세로선이 띠 위부터 children(홈의 막대) 끝까지 같은 x 로 지난다.
 //     글자 · 숫자는 선 위에 면 바탕으로 깔려 가려지지 않는다(children 쪽 글자도 z-20 + 면 바탕을 쓴다).
 //   손가락은 기본 가로 스크롤, PC 는 마우스로 끌어 넘긴다(끈 뒤에 놓아도 누른 것으로 치지 않는다).
@@ -29,15 +29,17 @@ export function useNarrow(): boolean {
   return useMedia(NARROW_Q);
 }
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-/** 그 주(월요일)의 이름: 목요일이 든 달의 몇째 주 */
-function weekName(monday: string): string {
-  const thu = toDate(addDays(monday, 3));
-  return `${thu.getMonth() + 1}월 ${Math.ceil(thu.getDate() / 7)}주`;
+// 넓은 모드의 요일 글자 · 날짜 숫자 색: 일요일 danger-ink · 토요일 info-ink(간단 모드 · 달력과 같은 토큰)
+const dowTone = (dow: number, base: string) => (dow === 0 ? 'text-danger-ink' : dow === 6 ? 'text-info-ink' : base);
+/** 그 주(일요일)의 이름: 가운데 날(수요일)이 든 달의 몇째 주 */
+function weekName(sunday: string): string {
+  const wed = toDate(addDays(sunday, 3));
+  return `${wed.getMonth() + 1}월 ${Math.ceil(wed.getDate() / 7)}주`;
 }
 
-/** 좁은 띠의 주 이름: 그 주(목요일 기준) 달이 앞 주와 다르면(또는 첫 주) 「11월」, 아니면 없음 */
-function monthChange(monday: string, prev: string | null): string | null {
-  const m = toDate(addDays(monday, 3)).getMonth();
+/** 좁은 띠의 주 이름: 그 주(수요일 기준) 달이 앞 주와 다르면(또는 첫 주) 「11월」, 아니면 없음 */
+function monthChange(sunday: string, prev: string | null): string | null {
+  const m = toDate(addDays(sunday, 3)).getMonth();
   if (prev && toDate(addDays(prev, 3)).getMonth() === m) return null;
   return `${m + 1}월`;
 }
@@ -109,7 +111,7 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
   const inAxis = (d: string) => d >= first && d <= last;
   const axisPins = pins.filter((p) => inAxis(p.date));
   const pinsOn = (d: string) => pins.filter((p) => p.date === d);
-  // 좁은 띠에서 숫자를 적는 날: 오늘 · 고른 날 · 월요일(오늘 · 고른 날 바로 옆이면 빼서 숫자끼리 겹치지 않게)
+  // 좁은 띠에서 숫자를 적는 날: 오늘 · 고른 날 · 일요일(오늘 · 고른 날 바로 옆이면 빼서 숫자끼리 겹치지 않게)
   const special = [today, picked].filter((d): d is string => !!d);
   const showNum = (d: string, i: number) => !narrow || special.includes(d)
     || (i % 7 === 0 && !special.some((s) => s !== d && Math.abs(diffDays(d, s)) * dayW < 22));
@@ -139,11 +141,12 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
             const on = d === picked;
             const c = dayInfo.get(d);
             const num = showNum(d, i);
+            const numTone = narrow ? 'text-ink' : dowTone(dt.getDay(), 'text-ink');
             const circle = isToday
               ? 'bg-ink font-bold text-surface'
               : on
-              ? 'bg-strong font-bold text-ink ring-2 ring-inset ring-ink'
-              : 'bg-surface font-semibold text-ink';
+              ? `bg-strong font-bold ${numTone} ring-2 ring-inset ring-ink`
+              : `bg-surface font-semibold ${numTone}`;
             return (
               <DayCell key={d} width={dayW} onPick={onPick ? () => onPick(d) : undefined} pressed={on}
                 label={`${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW[dt.getDay()]}요일${isToday ? ' 오늘' : ''}${c ? `, 마감 할 일 ${c.n}개` : ''}${c?.late ? ', 기한 지난 일 있음' : ''}`}
@@ -151,7 +154,7 @@ export function DateStrip({ first, last, today, picked, pins, dayInfo, beyond = 
                 {narrow
                   ? <span className="relative z-20 flex h-4 items-center" />
                   : (
-                    <span className={`relative z-20 flex h-4 items-center bg-surface px-0.5 text-xs ${isToday ? 'font-bold text-accent-ink' : 'font-normal text-muted'}`}>
+                    <span className={`relative z-20 flex h-4 items-center bg-surface px-0.5 text-xs ${isToday ? 'font-bold text-accent-ink' : `font-normal ${dowTone(dt.getDay(), 'text-muted')}`}`}>
                       {isToday ? '오늘' : DOW[dt.getDay()]}
                     </span>
                   )}

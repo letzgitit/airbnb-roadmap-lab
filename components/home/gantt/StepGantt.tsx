@@ -12,7 +12,7 @@ import type { TimelineType } from '@/lib/timeline';
 import { addDays, diffDays, stepRanges, toDate, type DocLike, type TimelineStep } from '../step-dates';
 import { useDragScroll, useMedia } from '../use-drag-scroll';
 import { ganttRows, initialOpen, phasesOf, spanOf, tasksOf, type Editing, type Phase } from './gantt-model';
-import { axisOf, cxOf, dayWidth, isZoom, todayScroll, xOf, ZOOM_LABEL, ZOOMS, type Zoom } from './gantt-scale';
+import { axisOf, cxOf, dayTone, dayWidth, isZoom, todayScroll, xOf, ZOOM_LABEL, ZOOMS, type Zoom } from './gantt-scale';
 import { GanttForm } from './GanttForm';
 import { AddRow, FoldRow, FormRow, PhaseRow, SepRow, TaskRow, type DragMode, type Geo } from './GanttRow';
 import s from './gantt.module.css';
@@ -26,7 +26,7 @@ import { FoldAll, OpenAll } from './icons';
 // │   본문과 같은 세로 칸 선을 머리까지 이어 그어 숫자가 어느 칸인지 보인다(주말 면은 머리에 넣지 않는다)
 // │   달 이름은 보이는 맨 왼쪽 날의 달이 윗줄 왼쪽에 붙어 따라온다(그달 칸 안 sticky — 머리를 본문과 같은 scrollLeft 로 넘겨야 붙는다)
 // │   날짜 숫자 = 고르기 단추: 누르면 그 숫자에 고른 표시(검정 2px 고리 — 그날 창 날짜 띠 · 달력의 고른 날과 같음) +
-// │   그 칸이 머리부터 맨 아래 줄까지 옅은 면 하나(막대 · 글자 뒤). 다시 누르면 풀림. 주 · 달 단위는 월요일부터 7일. 단위를 바꾸면 풀림
+// │   그 칸이 머리부터 맨 아래 줄까지 옅은 면 하나(막대 · 글자 뒤). 다시 누르면 풀림. 주 · 달 단위는 일요일부터 7일. 단위를 바꾸면 풀림
 // │   (줄 이름 칸은 면이 불투명해 같은 옅은 면을 배경 그림으로 겹쳐 그린다 — 가로로 넘길 때 sync 가 --pa · --pb 를 옮긴다)
 // │ 「끝난 단계 n개」(접음) → 단계 머리 띠 → 할 일 → 세부 항목 → 「＋ 할 일」 …(gantt-model.ts)
 // │ 그림 읽는 법(범례)
@@ -64,7 +64,7 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   // 내용을 펼친 할 일 · 세부 항목(누르면 먼저 보기 — TaskDetail)
   const [reading, setReading] = useState<Set<string>>(() => new Set());
   const [viewW, setViewW] = useState(0);
-  // 고른 날(일 단위 = 그날, 주 · 달 단위 = 그 월요일). 이 화면에서만 — 새로고침하면 풀린다
+  // 고른 날(일 단위 = 그날, 주 · 달 단위 = 그 일요일). 이 화면에서만 — 새로고침하면 풀린다
   const [pick, setPick] = useState<string | null>(null);
   const secRef = useRef<HTMLElement>(null);
   const gxRef = useRef<HTMLDivElement>(null);
@@ -234,10 +234,12 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
           {ax.days.map((d) => {
             const dt = toDate(d.iso);
             const on = d.iso === pick;
+            // 일 단위 날짜 숫자만 일요일 빨강 · 토요일 파랑(주 · 달 단위는 숫자가 전부 일요일이라 색을 넣지 않는다)
+            const tone = dayTone(d.iso, zoom);
             return (
               <button key={d.iso} type="button" aria-pressed={on} onClick={() => togglePick(d.iso)}
                 aria-label={`${dt.getMonth() + 1}월 ${dt.getDate()}일${d.today ? ' 오늘' : ''}${zoom === 'day' ? '' : '부터 한 주'} 고르기`}
-                className={`${s.axB} ${zoom === 'day' ? '' : s.wk} ${d.today ? s.axTodayD : ''} ${d.hidden ? s.axHid : ''}`}
+                className={`${s.axB} ${zoom === 'day' ? '' : s.wk} ${d.today ? s.axTodayD : ''} ${tone ? s[tone] : ''} ${d.hidden ? s.axHid : ''}`}
                 style={{ left: zoom === 'day' ? d.x - dw / 2 : d.x, width: pickW }}>
                 <span className={s.axN}>{d.text}</span>
               </button>
