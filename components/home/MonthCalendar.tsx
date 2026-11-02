@@ -6,9 +6,9 @@ import type { TaskItem } from '@/lib/core/types';
 import { textBtn } from '@/components/ui/buttonCls';
 import { IconButton } from '@/components/ui/IconButton';
 import { TYPE_COLOR, TYPE_LABEL } from '@/components/TimelineChart';
-import { addDays, diffDays, isoOf, mondayOf, pinsOf, stepRanges, toDate, typeFilter, type DocLike, type Pin, type StepRange, type TimelineStep } from './step-dates';
+import { addDays, diffDays, isoOf, pinsOf, stepRanges, toDate, typeFilter, type DocLike, type Pin, type StepRange, type TimelineStep } from './step-dates';
 
-// 홈 「달력」 탭: 한 달을 월요일부터 일요일까지 주 단위로(날짜 띠의 주와 같은 기준).
+// 홈 「달력」 탭: 한 달을 일요일부터 토요일까지 주 단위로(간단 모드 달력과 같은 기준 — 날짜 띠 · 간트는 월요일 기준 그대로).
 //   한 주 줄 = 날짜 숫자(오늘 = 강조색, 마지막으로 연 날 = ink 2px 테두리, 고정 일정 날은 숫자 옆 핀)
 //            → 단계 기간 띠(16px, 종류 색을 옅게 깐 면 + 시작하는 날에 진한 색 점, 이름은 띠 안에 12px. 주마다 겹치지 않게 줄을 나눈다)
 //              띠가 한 칸뿐이면 「5단계」(안 들어가면 「5.」, 말줄임표 없이). 여러 칸이 좁으면 「~10/30」을 먼저 빼고 이름만 말줄임.
@@ -18,8 +18,9 @@ import { addDays, diffDays, isoOf, mondayOf, pinsOf, stepRanges, toDate, typeFil
 //   아무것도 없는 주(단계 띠 · 고정 일정 · 할 일 없음)는 줄 높이 44px. 단계 종류로 걸렀는데 그 달에 해당 단계가 없으면 「이번 달엔 ○○ 할 일이 없어요.」
 //   날을 누르면 그날 창(DaySheet — 할 일 추가 · 고치기 · 날짜 바꾸기 · 지우기는 그 창이 맡는다). 로그인 전(onPick 없음)은 누를 수 없다.
 //   위 줄: ‹ 2026년 10월 › + 「오늘」(이번 달로).
-const DOW = ['월', '화', '수', '목', '금', '토', '일'];
-const DOW_FULL = ['일', '월', '화', '수', '목', '금', '토'];
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+/** 그 날이 든 주의 일요일 */
+const sundayOf = (iso: string) => addDays(iso, -toDate(iso).getDay());
 const LANE = 18; // 단계 띠 한 줄(16px + 2px 틈)
 /** 폰 달력 칸의 고정 일정 이름: 「잔금 · 전입 · 신청」 → 「잔금」 */
 const shortPin = (label: string) => label.split(/\s*·\s*/)[0];
@@ -33,15 +34,15 @@ const monthStart = (iso: string) => `${iso.slice(0, 7)}-01`;
 const addMonths = (first: string, n: number) => { const d = toDate(first); d.setMonth(d.getMonth() + n, 1); return isoOf(d); };
 
 /** 그 주에 걸친 단계 기간을 겹치지 않게 줄(lane)에 나눈다 */
-function lanesOf(ranges: StepRange[], mon: string, sun: string) {
-  const inWeek = ranges.filter((r) => r.from <= sun && r.to >= mon).sort((a, b) => a.from.localeCompare(b.from) || a.id - b.id);
+function lanesOf(ranges: StepRange[], weekFirst: string, weekLast: string) {
+  const inWeek = ranges.filter((r) => r.from <= weekLast && r.to >= weekFirst).sort((a, b) => a.from.localeCompare(b.from) || a.id - b.id);
   const ends: string[] = [];
   return inWeek.map((r) => {
-    const from = r.from < mon ? mon : r.from;
-    const to = r.to > sun ? sun : r.to;
+    const from = r.from < weekFirst ? weekFirst : r.from;
+    const to = r.to > weekLast ? weekLast : r.to;
     let lane = ends.findIndex((e) => e < from);
     if (lane < 0) { lane = ends.length; ends.push(to); } else ends[lane] = to;
-    return { r, lane, col: diffDays(mon, from), span: diffDays(from, to) + 1, head: r.from >= mon, tail: r.to <= sun };
+    return { r, lane, col: diffDays(weekFirst, from), span: diffDays(from, to) + 1, head: r.from >= weekFirst, tail: r.to <= weekLast };
   });
 }
 
@@ -58,7 +59,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
   const m = toDate(month);
   const lastOfMonth = isoOf(new Date(m.getFullYear(), m.getMonth() + 1, 0));
   const weeks: string[] = [];
-  for (let w = mondayOf(month); w <= lastOfMonth; w = addDays(w, 7)) weeks.push(w);
+  for (let w = sundayOf(month); w <= lastOfMonth; w = addDays(w, 7)) weeks.push(w);
   const thisMonth = monthStart(today);
   const inMonthRanges = ranges.filter((r) => r.from <= lastOfMonth && r.to >= month);
   const monthWord = month === thisMonth ? '이번 달' : `${m.getMonth() + 1}월`;
@@ -80,16 +81,16 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
         <p className="border-b border-line px-4 py-3 text-base text-muted">{monthWord}엔 {types.map((t) => (TYPE_LABEL as Record<string, string>)[t] ?? t).join(' · ')} 할 일이 없어요.</p>
       )}
       <div role="group" aria-label={`${m.getMonth() + 1}월 달력`}>
-        {weeks.map((mon) => {
-          const sun = addDays(mon, 6);
-          const lanes = lanesOf(ranges, mon, sun);
+        {weeks.map((weekFirst) => {
+          const weekLast = addDays(weekFirst, 6);
+          const lanes = lanesOf(ranges, weekFirst, weekLast);
           const laneH = lanes.length ? (Math.max(...lanes.map((l) => l.lane)) + 1) * LANE : 0;
-          const empty = lanes.length === 0 && !tasks.some((t) => t.due! >= mon && t.due! <= sun) && !pins.some((p) => p.date >= mon && p.date <= sun);
+          const empty = lanes.length === 0 && !tasks.some((t) => t.due! >= weekFirst && t.due! <= weekLast) && !pins.some((p) => p.date >= weekFirst && p.date <= weekLast);
           return (
-            <div key={mon} className="relative border-b border-line last:border-b-0">
+            <div key={weekFirst} className="relative border-b border-line last:border-b-0">
               <div className="grid grid-cols-7">
                 {Array.from({ length: 7 }, (_, i) => {
-                  const d = addDays(mon, i);
+                  const d = addDays(weekFirst, i);
                   const dt = toDate(d);
                   const inMonth = d.slice(0, 7) === month.slice(0, 7);
                   const isToday = d === today;
@@ -98,7 +99,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
                   const dayPins = pins.filter((p) => p.date === d);
                   const late = list.some((t) => !t.done && d < today);
                   const active = ranges.filter((r) => r.from <= d && d <= r.to);
-                  const label = `${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW_FULL[dt.getDay()]}요일${isToday ? ' 오늘' : ''}`
+                  const label = `${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW[i]}요일${isToday ? ' 오늘' : ''}`
                     + `${list.length ? `, 마감 할 일 ${list.length}개` : ''}${late ? ', 기한 지난 일 있음' : ''}`
                     + `${active.length ? `, 단계 ${active.map((r) => `${r.id}. ${r.title}`).join(', ')}` : ''}`;
                   const circle = isToday
