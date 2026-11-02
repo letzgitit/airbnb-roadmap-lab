@@ -19,6 +19,10 @@ import { addDays, diffDays, isoOf, pinsOf, stepRanges, toDate, typeFilter, type 
 //   날을 누르면 그날 창(DaySheet — 할 일 추가 · 고치기 · 날짜 바꾸기 · 지우기는 그 창이 맡는다). 로그인 전(onPick 없음)은 누를 수 없다.
 //   위 줄: ‹ 2026년 10월 › + 「오늘」(이번 달로).
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+// 일요일 빨강 · 토요일 파랑(간단 모드 달력과 같은 색). 다른 달 날의 일 · 토는 회색과 반씩 섞어 흐리게
+const SUN = 'text-danger-ink', SAT = 'text-info-ink';
+const SUN_DIM = 'text-[color-mix(in_srgb,var(--color-danger-ink),var(--color-muted))]';
+const SAT_DIM = 'text-[color-mix(in_srgb,var(--color-info-ink),var(--color-muted))]';
 /** 그 날이 든 주의 일요일 */
 const sundayOf = (iso: string) => addDays(iso, -toDate(iso).getDay());
 const LANE = 18; // 단계 띠 한 줄(16px + 2px 틈)
@@ -75,7 +79,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
         <button type="button" className={`${textBtn} mx-0 px-3 ${month === thisMonth ? 'invisible' : ''}`} onClick={() => setMonth(thisMonth)}>오늘</button>
       </div>
       <div className="grid grid-cols-7 border-b border-line" aria-hidden>
-        {DOW.map((d) => <span key={d} className="py-1 text-center text-xs font-normal text-muted">{d}</span>)}
+        {DOW.map((d, i) => <span key={d} className={`py-1 text-center text-xs font-normal ${i === 0 ? SUN : i === 6 ? SAT : 'text-muted'}`}>{d}</span>)}
       </div>
       {types.length > 0 && inMonthRanges.length === 0 && (
         <p className="border-b border-line px-4 py-3 text-base text-muted">{monthWord}엔 {types.map((t) => (TYPE_LABEL as Record<string, string>)[t] ?? t).join(' · ')} 할 일이 없어요.</p>
@@ -102,13 +106,12 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
                   const label = `${dt.getMonth() + 1}월 ${dt.getDate()}일 ${DOW[i]}요일${isToday ? ' 오늘' : ''}`
                     + `${list.length ? `, 마감 할 일 ${list.length}개` : ''}${late ? ', 기한 지난 일 있음' : ''}`
                     + `${active.length ? `, 단계 ${active.map((r) => `${r.id}. ${r.title}`).join(', ')}` : ''}`;
+                  const tint = i === 0 ? (inMonth ? SUN : SUN_DIM) : i === 6 ? (inMonth ? SAT : SAT_DIM) : inMonth ? 'text-ink' : 'text-muted';
                   const circle = isToday
                     ? 'bg-ink font-bold text-surface'
                     : on
-                    ? 'bg-strong font-bold text-ink ring-2 ring-inset ring-ink'
-                    : inMonth
-                    ? 'font-semibold text-ink'
-                    : 'font-normal text-muted';
+                    ? `bg-strong font-bold ${i === 0 ? SUN : i === 6 ? SAT : 'text-ink'} ring-2 ring-inset ring-ink`
+                    : `${inMonth ? 'font-semibold' : 'font-normal'} ${tint}`;
                   const body = (
                     <>
                       <span className="flex h-8 items-center justify-center gap-0.5">
