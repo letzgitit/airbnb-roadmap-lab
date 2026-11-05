@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { devHeaders } from '@/components/progress/ProgressProvider';
-import { textBtn } from '@/components/progress/bits';
+import { btnGhost, textBtn } from '@/components/progress/bits';
+import { SaveButton } from '@/components/ui/SaveButton';
+import { buildDownloadName } from '@/lib/shared/download-name';
 import { Card, cardRowCls } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Segmented } from '@/components/ui/Segmented';
@@ -134,6 +136,14 @@ function RoomSection({ room, names }: { room: RestyleRoom; names: Map<string, st
           beforeAlt={`${room.name} 지금 모습`} afterAlt={`${room.name} ${name(shot.concept)} 시안`}
           afterLabel={name(shot.concept)} roomName={room.name}
           pos={pos} onPos={(p) => { setGlide(false); setPos(p); }} glide={glide} />
+      </div>
+      {/* 지금 비교 화면 위에 보이는 사진 한 장 받기(막대를 끝까지 민 「지금」이면 지금 사진) */}
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <SaveButton url={photoUrl(current === NOW ? room.original : shot.file)} mime="image/jpeg" className={btnGhost}
+          name={buildDownloadName({ label: room.name, caption: current === NOW ? '지금' : name(shot.concept), ext: 'jpg' })}
+          ariaLabel={`${room.name} ${current === NOW ? '지금' : name(shot.concept)} 사진 받기`}>
+          {current === NOW ? '지금 사진 받기' : '이 시안 받기'}
+        </SaveButton>
       </div>
       {room.note && <p className="mt-2 text-sm leading-relaxed text-muted">{room.note}</p>}
       {/* 썸네일 = 지금 + 시안 수(5개면 6장). 폰 2열 · 넓으면 3열이라 6장이 빈칸 없이 3줄 · 2줄로 떨어진다. */}

@@ -12,6 +12,8 @@ import { Card, cardRowCls } from '@/components/ui/Card';
 import { FoldRow } from '@/components/ui/FoldRow';
 import { IconButton } from '@/components/ui/IconButton';
 import { Segmented } from '@/components/ui/Segmented';
+import { SaveButton } from '@/components/ui/SaveButton';
+import { buildDownloadName } from '@/lib/shared/download-name';
 
 // 삭제 확인 창 안내(서버가 30일 보관 — lib/core/photos.ts TRASH_KEEP_MS)
 const PHOTO_TRASH_NOTE = '지운 사진은 30일 동안 사진 화면 맨 아래 「삭제한 사진」에서 되살릴 수 있어요.';
@@ -761,6 +763,12 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
             )}
             {/* 글씨 많은 문서를 PC 에서 크게: 큰 사진만 새 탭으로 연다(로그인한 같은 창이라 그대로 열린다) */}
             {p.kind === 'image' && p.hasImage && <a href={src(p.id, 'full')} target="_blank" rel="noopener" className={darkBtn}>크게 보기</a>}
+            {/* 원본 받기: 사진 = 큰 사진, PDF = 문서 원본. 이름은 「묶음이나 단계-설명-날짜」(서버 파일 이름에는 설명을 싣지 않는다) */}
+            {(p.kind === 'pdf' || p.hasImage) && (
+              <SaveButton url={src(p.id, p.kind === 'pdf' ? 'file' : 'full')} mime={p.kind === 'pdf' ? 'application/pdf' : 'image/jpeg'}
+                name={buildDownloadName({ label: p.album || stepLabel(steps, p.stepId), caption: p.caption, date: p.takenAt, ext: p.kind === 'pdf' ? 'pdf' : 'jpg' })}
+                className={darkBtn} errorClassName="text-sm text-red-300" ariaLabel={p.kind === 'pdf' ? 'PDF 원본 받기' : '사진 원본 받기'}>받기</SaveButton>
+            )}
             {p.originalUrl && <a href={p.originalUrl} target="_blank" rel="noopener noreferrer" className={darkBtn}>원본 보기</a>}
             {/* 같은 단계 안에서 한 칸씩. 맨 앞 · 맨 뒤에서는 눌리지 않는다. 정렬 · 검색 · 거르기 중에는 숨긴다 */}
             {showMove && (
