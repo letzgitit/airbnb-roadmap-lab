@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useMonthSwipe } from '@/components/simple-home/TabSwipe';
 import { dayRangeLabel, shortDate } from '@/lib/client/format';
 import type { TaskItem } from '@/lib/core/types';
 import { textBtn } from '@/components/ui/buttonCls';
@@ -54,6 +55,8 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
   onPick?: (date: string) => void; fixedDay0?: string; marks: Pin[]; guest: boolean;
 }) {
   const [month, setMonth] = useState(() => monthStart(picked ?? today));
+  const board = useRef<HTMLDivElement>(null);
+  useMonthSwipe(board, month, (step) => setMonth((v) => addMonths(v, step)));
   const keep = typeFilter(steps, types);
   const ranges = stepRanges(steps, doc, today, fixedDay0).filter((r) => keep(r.id));
   const tasks = Object.values(doc.tasks).filter((t) => !t.deletedAt && t.due && keep(t.stepId));
@@ -77,6 +80,8 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
         <IconButton label="다음 달" icon="fa-chevron-right" onClick={() => setMonth((v) => addMonths(v, 1))} />
         <button type="button" className={`${textBtn} mx-0 px-3 ${month === thisMonth ? 'invisible' : ''}`} onClick={() => setMonth(thisMonth)}>오늘</button>
       </div>
+      {/* 판(요일 줄 + 날 칸)을 좌우로 쓸면 달을 넘긴다(‹ › 단추와 같음 — 새 홈 달력과 같은 useMonthSwipe). data-noswipe: 판 위 쓸기는 화면(요약 · 단계 · 달력) 넘기기가 받지 않는다 */}
+      <div ref={board} data-noswipe>
       <div className="grid grid-cols-7 border-b border-line" aria-hidden>
         {DOW.map((d, i) => <span key={d} className={`py-1 text-center text-xs font-normal ${i === 0 ? SUN : i === 6 ? SAT : 'text-muted'}`}>{d}</span>)}
       </div>
@@ -161,6 +166,7 @@ export function MonthCalendar({ steps, doc, today, types, picked, onPick, fixedD
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

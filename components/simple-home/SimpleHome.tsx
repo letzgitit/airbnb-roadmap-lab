@@ -16,6 +16,7 @@ import { CalendarTab } from './CalendarTab';
 import { ContactsTab } from './ContactsTab';
 import { PhotosTab, type PhotoSub } from './PhotosTab';
 import { BlockHead, blockCls, StepBlock } from './StepBlock';
+import { arrowTarget } from './swipe';
 import { useTabSwipe } from './TabSwipe';
 import { CAL_FOLD_KEY, CAL_FOLD_START, OPEN_KEY, PHOTO_SUB_KEY, TAB_KEY, dropOldLocal, restoreScroll, savedOpen, savedSub, startTab, trackScroll, write } from './home-state';
 import {
@@ -54,6 +55,15 @@ export function HomeTabBar({ tab, onPick, late = {}, idBase }: {
       <div ref={sentinel} aria-hidden className="h-px -mb-px" />
       <div className={`sticky top-0 z-30 border-b transition-colors ${stuck ? 'border-marker bg-marker text-on-marker [--tab-line:var(--color-on-marker)]' : 'border-line bg-surface text-ink [--tab-line:var(--color-ink)]'}`}>
         <div role={onPick ? 'tablist' : undefined} aria-label={onPick ? '분야' : undefined} aria-hidden={onPick ? undefined : true}
+          onKeyDown={onPick ? (e) => {
+            // 키보드 ← → Home End 로 옆 탭으로(상세 모드 「요약 · 단계 · 달력」 줄과 같은 키 · 같은 끝 규칙)
+            if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+            const to = arrowTarget(TAB_IDS, tab, e.key);
+            if (!to) return;
+            e.preventDefault();
+            onPick(to);
+            e.currentTarget.querySelectorAll('button')[TAB_IDS.indexOf(to)]?.focus();
+          } : undefined}
           className="mx-auto grid max-w-content grid-cols-6 md:px-safe lg:max-w-wide">
           {TABS.map((t) => {
             const on = t.id === tab;

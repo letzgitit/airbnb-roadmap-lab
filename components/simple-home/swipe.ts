@@ -45,3 +45,12 @@ export function shouldCommit(dx: number, width: number, ms: number, hasNeighbor:
   if (d >= width * SWIPE_DIST_RATIO) return true;
   return d >= SWIPE_FLICK_MIN && d / Math.max(ms, 1) >= SWIPE_FLICK_V;
 }
+
+/** 키보드 ← → Home End 로 옮겨 갈 곳. 쓸어 넘기기와 같이 양 끝에서 멈춘다(돌아 나오지 않는다). 해당 키가 아니거나 갈 곳이 없으면 null */
+export function arrowTarget<K extends string>(keys: readonly K[], current: K | null | undefined, key: string): K | null {
+  if (key === 'Home') return keys[0] ?? null;
+  if (key === 'End') return keys[keys.length - 1] ?? null;
+  if (key === 'ArrowRight') return neighborKey(keys, current, -1);
+  if (key === 'ArrowLeft') return neighborKey(keys, current, 1);
+  return null;
+}

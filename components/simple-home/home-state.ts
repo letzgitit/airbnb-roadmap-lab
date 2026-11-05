@@ -44,12 +44,16 @@ export const savedCalFolded = (): Set<CalGroup> => {
     return new Set(Array.isArray(v) ? v.filter((x): x is CalGroup => x === 'day' || x === 'upcoming' || x === 'late') : CAL_FOLD_START);
   } catch { return new Set(CAL_FOLD_START); }
 };
+/** 상세 모드(/classic)의 스크롤 위치 · 펼친 간트 단계 — 새 홈과 같은 규칙(이 브라우저 탭에만)으로 따로 기억한다 */
+export const DETAIL_SCROLL_KEY = 'classic:scroll';
+export const DETAIL_GANTT_OPEN_KEY = 'classic:gantt-open';
+export const forget = (k: string) => { try { sessionStorage.removeItem(k); } catch { /* 못 지워도 이번 화면에만 남는다 */ } };
 export const savedSub =(): PhotoSub => { const v = read(PHOTO_SUB_KEY); return v === 'docs' || v === 'etc' ? v : 'photos'; };
 
 /** 홈 스크롤 위치를 적어 둔다(스크롤이 멈출 때 — 0.15초 쉬면). 돌려주는 함수로 그만 듣는다 */
-export function trackScroll(): () => void {
+export function trackScroll(key = SCROLL_KEY): () => void {
   let t = 0;
-  const save = () => { window.clearTimeout(t); t = window.setTimeout(() => write(SCROLL_KEY, String(Math.round(window.scrollY))), 150); };
+  const save = () => { window.clearTimeout(t); t = window.setTimeout(() => write(key, String(Math.round(window.scrollY))), 150); };
   window.addEventListener('scroll', save, { passive: true });
   return () => { window.clearTimeout(t); window.removeEventListener('scroll', save); };
 }
@@ -58,8 +62,8 @@ export function trackScroll(): () => void {
  * 적어 둔 스크롤 위치로 한 번 되돌린다(데이터가 늦게 그려져 브라우저 자동 복원이 안 먹으므로). 새로 들어왔으면(적어 둔 값 없음) 아무것도 안 한다.
  * 사진처럼 늦게 커지는 내용이 있어, 그 자리까지 내려갈 수 있을 만큼 화면이 길어질 때까지 잠깐(1.5초까지) 다시 해 본다. 그 사이 사람이 스크롤하면 그만.
  */
-export function restoreScroll(): () => void {
-  const y = Number(read(SCROLL_KEY));
+export function restoreScroll(key = SCROLL_KEY): () => void {
+  const y = Number(read(key));
   if (!Number.isFinite(y) || y <= 0) return () => undefined;
   let raf = 0;
   let stop = false;

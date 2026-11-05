@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { DETAIL_SCROLL_KEY, restoreScroll, trackScroll } from './simple-home/home-state';
 import type { Content, StepStatus } from '@/lib/core/types';
 import type { StepSection } from '@/lib/client/step-sections';
 import { StepModal } from './StepModal';
@@ -20,6 +21,14 @@ export default function App({ content }: { content: Content }) {
   const { status, doc, hasDirty, confirmDiscard } = useProgress();
   const loggedIn = status === 'ready' && !!doc;
   const stepIds = useMemo(() => steps.map((s) => s.id), [steps]);
+
+  // 새로고침 · 시안이나 자금에 갔다 돌아왔을 때 스크롤 위치를 되돌린다(새 홈과 같은 규칙 — home-state.ts, 이 브라우저 탭에만). 현황이 그려진 뒤 한 번
+  useEffect(() => {
+    if (!loggedIn) return;
+    const undo = restoreScroll(DETAIL_SCROLL_KEY);
+    const untrack = trackScroll(DETAIL_SCROLL_KEY);
+    return () => { undo(); untrack(); };
+  }, [loggedIn]);
 
   // 저장 안 한 편집이 있는 시트는 떠나기 전에 앱 안 확인 창을 거친다(단계 창 = 그 창 안의 폼)
   const isDirty = useCallback((kind: SheetKind) => (kind === 'step' || kind === 'day' ? hasDirty('modal') : false), [hasDirty]);

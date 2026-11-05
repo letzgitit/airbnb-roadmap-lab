@@ -1,7 +1,7 @@
 // 데일리 src/lib/view/__tests__/swipe.test.ts 를 옮기고, 분야 탭 순서로 이웃 탭을 한 번 더 본다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { followOffset, lockAxis, neighborKey, shouldCommit } from './swipe.ts';
+import { arrowTarget, followOffset, lockAxis, neighborKey, shouldCommit } from './swipe.ts';
 import { TABS } from './home-model.ts';
 
 test('방향 잠그기 — 가로가 확실할 때만 x', () => {
@@ -38,6 +38,26 @@ test('따라가기 · 저항', () => {
   assert.equal(followOffset(80, true), 80);
   assert.equal(followOffset(80, false), 20);
   assert.equal(followOffset(-400, false), -36);
+});
+
+test('상세 모드 화면 순서(요약 · 단계 · 달력) — 같은 판정으로 이웃을 고른다', () => {
+  const v = ['summary', 'steps', 'month'];
+  assert.equal(neighborKey(v, 'summary', -1), 'steps');
+  assert.equal(neighborKey(v, 'month', 1), 'steps');
+  assert.equal(neighborKey(v, 'summary', 1), null);
+  assert.equal(neighborKey(v, 'month', -1), null);
+});
+
+test('키보드 ← → Home End — 양 끝에서 멈추고 다른 키는 무시', () => {
+  const k = ['a', 'b', 'c'];
+  assert.equal(arrowTarget(k, 'b', 'ArrowRight'), 'c');
+  assert.equal(arrowTarget(k, 'b', 'ArrowLeft'), 'a');
+  assert.equal(arrowTarget(k, 'c', 'ArrowRight'), null);
+  assert.equal(arrowTarget(k, 'a', 'ArrowLeft'), null);
+  assert.equal(arrowTarget(k, 'b', 'Home'), 'a');
+  assert.equal(arrowTarget(k, 'b', 'End'), 'c');
+  assert.equal(arrowTarget(k, 'b', 'Enter'), null);
+  assert.equal(arrowTarget([], 'b', 'Home'), null);
 });
 
 test('넘길지 — 25% 또는 빠른 플릭', () => {

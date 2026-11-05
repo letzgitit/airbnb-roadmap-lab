@@ -9,6 +9,8 @@ import { ToggleChips } from '@/components/ui/ToggleChips';
 import { TYPE_DOT, TYPE_LABEL, TYPE_ORDER } from '@/components/TimelineChart';
 import type { TimelineType } from '@/lib/timeline';
 import type { UpdateItem } from '@/lib/core/types';
+import { DETAIL_GANTT_OPEN_KEY, forget } from '@/components/simple-home/home-state';
+import { useTabSwipe } from '@/components/simple-home/TabSwipe';
 import { HomeSummary } from './HomeSummary';
 import { MonthCalendar } from './MonthCalendar';
 import { StepGantt } from './gantt/StepGantt';
@@ -34,6 +36,7 @@ export type { TimelineStep } from './step-dates';
 // 고른 탭 · 칩은 이 브라우저에만 기억한다(localStorage, 못 쓰면 기본값 — 로그인 = 요약, 로그인 전 = 단계).
 // 요약 안 할 일 폼에 저장 안 한 글이 있으면 탭을 바꾸기 전에 확인 창(안 그러면 쓰던 글이 사라진다).
 export type View = 'summary' | 'steps' | 'month';
+const VIEW_IDS: readonly View[] = ['summary', 'steps', 'month'];
 const VIEW_KEY = 'home:view';
 const TYPES_KEY = 'home:types';
 const recall = <T,>(key: string, ok: (v: unknown) => v is T, fallback: T): T => {
@@ -70,17 +73,24 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
   const [view, setView] = useState<View>(() => recall(VIEW_KEY, isView, guest ? 'steps' : 'summary'));
   const [types, setTypes] = useState<TimelineType[]>(() => recall(TYPES_KEY, isTypes, []));
   useEffect(() => { onViewChange?.(view); }, [view, onViewChange]);
+  // 화면(요약 · 단계 · 달력)을 고르면(누르기 · 좌우 쓸기 · 키보드, 이미 고른 화면을 다시 눌러도) 새 홈의 분야 탭과 같이
+  // 그 화면을 처음 상태로 다시 그리고(펼친 간트 단계 · 달력의 달 · 고른 날 초기화) 맨 위로 올린다. fresh = 다시 그리기용 번호
+  const [fresh, setFresh] = useState(0);
+  const openView = (v: View) => {
+    if (v === 'month') setPicked(today);
+    forget(DETAIL_GANTT_OPEN_KEY);
+    setView(v); remember(VIEW_KEY, v); setFresh((n) => n + 1);
+    window.scrollTo({ top: 0 });
+  };
+  // 폰에서 본문을 좌우로 쓸면 옆 화면으로(새 홈과 같은 TabSwipe — 같은 판정). 쓰다 만 폼이 있으면 쓸기는 받지 않는다(누르면 확인을 거친다)
+  useTabSwipe({ keys: VIEW_IDS, current: view, onPick: openView, enabled: () => !progress.hasDirty() });
   if (!doc) return null;
 
   const pickView = async (v: View) => {
-    if (v === view) return;
-    if (view === 'summary' && progress.hasDirty('page') && !(await progress.confirm({
+    if (progress.hasDirty('page') && !(await progress.confirm({
       title: '저장 안 한 내용이 있어요', body: '다른 탭으로 가면 고친 내용이 사라져요.', confirmLabel: '버리고 가기', cancelLabel: '계속 편집',
     }))) return;
-    if (v === 'month') {
-      setPicked(today);
-    }
-    setView(v); remember(VIEW_KEY, v);
+    openView(v);
   };
   const pickTypes = (v: TimelineType[]) => { setTypes(v); remember(TYPES_KEY, v); };
   const openDay = onDay && !guest ? (d: string) => { setPicked(d); onDay(d); } : undefined;
@@ -89,8 +99,10 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
 
   return (
     <div className="flex flex-col gap-3">
-      <Segmented label="보는 방식 고르기" value={view} onChange={(v) => void pickView(v)}
+      <Segmented label="보는 방식 고르기" arrowKeys value={view} onChange={(v) => void pickView(v)}
         options={[{ value: 'summary', label: '요약' }, { value: 'steps', label: '단계' }, { value: 'month', label: '달력' }]} />
+      {/* data-tab-swipe: 쓸 때 손가락을 따라 움직이는 본문(고르는 줄은 제자리). key 가 바뀌면 그 화면을 처음 상태로 다시 그린다 */}
+      <div data-tab-swipe key={`${view}:${fresh}`}>
       {view === 'summary' ? (
         <div className="pt-1">
           <HomeSummary steps={steps} currentId={currentId} onStep={onStep} onDay={openDay} onShowSteps={() => void pickView('steps')}
@@ -117,6 +129,7 @@ export function DateTimeline({ steps, currentId, onStep, onDay, fixedDay0, marks
           )}
         </Card>
       )}
+      </div>
     </div>
   );
 }

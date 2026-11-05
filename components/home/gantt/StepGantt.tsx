@@ -10,6 +10,7 @@ import { taskErrorMessage } from '@/components/tasks/task-errors';
 import { clipLabel } from '@/components/progress/bits';
 import type { TimelineType } from '@/lib/timeline';
 import { addDays, diffDays, stepRanges, toDate, type DocLike, type TimelineStep } from '../step-dates';
+import { DETAIL_GANTT_OPEN_KEY, read, write } from '@/components/simple-home/home-state';
 import { useDragScroll, useMedia } from '../use-drag-scroll';
 import { ganttRows, initialOpen, phasesOf, spanOf, tasksOf, type Editing, type Phase } from './gantt-model';
 import { axisOf, cxOf, dayTone, dayWidth, isZoom, todayScroll, xOf, ZOOM_LABEL, ZOOMS, type Zoom } from './gantt-scale';
@@ -40,7 +41,19 @@ const ZOOM_KEY = 'home:gantt-zoom';
 const EPOCH = '2026-01-01';
 // 처음 단위: 로그인 = 주, 로그인 전 = 달(공개 일정 약 45일이 한 화면에 — 날짜보다 순서와 길이를 보는 화면)
 const recallZoom = (fallback: Zoom): Zoom => { try { const v = JSON.parse(localStorage.getItem(ZOOM_KEY) ?? 'null'); return isZoom(v) ? v : fallback; } catch { return fallback; } };
-const rememberZoom = (z: Zoom) => { try { localStorage.setItem(ZOOM_KEY, JSON.stringify(z)); } catch { /* 기억 못 해도 화면은 그대로 */ } };
+/** 적어 둔 펼침(sessionStorage). 없거나 깨졌으면 null → 처음 상태 */
+const savedGanttOpen = (): { open: Set<number>; openTask: Set<string> } | null => {
+  const raw = read(DETAIL_GANTT_OPEN_KEY);
+  if (!raw) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!v || typeof v !== 'object') return null;
+    const { open, openTask } = v as { open?: unknown; openTask?: unknown };
+    if (!Array.isArray(open) || !Array.isArray(openTask)) return null;
+    return { open: new Set(open.filter((x): x is number => typeof x === 'number')), openTask: new Set(openTask.filter((x): x is string => typeof x === 'string')) };
+  } catch { return null; }
+};
+const rememberZoom =(z: Zoom) => { try { localStorage.setItem(ZOOM_KEY, JSON.stringify(z)); } catch { /* 기억 못 해도 화면은 그대로 */ } };
 
 export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep, fixedDay0, guest }: {
   steps: TimelineStep[]; doc: DocLike; today: string;
@@ -81,7 +94,11 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
     const st = doc.steps[String(r.id)];
     return { ...r, target: guest ? null : st?.targetDate ?? null, current: !guest && r.id === currentId, doing: st?.status === 'doing' };
   }), tasks, today), [steps, doc, today, fixedDay0, tasks, currentId, guest]);
-  const [openState, setOpenState] = useState(() => initialOpen(phases, today));
+  // 펼친 단계 · 할 일은 이 브라우저 탭에 기억한다(새 홈의 펼친 블록과 같은 규칙 — 새로고침 · 시안이나 자금에 갔다 와도 그대로, 화면을 고르면 처음 상태)
+  const [openState, setOpenState] = useState(() => savedGanttOpen() ?? initialOpen(phases, today));
+  useEffect(() => {
+    write(DETAIL_GANTT_OPEN_KEY, JSON.stringify({ open: [...openState.open], openTask: [...openState.openTask] }));
+  }, [openState]);
   const { open, openTask } = openState;
   const { first, last } = spanOf(phases, today, { showDone, types });
   const days = diffDays(first, last) + 1;
@@ -207,7 +224,8 @@ export function StepGantt({ steps, doc, today, types, onTypes, currentId, onStep
   };
 
   return (
-    <section ref={secRef} className={`${s.gantt} ${pick ? s.picking : ''} overflow-clip rounded-panel border border-line bg-surface`} style={{ '--vw': `${vw}px` } as CSSProperties} aria-label="단계별 일정">
+    // data-noswipe: 간트(가로 스크롤 · 막대 끌기 · 날짜 머리) 위에서는 화면 넘기기 쓸기를 받지 않는다
+    <section ref={secRef} data-noswipe className={`${s.gantt} ${pick ? s.picking : ''} overflow-clip rounded-panel border border-line bg-surface`} style={{ '--vw': `${vw}px` } as CSSProperties} aria-label="단계별 일정">
       <div className={s.tools}>
         <div className={s.zoom}>
           {/* 고르개는 사이트 한 모양(Segmented — 굵은 글자 + 아래 2px 선, 바로 위 「요약 · 단계 · 달력」과 같음) */}
