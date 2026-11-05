@@ -4,7 +4,8 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import type { PhotoView } from '@/lib/core/photos';
 import { REF_LABEL, REF_STEP } from '@/lib/core/photo-order';
 import { useProgress } from '@/components/progress/ProgressProvider';
-import { PhotoSearchFields, PhotoTrash, usePhotos } from '@/components/progress/PhotosPanel';
+import { PhotoSearchFields, PhotoTrash, photoSaveName, usePhotos } from '@/components/progress/PhotosPanel';
+import { SaveButton } from '@/components/ui/SaveButton';
 import { addBtnCls, textBtn } from '@/components/ui/buttonCls';
 import { LineIcon } from '@/components/ui/LineIcon';
 import { BlockHead, blockCls } from './StepBlock';
@@ -223,6 +224,7 @@ function Thumb({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
 /** 문서 칸: 사진 = 4:3 썸네일(누르면 크게 보기), PDF = 문서 아이콘 + 「PDF」(그림이 있으면 그림 + 「PDF」 표시, 누르면 새 창). 밑에 설명 한 줄(14) */
 function DocTile({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
   const [failed, setFailed] = useState(false);
+  const { steps } = usePhotos();
   const name = p.caption || p.album || (p.kind === 'pdf' ? 'PDF' : '문서');
   const face = p.kind === 'pdf' && !p.hasImage
     ? (
@@ -242,6 +244,14 @@ function DocTile({ p, onOpen }: { p: PhotoView; onOpen: () => void }) {
     );
   const label = <span className="mt-1.5 block truncate text-sm text-ink-soft">{name}</span>;
   return p.kind === 'pdf'
-    ? <a href={`/api/photos/${p.id}?size=file`} target="_blank" rel="noopener" aria-label={`${name} PDF 새 창으로 열기`} className="block">{face}{label}</a>
+    ? (
+      <div>
+        <a href={`/api/photos/${p.id}?size=file`} target="_blank" rel="noopener" aria-label={`${name} PDF 새 창으로 열기`} className="block">{face}{label}</a>
+        {/* 열기는 그대로, 타일마다 바로 보이는 받기(폰에서 한 번에, 누르는 칸 44px) */}
+        <SaveButton url={`/api/photos/${p.id}?size=file`} mime="application/pdf" name={photoSaveName(p, steps)}
+          className="-ml-3 inline-flex min-h-11 items-center rounded-control px-3 text-sm font-bold text-ink hover:bg-sunken disabled:opacity-60"
+          ariaLabel={`${name} PDF 받기`}>받기</SaveButton>
+      </div>
+    )
     : <button type="button" onClick={onOpen} aria-label={`${name} 크게 보기`} className="block w-full text-left">{face}{label}</button>;
 }

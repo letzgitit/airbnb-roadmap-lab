@@ -241,11 +241,15 @@ export function PhotosProvider({ steps, children }: { steps: StepName[]; childre
   );
 }
 
-const stepLabel = (steps: StepName[], id: number) => {
+export const stepLabel = (steps: StepName[], id: number) => {
   if (id === REF_STEP) return REF_LABEL;
   const s = steps.find((x) => x.id === id);
   return s ? `${s.id}. ${s.title}` : `${id}단계`;
 };
+
+/** 받는 파일 이름: 「묶음이나 단계-설명-날짜」. 크게 보기와 문서 칸의 받기가 같은 이름을 쓴다 */
+export const photoSaveName = (p: PhotoView, steps: StepName[]) =>
+  buildDownloadName({ label: p.album || stepLabel(steps, p.stepId), caption: p.caption, date: p.takenAt, ext: p.kind === 'pdf' ? 'pdf' : 'jpg' });
 
 // 썸네일 한 칸(정사각형, 화면에 가까워질 때 불러온다)
 // 썸네일 그림. 못 불러오면 깨진 그림 대신 짧은 글
@@ -766,7 +770,7 @@ function Lightbox({ list, index, steps, onIndex, onClose, onSave, onDelete, onMo
             {/* 원본 받기: 사진 = 큰 사진, PDF = 문서 원본. 이름은 「묶음이나 단계-설명-날짜」(서버 파일 이름에는 설명을 싣지 않는다) */}
             {(p.kind === 'pdf' || p.hasImage) && (
               <SaveButton url={src(p.id, p.kind === 'pdf' ? 'file' : 'full')} mime={p.kind === 'pdf' ? 'application/pdf' : 'image/jpeg'}
-                name={buildDownloadName({ label: p.album || stepLabel(steps, p.stepId), caption: p.caption, date: p.takenAt, ext: p.kind === 'pdf' ? 'pdf' : 'jpg' })}
+                name={photoSaveName(p, steps)}
                 className={darkBtn} errorClassName="text-sm text-red-300" ariaLabel={p.kind === 'pdf' ? 'PDF 원본 받기' : '사진 원본 받기'}>받기</SaveButton>
             )}
             {p.originalUrl && <a href={p.originalUrl} target="_blank" rel="noopener noreferrer" className={darkBtn}>원본 보기</a>}
